@@ -28,159 +28,76 @@
     <button id="btn-search" title="חיפוש מקום" aria-label="חיפוש">
       <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none"/><path d="M15.5 15.5L21 21"/></svg>
     </button>
+    <button id="btn-gpx" title="טען מסלול GPX" aria-label="טען מסלול">
+      <svg viewBox="0 0 24 24"><path d="M4 19c3-1 4-5 7-6s5 2 9-6" fill="none"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="7" r="2"/></svg>
+    </button>
+    <button id="btn-fit" title="הצג את כל המסלול" aria-label="הצג את כל המסלול" hidden>
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none"/></svg>
+    </button>
+    <button id="btn-menu" title="תפריט" aria-label="תפריט">
+      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none"/></svg>
+    </button>
+  </div>
+
+  <div id="status" hidden>
+    <div class="cell"><span class="lbl">מהמסלול</span><span id="s-off" class="val">–</span></div>
+    <div class="cell"><span class="lbl">עברת</span><span id="s-done" class="val">–</span></div>
+    <div class="cell"><span class="lbl">נותרו</span><span id="s-left" class="val">–</span></div>
   </div>
 
   <div id="toast" hidden></div>
 
-  <!-- אייקונים (בסגנון lucide) -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-    <symbol id="i-map" viewBox="0 0 24 24"><path d="M14.1 5.55a2 2 0 0 0 1.8 0l3.66-1.83A1 1 0 0 1 21 4.62v12.76a1 1 0 0 1-.55.9l-4.55 2.27a2 2 0 0 1-1.8 0l-4.2-2.1a2 2 0 0 0-1.8 0l-3.66 1.83A1 1 0 0 1 3 19.38V6.62a1 1 0 0 1 .55-.9L8.1 3.45a2 2 0 0 1 1.8 0z"/><path d="M15 5.76v15M9 3.24v15"/></symbol>
-    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
-    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
-    <symbol id="i-fit" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
-    <symbol id="i-down" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5M12 15V3"/></symbol>
-    <symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5M12 3v12"/></symbol>
-    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></symbol>
-    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
-    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
-    <symbol id="i-eraser" viewBox="0 0 24 24"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21M22 21H7M5 11l9 9"/></symbol>
-    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
-    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
-  </svg>
-
-  <!-- הדוק: משטח זכוכית אחד – כרטיס לפי ההקשר, קבוצות כפתורים, ולשוניות -->
-  <nav id="dock" data-stop="1">
-    <div class="dock-skin"></div>
-    <button id="dock-bump" class="dock-bump" aria-label="הרחב או כווץ" hidden>
-      <span class="bump-shape">
-        <svg class="bump-rim" width="76" height="12" viewBox="0 -0.5 76 12"><path d="M0,11 Q5,11 5,6 Q5,0 11,0 L65,0 Q71,0 71,6 Q71,11 76,11"/></svg>
-        <span class="bump-groove up"></span><span class="bump-groove low"></span>
-      </span>
-    </button>
-
-    <div id="dock-slot">
-      <!-- מסלול פעיל -->
-      <section data-ctx="route" hidden>
-        <div class="card-head">
-          <div id="ri-name" class="card-name"></div>
-          <div id="ri-line" class="card-line"></div>
-          <div id="status" class="navrow" hidden>
-            <div><span class="lbl">מהמסלול</span><span id="s-off" class="val">–</span></div>
-            <div><span class="lbl">עברת</span><span id="s-done" class="val">–</span></div>
-            <div><span class="lbl">נותרו</span><span id="s-left" class="val">–</span></div>
-          </div>
-        </div>
-        <div class="more"><div>
-          <div class="stats">
-            <div><span class="lbl">אורך</span><span id="ri-len" class="v">–</span></div>
-            <div><span class="lbl">↑ עלייה</span><span id="ri-up" class="v">–</span></div>
-            <div><span class="lbl">↓ ירידה</span><span id="ri-down" class="v">–</span></div>
-            <div><span class="lbl">⏱ זמן משוער</span><span id="ri-time" class="v">–</span></div>
-          </div>
-          <canvas id="ri-profile" class="profile"></canvas>
-          <p id="ri-remain" class="muted small center"></p>
-          <div id="ri-scrub" class="scrub" hidden>
-            <div class="scrub-head"><span id="ri-sc-title"></span><button id="ri-sc-x" aria-label="נקה">✕</button></div>
-            <div class="stats">
-              <div><span class="lbl">מרחק</span><span id="ri-sc-len" class="v"></span></div>
-              <div><span class="lbl">גובה בנקודה</span><span id="ri-sc-ele" class="v"></span></div>
-              <div><span class="lbl">↑ לעלות</span><span id="ri-sc-up" class="v"></span></div>
-              <div><span class="lbl">↓ לרדת</span><span id="ri-sc-down" class="v"></span></div>
-              <div><span class="lbl">⏱ זמן</span><span id="ri-sc-time" class="v"></span></div>
-            </div>
-          </div>
-          <div class="more-foot center">
-            <label class="toggle"><input type="checkbox" id="ri-focus"> הדגש מסלול</label>
-          </div>
-        </div></div>
-        <div class="drawer"><div><div class="drawer-row">
-          <div class="grp">
-            <button id="ri-fit" class="cell" aria-label="הצג את כל המסלול"><svg class="ic"><use href="#i-fit"/></svg></button>
-            <button id="ri-gpx" class="cell" aria-label="ייצוא GPX"><svg class="ic"><use href="#i-down"/></svg></button>
-          </div>
-          <div class="grp">
-            <button id="ri-edit" class="cell word">עריכה</button>
-            <button id="ri-save" class="cell word">שמירה</button>
-          </div>
-          <div class="grp">
-            <button id="ri-clear" class="cell danger" aria-label="הסר מהמפה"><svg class="ic"><use href="#i-x"/></svg></button>
-            <button id="ri-del" class="cell danger" aria-label="מחק מהספרייה"><svg class="ic"><use href="#i-trash"/></svg></button>
-          </div>
-        </div></div></div>
-      </section>
-
-      <!-- תכנון מסלול -->
-      <section data-ctx="plan" hidden>
-        <div class="card-head">
-          <div class="card-name">תכנון מסלול</div>
-          <div class="card-line"><span id="pl-len">–</span><span class="dot"> • </span>↑ <span id="pl-up">–</span><span class="dot"> • </span>↓ <span id="pl-down">–</span><span class="dot"> • </span>⏱ <span id="pl-time">–</span></div>
-          <p id="pl-hint" class="card-quiet"></p>
-        </div>
-        <div class="more"><div>
-          <canvas id="pl-profile" class="profile small-profile"></canvas>
-          <div class="opts">
-            <label class="toggle"><input type="checkbox" id="pl-snap"> צמוד לשבילים</label>
-            <label class="toggle"><input type="checkbox" id="pl-bike"> כולל שבילי אופניים</label>
-          </div>
-        </div></div>
-        <div class="drawer"><div><div class="drawer-row">
-          <div class="grp">
-            <button id="pl-undo" class="cell" aria-label="בטל נקודה"><svg class="ic"><use href="#i-undo"/></svg></button>
-            <button id="pl-clear" class="cell" aria-label="נקה הכול"><svg class="ic"><use href="#i-eraser"/></svg></button>
-          </div>
-          <div class="grp"><button id="pl-done" class="cell word lit">סיום</button></div>
-          <div class="grp"><button id="pl-cancel" class="cell danger" aria-label="ביטול"><svg class="ic"><use href="#i-x"/></svg></button></div>
-        </div></div></div>
-      </section>
-
-      <!-- סימון אזור -->
-      <section data-ctx="draw" hidden>
-        <div class="card-head">
-          <div class="card-name">אזור חדש</div>
-          <p id="draw-hint" class="card-quiet"></p>
-        </div>
-        <div class="drawer"><div><div class="drawer-row">
-          <div class="grp"><button id="draw-undo" class="cell" aria-label="בטל נקודה"><svg class="ic"><use href="#i-undo"/></svg></button></div>
-          <div class="grp"><button id="draw-done" class="cell word lit">סיום ושמירה</button></div>
-          <div class="grp"><button id="draw-cancel" class="cell danger" aria-label="ביטול"><svg class="ic"><use href="#i-x"/></svg></button></div>
-        </div></div></div>
-      </section>
-
-      <!-- המסלולים שלי -->
-      <section data-ctx="lib" class="panel" hidden>
-        <div class="panel-top drawer-row">
-          <div class="grp"><button id="m-plan" class="cell word lit"><svg class="ic"><use href="#i-plus"/></svg> תכנון מסלול</button></div>
-          <div class="grp"><button id="m-gpx" class="cell word"><svg class="ic"><use href="#i-up"/></svg> טעינת GPX</button></div>
-        </div>
-        <div id="lib-list" class="panel-list"></div>
-      </section>
-
-      <!-- הגדרות -->
-      <section data-ctx="settings" class="panel" hidden>
-        <div class="panel-list">
-          <p id="offline-info" class="muted small"></p>
-          <p id="storage-info" class="muted small"></p>
-          <h3>מפה שמורה</h3>
-          <button id="m-carmel" class="list-btn">עדכון מפת הכרמל</button>
-          <button id="m-area" class="list-btn">הוספת האזור שבמסך למפה השמורה</button>
-          <button id="m-draw" class="list-btn">סימון אזור חדש על המפה</button>
-          <button id="m-areas" class="list-btn">האזורים שלי</button>
-          <h3>תצוגה</h3>
-          <label class="toggle row"><input type="checkbox" id="m-night"> מצב לילה 🌙</label>
-          <label class="toggle row"><input type="checkbox" id="m-wake" checked> מסך דולק בזמן ניווט</label>
-          <p class="muted small">נתוני מפה: © תורמי <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ‏(ODbL). לחיצה ארוכה על כפתור המיקום מכבה את ה-GPS.</p>
-        </div>
-      </section>
+  <div id="routeinfo" class="sheet" hidden>
+    <div class="sheet-head"><b id="ri-name"></b><button id="ri-close" aria-label="סגור">✕</button></div>
+    <div class="stats">
+      <div><span class="lbl">אורך</span><span id="ri-len" class="v">–</span></div>
+      <div><span class="lbl">↑ עלייה</span><span id="ri-up" class="v">–</span></div>
+      <div><span class="lbl">↓ ירידה</span><span id="ri-down" class="v">–</span></div>
+      <div><span class="lbl">⏱ זמן משוער</span><span id="ri-time" class="v">–</span></div>
     </div>
-
-    <div id="dock-bar">
-      <ul>
-        <li><button class="nav-pill" data-tab="map"><svg class="ic"><use href="#i-map"/></svg><span>מפה</span></button></li>
-        <li><button class="nav-pill" data-tab="lib"><svg class="ic"><use href="#i-route"/></svg><span>מסלולים</span></button></li>
-        <li><button class="nav-pill" data-tab="settings"><svg class="ic"><use href="#i-sliders"/></svg><span>הגדרות</span></button></li>
-      </ul>
+    <p id="ri-folder" class="muted small"></p>
+    <canvas id="ri-profile" class="profile"></canvas>
+    <p id="ri-remain" class="muted small center"></p>
+    <div id="ri-scrub" class="scrub" hidden>
+      <div class="scrub-head"><span id="ri-sc-title"></span><button id="ri-sc-x" aria-label="נקה">✕</button></div>
+      <div class="stats">
+        <div><span class="lbl">מרחק</span><span id="ri-sc-len" class="v"></span></div>
+        <div><span class="lbl">גובה בנקודה</span><span id="ri-sc-ele" class="v"></span></div>
+        <div><span class="lbl">↑ לעלות</span><span id="ri-sc-up" class="v"></span></div>
+        <div><span class="lbl">↓ לרדת</span><span id="ri-sc-down" class="v"></span></div>
+        <div><span class="lbl">⏱ זמן</span><span id="ri-sc-time" class="v"></span></div>
+      </div>
     </div>
-  </nav>
+    <label class="row"><input type="checkbox" id="ri-focus"> הדגש את המסלול (המפה מסביב דוהה)</label>
+    <div class="btns">
+      <button id="ri-save">💾 שמור</button>
+      <button id="ri-edit">✏️ ערוך</button>
+      <button id="ri-fit">הצג הכול</button>
+      <button id="ri-gpx">ייצוא GPX</button>
+      <button id="ri-clear">הסר</button>
+    </div>
+  </div>
+
+  <div id="planbar" class="sheet" hidden>
+    <p id="pl-hint" class="center"></p>
+    <div class="stats">
+      <div><span class="lbl">אורך</span><span id="pl-len" class="v">–</span></div>
+      <div><span class="lbl">↑ עלייה</span><span id="pl-up" class="v">–</span></div>
+      <div><span class="lbl">↓ ירידה</span><span id="pl-down" class="v">–</span></div>
+      <div><span class="lbl">⏱ זמן</span><span id="pl-time" class="v">–</span></div>
+    </div>
+    <canvas id="pl-profile" class="profile small-profile"></canvas>
+    <div class="opts">
+      <label><input type="checkbox" id="pl-snap"> צמוד לשבילים</label>
+      <label><input type="checkbox" id="pl-bike"> כולל שבילי אופניים</label>
+    </div>
+    <div class="btns">
+      <button id="pl-done" class="primary">סיום</button>
+      <button id="pl-undo">↶ בטל</button>
+      <button id="pl-clear">נקה</button>
+      <button id="pl-cancel">ביטול</button>
+    </div>
+  </div>
 
   <dialog id="plan-dlg">
     <form method="dialog">
@@ -200,6 +117,15 @@
       <button type="button" id="search-close" aria-label="סגור">✕</button>
     </form>
     <ul id="search-results"></ul>
+  </div>
+
+  <div id="drawbar" hidden>
+    <p id="draw-hint"></p>
+    <div class="draw-btns">
+      <button id="draw-done" class="primary">סיום ושמירה</button>
+      <button id="draw-undo">בטל נקודה</button>
+      <button id="draw-cancel">ביטול</button>
+    </div>
   </div>
 
   <dialog id="name-dlg">
@@ -238,10 +164,34 @@
     <button id="layers-close" class="primary">סגור</button>
   </dialog>
 
+  <dialog id="lib-dlg" class="tall">
+    <h2>📚 המסלולים שלי</h2>
+    <div id="lib-list"></div>
+    <button id="lib-close" class="primary">סגור</button>
+  </dialog>
+
   <dialog id="areas-dlg">
     <h2>האזורים שלי</h2>
     <div id="areas-list"></div>
     <button id="areas-close" class="primary">סגור</button>
+  </dialog>
+
+  <dialog id="menu">
+    <h2>שבילים</h2>
+    <p id="offline-info" class="muted"></p>
+    <p id="storage-info" class="muted small"></p>
+    <button id="m-gpx">טען מסלול GPX</button>
+    <button id="m-clear">הסר מסלול</button>
+    <button id="m-plan" class="primary">✏️ תכנן מסלול</button>
+    <button id="m-lib">📚 המסלולים שלי</button>
+    <button id="m-draw">סמן אזור חדש על המפה</button>
+    <button id="m-areas">האזורים שלי</button>
+    <button id="m-area">הוסף למפה השמורה את האזור שבמסך</button>
+    <button id="m-carmel">עדכן את מפת הכרמל</button>
+    <label class="row"><input type="checkbox" id="m-night"> מצב לילה 🌙</label>
+    <label class="row"><input type="checkbox" id="m-wake" checked> השאר את המסך דולק בזמן ניווט</label>
+    <p class="muted small">נתוני מפה: © תורמי <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ‏(ODbL). לחיצה ארוכה על כפתור המיקום מכבה את ה-GPS.</p>
+    <button id="m-close" class="primary">סגור</button>
   </dialog>
 
   <div id="nodata" hidden>
