@@ -409,8 +409,9 @@
   }
 
   function fitRoute() {
-    if (!active) return;
-    const all = active.segs.flatMap((sg) => sg.coords).concat((active.waypoints || []).map((w) => w.coord));
+    const src = plan?.wps.length > 1 ? plan : active; // בתכנון – המסלול שמתכננים
+    if (!src) return;
+    const all = (src.segs || []).flatMap((sg) => sg.coords).concat((src.waypoints || []).map((w) => w.coord));
     if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 40, bottom: $('dock').offsetHeight + 30, left: 40, right: 76 }, maxZoom: 16 });
   }
 
@@ -1090,6 +1091,7 @@
 
   // ---------- כפתורים ותפריט ----------
   const menu = $('menu');
+  $('btn-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
   $('btn-settings').addEventListener('click', async () => {
     const ready = navigator.serviceWorker?.controller ? 'האפליקציה והמפה שמורות לשימוש אופליין ✓' : 'טוען לשימוש אופליין…';
     $('offline-info').textContent = ready;
@@ -1430,6 +1432,7 @@
     const m = dockMode();
     for (const sec of dockEl.children) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
+    $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     dockEl.classList.toggle('open', dock.open);
     if (m === 'route') renderRouteInfo();
     if (m === 'lib') renderLibrary();
