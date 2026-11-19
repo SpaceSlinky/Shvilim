@@ -747,18 +747,46 @@
     return [...idx.values()];
   }
 
+  // מילים שמתארות סוג מקום – כדי שחיפוש כמו "חניון שוויצריה הקטנה" או "מעיין כלח" יעבוד
+  const KIND_WORDS = {
+    trail: ['שביל', 'מסלול', 'סימון'], road: ['דרך', 'כביש', 'רחוב', 'דרך עפר'], water: ['נחל', 'ואדי', 'וואדי', 'אפיק'],
+    place: ['יישוב', 'ישוב', 'כפר', 'שכונה', 'מקום', 'עיר'], peak: ['הר', 'פסגה', 'גבעה', 'רכס'],
+    spring: ['מעיין', 'מעין', 'עין', 'נביעה'], viewpoint: ['תצפית', 'נוף', 'מצפור'],
+    ruins: ['חורבה', 'חרבה', 'חירבת', 'חרבת', 'עתיקות'], archaeological_site: ['עתיקות', 'אתר', 'ארכאולוגי'],
+    cave_entrance: ['מערה', 'מערת'], picnic_site: ['חניון', 'יום', 'פיקניק', 'חנייה', 'חניה'],
+    camp_site: ['חניון', 'לילה', 'קמפינג', 'לינה'], attraction: ['אתר', 'אטרקציה'],
+    water_poi: ['ברזייה', 'ברזיה', 'מים', 'שתייה'], area: ['אזור'], preset: ['אזור'],
+  };
+  const kindWordsNorm = Object.fromEntries(Object.entries(KIND_WORDS).map(([k, ws]) => [k, ws.map((w) => loose(norm(w)))]));
+
   function localSearch(q) {
     const nq = norm(q);
     if (!nq) return [];
     searchIndex ||= buildIndex();
     const extra = [...PRESETS.map((p) => ({ ...p, kind: 'preset' })), ...areas.map((a) => ({ name: a.name, kind: 'area', bbox: polyBbox(a.ring) }))]
       .map((x) => ({ ...x, key: norm(x.name) }));
-    const rank = { area: 0, preset: 0, place: 1, peak: 2, spring: 2, viewpoint: 2, trail: 3 };
-    const lq = loose(nq);
-    return [...extra, ...searchIndex]
-      .filter((x) => x.key.includes(nq) || (lq.length > 1 && loose(x.key).includes(lq)))
-      .sort((a, b) => (b.key.startsWith(nq) - a.key.startsWith(nq)) || ((rank[a.kind] ?? 4) - (rank[b.kind] ?? 4)) || a.name.length - b.name.length)
-      .slice(0, 30);
+    const tokens = nq.split(' ').filter(Boolean);
+    const rank = { area: 0, preset: 0, place: 1, peak: 2, spring: 2, viewpoint: 2, picnic_site: 2, camp_site: 2, trail: 3 };
+    const results = [];
+    for (const x of [...extra, ...searchIndex]) {
+      const lkey = loose(x.key);
+      const kw = kindWordsNorm[x.kind] || [];
+      let nameHits = 0, ok = true;
+      for (const t of tokens) {
+        const lt = loose(t);
+        const nameHit = x.key.includes(t) || (lt.length > 1 && lkey.includes(lt));
+        const kindHit = lt.length > 0 && kw.some((w) => w.startsWith(lt));
+        if (nameHit) nameHits++;
+        else if (!kindHit) { ok = false; break; }
+      }
+      if (!ok) continue;
+      // רק מילת סוג (למשל "מעיין") – מציגים את כל המקומות מהסוג הזה
+      const score = nameHits * 10 + (x.key === nq ? 8 : 0) + (x.key.startsWith(tokens[0]) ? 3 : 0) + (nameHits < tokens.length ? 2 : 0);
+      results.push({ x, score });
+    }
+    return results
+      .sort((a, b) => (b.score - a.score) || ((rank[a.x.kind] ?? 4) - (rank[b.x.kind] ?? 4)) || a.x.name.length - b.x.name.length)
+      .slice(0, 40).map((r) => r.x);
   }
 
   function showResults(items, note) {
