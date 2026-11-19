@@ -169,3 +169,22 @@ body.night .stats .lbl { color: #999; }
 body.night .btns button { background: #2a3036; border-color: #444; }
 body.night .btns button.primary { background: #2e7d4f; border-color: #2e7d4f; }
 body.night #plan-name { background: #1d2227; color: #eee; border-color: #444; }
+
+/* ספריית מסלולים */
+dialog.tall { max-height: 85vh; }
+#lib-list details { margin: 6px 0; border-bottom: 1px solid #eee; }
+#lib-list summary { font-weight: 700; padding: 8px 0; cursor: pointer; }
+.lib-row { display: flex; align-items: center; gap: 6px; padding: 7px 4px; border-top: 1px solid #f0f0f0; }
+.lib-row.current { background: rgba(46,125,79,.1); border-radius: 8px; }
+.lib-main { flex: 1; min-width: 0; }
+.lib-main b, .lib-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-btns { display: flex; gap: 4px; }
+.lib-btns button { width: auto; margin: 0; padding: 7px 8px; font-size: 13px; }
+.lib-btns button.armed { background: #c62828; color: #fff; border-color: #c62828; }
+.fld { display: block; font-size: 13px; color: #666; margin: 6px 0; }
+.fld input { display: block; width: 100%; font-size: 16px; padding: 9px; border-radius: 10px; border: 1px solid #ccc; margin-top: 3px; color: #222; }
+#smooth-level { font-size: 14px; margin-right: 6px; padding: 3px; }
+#ri-folder { margin: 0; }
+body.night #lib-list details, body.night .lib-row { border-color: #333; }
+body.night .fld { color: #aaa; }
+body.night .fld input, body.night #smooth-level { background: #1d2227; color: #eee; border-color: #444; }

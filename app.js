@@ -288,12 +288,14 @@
   async function setMapData(fc) {
     mapFC = fc;
     searchIndex = null;
-    smoother = Geo.makeSmoother(fc, 2);
-    if (!layerPrefs.smooth) return map.getSource('osm').setData(fc);
-    const stamp = fc.features.length + '|' + (fc.bbox || []).join(',');
+    const lvl = smoothLevel();
+    smoother = lvl ? Geo.makeSmoother(fc, lvl) : null;
+    if (!lvl) return map.getSource('osm').setData(fc);
+    const stamp = fc.features.length + '|' + (fc.bbox || []).join(',') + '|' + lvl;
     if (smoothCache?.stamp !== stamp) {
       const saved = await db.get('mapsmooth').catch(() => null);
-      smoothCache = saved?.stamp === stamp ? saved : { stamp, fc: Geo.smoothFC(fc, 2) };
+      if (saved?.stamp !== stamp) toast('מעגל קווים…', 2500);
+      smoothCache = saved?.stamp === stamp ? saved : { stamp, fc: Geo.smoothFC(fc, lvl) };
       if (saved?.stamp !== stamp) db.set('mapsmooth', smoothCache).catch(console.error);
     }
     if (mapFC === fc) map.getSource('osm').setData(smoothCache.fc);
@@ -400,7 +402,11 @@
     if (save) db.set('active', a).catch(console.error);
     updateStatus();
     prof = null;
-    Elev.profile(route.pts).then((p) => { if (active === a) { prof = p; updateStatus(); renderRouteInfo(); } });
+    Elev.profile(route.pts).then((p) => {
+      if (active !== a) return;
+      prof = p; updateStatus(); renderRouteInfo();
+      if (p) { a.gain = Math.round(p.gain); a.loss = Math.round(p.loss); if (a.libId) libUpdateStats(a.libId, p); }
+    });
   }
 
   function fitRoute() {
@@ -505,6 +511,8 @@
     const rem = prevAlong != null && prof ? profileStats(prof, prevAlong) : null;
     $('ri-remain').textContent = rem ? `נותרו ${Geo.fmtDist(total - prevAlong)} · ↑ ${Math.round(rem.gain)} מ' · ↓ ${Math.round(rem.loss)} מ'` : '';
     $('ri-edit').hidden = active.kind !== 'plan';
+    $('ri-save').hidden = !!active.libId;
+    $('ri-folder').textContent = active.libId ? '📁 ' + (active.folder || 'כללי') : '';
     $('ri-focus').checked = layerPrefs.focus;
     drawProfile($('ri-profile'), prof, { at: prevAlong });
   }
@@ -513,6 +521,7 @@
   $('ri-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
   $('ri-clear').addEventListener('click', () => clearRoute());
   $('ri-gpx').addEventListener('click', () => exportGpx());
+  $('ri-save').addEventListener('click', () => openSaveDlg('active', { name: active.name, coords: route.pts }));
   $('ri-edit').addEventListener('click', () => { $('routeinfo').hidden = true; startPlan(active); });
   $('ri-focus').addEventListener('change', (e) => { layerPrefs.focus = e.target.checked; applyLayers(); });
 
@@ -579,7 +588,7 @@
   let profTimer = 0;
   function renderPlan() {
     const { segs, free } = planSegs();
-    const display = layerPrefs.smooth && smoother ? segs.map((sg) => (sg.h === 'free' ? sg : { ...sg, coords: smoother(sg.coords) })) : segs;
+    const display = smoother ? segs.map((sg) => (sg.h === 'free' ? sg : { ...sg, coords: smoother(sg.coords) })) : segs;
     map.getSource('route').setData(plan.wps.length > 1 ? routeFeatures(display) : empty);
     plan.segs = display;
     // סמנים
@@ -625,7 +634,7 @@
     closeSearch();
     setFollow(false);
     plan = { wps: from?.wps ? from.wps.map((p) => [...p]) : [], opts: { snap: true, bike: false, ...(from?.opts || {}) },
-      name: from?.name || '', markers: [] };
+      name: from?.name || '', folder: from?.folder, libId: from?.libId, markers: [] };
     $('pl-snap').checked = plan.opts.snap;
     $('pl-bike').checked = plan.opts.bike;
     $('planbar').hidden = false;
@@ -658,16 +667,136 @@
   $('pl-cancel').addEventListener('click', endPlan);
   $('pl-snap').addEventListener('change', (e) => { plan.opts.snap = e.target.checked; renderPlan(); });
   $('pl-bike').addEventListener('change', (e) => { plan.opts.bike = e.target.checked; toast('מעדכן…', 800); setTimeout(renderPlan, 30); });
-  $('pl-done').addEventListener('click', () => { $('plan-name').value = plan.name || ''; $('plan-dlg').showModal(); });
+  // דיאלוג שמירה – משמש גם לסיום תכנון וגם לשמירת מסלול GPX בספרייה
+  let saveMode = null; // 'plan' | 'active'
+  async function openSaveDlg(mode, { name = '', folder = '', coords = [] } = {}) {
+    saveMode = mode;
+    const lib = await libLoad();
+    $('folders').replaceChildren(...[...new Set([...lib.map((r) => r.folder), ...areas.map((a) => a.name)])]
+      .filter(Boolean).map((f) => Object.assign(document.createElement('option'), { value: f })));
+    $('plan-name').value = name;
+    $('plan-folder').value = folder || suggestFolder(coords);
+    $('plan-lib').checked = true;
+    $('plan-lib-row').hidden = mode !== 'plan';
+    $('plan-dlg-title').textContent = mode === 'plan' ? 'שמירת המסלול' : 'שמירה בספרייה';
+    $('plan-dlg').showModal();
+  }
+  $('pl-done').addEventListener('click', () => openSaveDlg('plan', { name: plan.name, folder: plan.folder, coords: plan.wps }));
   $('plan-dlg').addEventListener('close', async () => {
-    if ($('plan-dlg').returnValue !== 'ok' || !plan) return;
+    if ($('plan-dlg').returnValue !== 'ok') return;
     const name = $('plan-name').value.trim() || 'מסלול מתוכנן';
-    const a = { kind: 'plan', name, wps: plan.wps, opts: plan.opts, segs: plan.segs,
-      waypoints: [] };
-    endPlan();
-    await setActive(a, { fit: true });
-    toast(`"${name}" פעיל · ${Geo.fmtDist(route.total)} · הקישו על שורת המצב לפרטים`, 5000);
+    const folder = $('plan-folder').value.trim() || 'כללי';
+    if (saveMode === 'plan' && plan) {
+      const inLib = $('plan-lib').checked;
+      const a = { kind: 'plan', name, folder, wps: plan.wps, opts: plan.opts, segs: plan.segs, waypoints: [],
+        libId: inLib ? plan.libId || Date.now() : undefined };
+      endPlan();
+      if (inLib) await libPut(a);
+      await setActive(a, { fit: true });
+      toast(`"${name}" ${inLib ? 'נשמר בספרייה (' + folder + ') ו' : ''}פעיל · ${Geo.fmtDist(route.total)}`, 5000);
+    } else if (saveMode === 'active' && active) {
+      active.name = name; active.folder = folder; active.libId ||= Date.now();
+      await libPut(active);
+      db.set('active', active);
+      renderRouteInfo();
+      toast(`נשמר בספרייה: ${folder} ← ${name}`);
+    }
   });
+
+  // ---------- ספריית מסלולים (לפי אזורים) ----------
+  const libLoad = async () => (await db.get('library').catch(() => null)) || [];
+  async function libPut(a) {
+    const lib = await libLoad();
+    const entry = { id: a.libId, kind: a.kind, name: a.name, folder: a.folder || 'כללי', segs: a.segs, wps: a.wps, opts: a.opts,
+      waypoints: a.waypoints,
+      len: segsToLines(a.segs).reduce((s2, l) => s2 + l.reduce((acc, p, j) => (j ? acc + Geo.haversine(l[j - 1], p) : 0), 0), 0),
+      gain: a.gain, loss: a.loss, updated: Date.now() };
+    const i = lib.findIndex((r) => r.id === entry.id);
+    if (i >= 0) lib[i] = { ...lib[i], ...entry, gain: entry.gain ?? lib[i].gain, loss: entry.loss ?? lib[i].loss };
+    else lib.push({ ...entry, created: Date.now() });
+    await db.set('library', lib);
+  }
+  async function libUpdateStats(id, p) {
+    const lib = await libLoad();
+    const r = lib.find((x) => x.id === id);
+    if (r && p) { r.gain = Math.round(p.gain); r.loss = Math.round(p.loss); await db.set('library', lib); }
+  }
+
+  // הצעת אזור: אזור שסימנתם שמכיל את תחילת המסלול, אחרת היישוב/המקום הקרוב
+  function suggestFolder(coords) {
+    const p = coords?.[0];
+    if (!p) return 'כללי';
+    const inPoly = (pt, ring) => {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    };
+    const area = areas.find((a) => inPoly(p, a.ring));
+    if (area) return area.name;
+    const preset = PRESETS.find((a) => p[0] >= a.bbox[0] && p[0] <= a.bbox[2] && p[1] >= a.bbox[1] && p[1] <= a.bbox[3]);
+    if (preset) return preset.name;
+    let best = null, bd = 6000;
+    for (const f of mapFC?.features || []) {
+      if (f.properties.k !== 'place') continue;
+      const d = Geo.haversine(p, f.geometry.coordinates);
+      if (d < bd) { bd = d; best = f.properties.n; }
+    }
+    return best || 'כללי';
+  }
+
+  async function openLibrary() {
+    const lib = await libLoad();
+    const box = $('lib-list');
+    box.replaceChildren();
+    if (!lib.length) box.innerHTML = '<p class="muted">עדיין אין מסלולים שמורים. מסלול שתתכננו ותשמרו יופיע כאן, מסודר לפי אזורים.</p>';
+    const groups = {};
+    for (const r of lib) (groups[r.folder || 'כללי'] ||= []).push(r);
+    for (const folder of Object.keys(groups).sort((a, b) => a.localeCompare(b, 'he'))) {
+      const det = document.createElement('details');
+      det.open = true;
+      det.innerHTML = '<summary></summary>';
+      det.querySelector('summary').textContent = `📁 ${folder} (${groups[folder].length})`;
+      for (const r of groups[folder].sort((a, b) => (b.updated || 0) - (a.updated || 0))) {
+        const row = document.createElement('div');
+        row.className = 'lib-row' + (active?.libId === r.id ? ' current' : '');
+        row.innerHTML = `<div class="lib-main"><b></b><span class="muted small"></span></div>
+          <span class="lib-btns"><button data-a="open">הפעל</button>${r.kind === 'plan' ? '<button data-a="edit">✏️</button>' : ''}<button data-a="gpx">GPX</button><button data-a="del">🗑</button></span>`;
+        row.querySelector('b').textContent = r.name;
+        row.querySelector('.muted').textContent = [Geo.fmtDist(r.len), r.gain != null ? `↑ ${r.gain} מ'` : '', r.loss != null ? `↓ ${r.loss} מ'` : '']
+          .filter(Boolean).join(' · ');
+        row.addEventListener('click', async (ev) => {
+          const act = ev.target.dataset?.a;
+          if (!act) return;
+          const a = { ...r, libId: r.id };
+          if (act === 'del') {
+            if (!confirmDel(row)) return;
+            await db.set('library', (await libLoad()).filter((x) => x.id !== r.id));
+            if (active?.libId === r.id) { active.libId = undefined; db.set('active', active); }
+            return openLibrary();
+          }
+          $('lib-dlg').close();
+          if (act === 'open') { await setActive(a, { fit: true }); toast(`"${r.name}" פעיל`); }
+          if (act === 'edit') { startPlan(a); plan.libId = r.id; plan.folder = r.folder; }
+          if (act === 'gpx') { const prev = active; active = a; await exportGpx(); active = prev; }
+        });
+        det.appendChild(row);
+      }
+      box.appendChild(det);
+    }
+    if (!$('lib-dlg').open) $('lib-dlg').showModal();
+  }
+  // מחיקה בשתי הקשות (בלי חלונות אישור של הדפדפן)
+  function confirmDel(row) {
+    const btn = row.querySelector('[data-a=del]');
+    if (btn.classList.contains('armed')) return true;
+    btn.classList.add('armed'); btn.textContent = 'למחוק?';
+    setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '🗑'; }, 3000);
+    return false;
+  }
+  $('lib-close').addEventListener('click', () => $('lib-dlg').close());
 
   // ---------- GPS ----------
   let watchId = null;
@@ -784,6 +913,7 @@
   $('btn-menu').addEventListener('click', async () => {
     const ready = navigator.serviceWorker?.controller ? 'האפליקציה והמפה שמורות לשימוש אופליין ✓' : 'טוען לשימוש אופליין…';
     $('offline-info').textContent = ready;
+    storageInfo().then((t) => ($('storage-info').textContent = t));
     menu.showModal();
   });
   $('m-close').addEventListener('click', () => menu.close());
@@ -792,11 +922,22 @@
   $('m-area').addEventListener('click', () => { menu.close(); downloadVisible(); });
   $('m-draw').addEventListener('click', () => { menu.close(); startDraw(); });
   $('m-plan').addEventListener('click', () => { menu.close(); startPlan(); });
+  $('m-lib').addEventListener('click', () => { menu.close(); openLibrary(); });
   $('m-areas').addEventListener('click', () => { menu.close(); renderAreas(); $('areas-dlg').showModal(); });
   $('areas-close').addEventListener('click', () => $('areas-dlg').close());
   $('m-carmel').addEventListener('click', () => { menu.close(); downloadArea(CARMEL); });
   $('w-carmel').addEventListener('click', () => downloadArea(CARMEL));
   gpxInput.addEventListener('change', () => { if (gpxInput.files[0]) loadGpxFile(gpxInput.files[0]); gpxInput.value = ''; });
+
+  async function storageInfo() {
+    try {
+      const est = await navigator.storage.estimate();
+      const mb = (b) => (b / 1048576).toFixed(1) + 'MB';
+      const d = est.usageDetails || {};
+      const parts = [d.indexedDB != null && `מפה ומסלולים ${mb(d.indexedDB)}`, d.caches != null && `אפליקציה, גופנים וגובה ${mb(d.caches)}`].filter(Boolean);
+      return `נפח בטלפון: ${mb(est.usage)}` + (parts.length ? ` (${parts.join(' · ')})` : '');
+    } catch { return ''; }
+  }
 
   // ---------- סיבוב ומצפן ----------
   let compassMode = false;
@@ -902,7 +1043,7 @@
   };
   const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major', 'area-label']);
   const layerPrefs = Object.assign(
- { base: 'vector', labels: true, smooth: true, focus: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
+ { base: 'vector', labels: true, smooth: 3, focus: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
 
   function applyLayers() {
@@ -914,7 +1055,9 @@
     map.setLayoutProperty('dim', 'visibility', vis(layerPrefs.focus && layerPrefs.route && (!!active || !!plan)));
     try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
   }
+  function smoothLevel() { return layerPrefs.smooth === true ? 3 : +layerPrefs.smooth || 0; }
   function syncLayerForm() {
+    $('smooth-level').value = String(smoothLevel());
     for (const el of document.querySelectorAll('#layers-dlg input')) {
       if (el.type === 'radio') el.checked = el.value === layerPrefs.base;
       else el.checked = !!layerPrefs[el.name];
@@ -922,6 +1065,12 @@
   }
   $('layers-dlg').addEventListener('change', (e) => {
     const el = e.target;
+    if (el.id === 'smooth-level') {
+      layerPrefs.smooth = +el.value;
+      applyLayers();
+      if (mapFC) setTimeout(() => setMapData(mapFC), 30);
+      return;
+    }
     if (el.type === 'radio') {
       layerPrefs.base = el.value;
       if (el.value !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);

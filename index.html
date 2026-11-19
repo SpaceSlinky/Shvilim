@@ -55,10 +55,12 @@
       <div><span class="lbl">↓ ירידה</span><span id="ri-down" class="v">–</span></div>
       <div><span class="lbl">⏱ זמן משוער</span><span id="ri-time" class="v">–</span></div>
     </div>
+    <p id="ri-folder" class="muted small"></p>
     <canvas id="ri-profile" class="profile"></canvas>
     <p id="ri-remain" class="muted small center"></p>
     <label class="row"><input type="checkbox" id="ri-focus"> הדגש את המסלול (המפה מסביב דוהה)</label>
     <div class="btns">
+      <button id="ri-save">💾 שמור</button>
       <button id="ri-edit">✏️ ערוך</button>
       <button id="ri-fit">הצג הכול</button>
       <button id="ri-gpx">ייצוא GPX</button>
@@ -89,9 +91,12 @@
 
   <dialog id="plan-dlg">
     <form method="dialog">
-      <h2>שם למסלול</h2>
-      <input id="plan-name" placeholder="למשל: טבעת כלח" maxlength="50">
-      <button value="ok" class="primary">שמור והפעל</button>
+      <h2 id="plan-dlg-title">שמירת המסלול</h2>
+      <label class="fld">שם<input id="plan-name" placeholder="למשל: טבעת כלח" maxlength="50"></label>
+      <label class="fld">אזור (תיקייה)<input id="plan-folder" list="folders" placeholder="למשל: שוויצריה הקטנה" maxlength="40"></label>
+      <datalist id="folders"></datalist>
+      <label class="row" id="plan-lib-row"><input type="checkbox" id="plan-lib" checked> שמור בספרייה</label>
+      <button value="ok" class="primary">שמור</button>
       <button value="cancel" formnovalidate>חזרה לעריכה</button>
     </form>
   </dialog>
@@ -143,10 +148,17 @@
       <label class="row"><input type="checkbox" name="route"> מסלול GPX</label>
       <label class="row"><input type="checkbox" name="labels"> שמות על המפה</label>
       <label class="row"><input type="checkbox" name="bike"> שבילי אופניים</label>
-      <label class="row"><input type="checkbox" name="smooth"> קווים מעוגלים</label>
+      <label class="row">עיגול קווים
+        <select id="smooth-level"><option value="0">ללא</option><option value="2">רגיל</option><option value="3">חלק</option><option value="4">חלק מאוד</option></select></label>
       <label class="row"><input type="checkbox" name="focus"> הדגשת מסלול פעיל</label>
     </div>
     <button id="layers-close" class="primary">סגור</button>
+  </dialog>
+
+  <dialog id="lib-dlg" class="tall">
+    <h2>📚 המסלולים שלי</h2>
+    <div id="lib-list"></div>
+    <button id="lib-close" class="primary">סגור</button>
   </dialog>
 
   <dialog id="areas-dlg">
@@ -158,9 +170,11 @@
   <dialog id="menu">
     <h2>שבילים</h2>
     <p id="offline-info" class="muted"></p>
+    <p id="storage-info" class="muted small"></p>
     <button id="m-gpx">טען מסלול GPX</button>
     <button id="m-clear">הסר מסלול</button>
     <button id="m-plan" class="primary">✏️ תכנן מסלול</button>
+    <button id="m-lib">📚 המסלולים שלי</button>
     <button id="m-draw">סמן אזור חדש על המפה</button>
     <button id="m-areas">האזורים שלי</button>
     <button id="m-area">הוסף למפה השמורה את האזור שבמסך</button>
