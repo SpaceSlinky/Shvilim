@@ -79,7 +79,7 @@
       draft: { type: 'geojson', data: empty },
     },
     layers: [
-      { id: 'bg', type: 'background', paint: { 'background-color': '#f3f0e6' } },
+      { id: 'bg', type: 'background', paint: { 'background-color': '#e6e1d1' } },
       ...['sat', 'topo', 'ihm'].map((id) => ({ id: 'base-' + id, type: 'raster', source: id,
         layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150 } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
@@ -112,8 +112,8 @@
         paint: { 'line-color': '#ff1fa6', 'line-opacity': 0.38, 'line-width': zw(8, 18) } },
       // שבילים מסומנים
       { id: 'trail-casing', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#666', '#ffffff'],
-          'line-opacity': 0.85, 'line-width': zw(2.5, 7) } },
+        paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
+          'line-opacity': 0.85, 'line-width': zw(2.8, 7.5) } },
       { id: 'trail', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': zw(1.5, 4.5) } },
       { id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
@@ -135,8 +135,12 @@
         paint: { 'text-color': '#222', ...halo } },
       { id: 'poi-dot', type: 'circle', source: 'osm', filter: ['all', k('poi'), ['!=', ['get', 't'], 'peak']], minzoom: 12.5,
         paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 3, 16, 6], 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff',
-          'circle-color': ['match', ['get', 't'], ['spring', 'water'], '#1f88e5', 'viewpoint', '#e53935',
+          'circle-color': ['match', ['get', 't'], ['spring', 'water'], '#1f88e5', 'viewpoint', '#e53935', 'parking', '#3949ab',
             ['ruins', 'archaeological_site'], '#795548', 'cave_entrance', '#424242', '#43a047'] } },
+      { id: 'parking-p', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['==', ['get', 't'], 'parking']], minzoom: 14,
+        layout: { 'text-field': 'P', 'text-font': FONT, 'text-size': ['interpolate', ['linear'], ['zoom'], 14, 7, 16, 10],
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#ffffff' } },
       { id: 'poi-label', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['has', 'n'], ['!=', ['get', 't'], 'peak']], minzoom: 14,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'text-anchor': 'top', 'text-offset': [0, 0.6],
           'text-max-width': 8, 'text-optional': true },
@@ -289,6 +293,37 @@
     el.textContent = f.properties.name;
     new maplibregl.Popup({ closeButton: false }).setLngLat(f.geometry.coordinates).setDOMContent(el).addTo(map);
   });
+
+  // ---------- הקשה על המפה: מה רשום ב-OpenStreetMap ----------
+  const COLOR_NAMES = { '#e0262b': 'אדום', '#1f5bd8': 'כחול', '#16a03a': 'ירוק', '#222222': 'שחור', '#f57c00': 'כתום',
+    '#8e24aa': 'סגול', '#e8b800': 'צהוב', '#8d5524': 'חום', '#ffffff': 'לבן / שקוף', '#808080': 'אפור', '#7b5cb8': 'לא ידוע' };
+  const HW = { path: 'שביל', footway: 'שביל הליכה', track: 'דרך עפר', steps: 'מדרגות', bridleway: 'שביל רכיבה', cycleway: 'שביל אופניים',
+    residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
+  const INFO_LAYERS = ['trail', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-dot', 'peak'];
+  map.on('click', (e) => {
+    if (draft) return;
+    const { x, y } = e.point;
+    const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
+    if (!feats.length) return;
+    const seen = new Set();
+    const rows = [];
+    for (const f of feats) {
+      const p = f.properties;
+      const id = p.k + p.n + p.c + p.h + p.t;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      let line = '';
+      if (p.k === 'trail') line = `שביל מסומן ${COLOR_NAMES[p.c] || p.c}` + (p.ref ? ` (${p.ref})` : '')
+        + `<small>OSM: ${[p.o && 'osmc:symbol=' + p.o, p.cl && 'colour=' + p.cl].filter(Boolean).join(' · ') || '—'}${p.w ? ' · הסימון רשום על השביל עצמו' : ''}</small>`;
+      else if (p.k === 'road') line = HW[p.h] || 'דרך';
+      else if (p.k === 'water') line = 'נחל';
+      else if (p.k === 'poi') line = KIND[p.t === 'water' ? 'water_poi' : p.t] || p.t;
+      rows.push(`<div class="info-row"><b>${esc(p.n || '')}</b> ${line}</div>`);
+      if (rows.length >= 4) break;
+    }
+    new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
+  });
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   // ---------- מסלול GPX ----------
   let route = null;
@@ -568,7 +603,7 @@
     tracks: ['track'],
     roads: ['major-casing', 'major', 'medium-casing', 'medium', 'minor-casing', 'minor', 'road-label'],
     water: ['water', 'water-label'],
-    poi: ['poi-dot', 'poi-label', 'peak'],
+    poi: ['poi-dot', 'parking-p', 'poi-label', 'peak'],
     places: ['place-minor', 'place-major'],
     areas: ['area-fill', 'area-line', 'area-label'],
     route: ['route-halo', 'route-line', 'route-arrows', 'route-ends', 'wpts'],
@@ -607,7 +642,7 @@
 
   // ---------- מצב לילה ----------
   const THEME = [ // [שכבה, מאפיין, יום, לילה]
-    ['bg', 'background-color', '#f3f0e6', '#15191e'],
+    ['bg', 'background-color', '#e6e1d1', '#15191e'],
     ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
     ['major-casing', 'line-color', '#b8742a', '#4d3215'],
     ['major', 'line-color', '#f7a656', '#9a6430'],
@@ -617,7 +652,7 @@
     ['minor', 'line-color', '#ffffff', '#5a5e63'],
     ['track', 'line-color', '#8b6b3e', '#a98b5e'],
     ['path', 'line-color', '#4a3d30', '#b3a596'],
-    ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#666', '#ffffff'],
+    ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
       ['case', ['==', ['get', 'c'], '#ffffff'], '#888', '#0d0f12']],
     ['trail', 'line-color', ['get', 'c'], ['case', ['==', ['get', 'c'], '#222222'], '#d8d8d8', ['get', 'c']]],
     ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'area-label']
@@ -726,7 +761,7 @@
   // ---------- חיפוש ----------
   const KIND = { trail: 'שביל', road: 'דרך', water: 'נחל', place: 'יישוב / מקום', area: 'האזור שלי', preset: 'אזור',
     peak: 'פסגה', spring: 'מעיין', viewpoint: 'תצפית', ruins: 'חורבה', archaeological_site: 'אתר עתיקות',
-    cave_entrance: 'מערה', picnic_site: 'חניון', camp_site: 'חניון לילה', attraction: 'אתר', water_poi: 'ברזייה' };
+    cave_entrance: 'מערה', parking: 'חניה', picnic_site: 'חניון', camp_site: 'חניון לילה', attraction: 'אתר', water_poi: 'ברזייה' };
   const norm = (s) => s.toLowerCase().replace(/[\u0591-\u05C7]/g, '').replace(/["'״׳\-–]/g, ' ')
     .replace(/וו/g, 'ו').replace(/יי/g, 'י').replace(/\s+/g, ' ').trim();
   const loose = (s) => s.replace(/[וי]/g, ''); // כתיב מלא/חסר: שוויצריה = שווצריה = שויצריה
@@ -753,7 +788,7 @@
     place: ['יישוב', 'ישוב', 'כפר', 'שכונה', 'מקום', 'עיר'], peak: ['הר', 'פסגה', 'גבעה', 'רכס'],
     spring: ['מעיין', 'מעין', 'עין', 'נביעה'], viewpoint: ['תצפית', 'נוף', 'מצפור'],
     ruins: ['חורבה', 'חרבה', 'חירבת', 'חרבת', 'עתיקות'], archaeological_site: ['עתיקות', 'אתר', 'ארכאולוגי'],
-    cave_entrance: ['מערה', 'מערת'], picnic_site: ['חניון', 'יום', 'פיקניק', 'חנייה', 'חניה'],
+    cave_entrance: ['מערה', 'מערת'], picnic_site: ['חניון', 'יום', 'פיקניק'], parking: ['חניה', 'חנייה', 'חניון', 'חנית', 'פרקינג'],
     camp_site: ['חניון', 'לילה', 'קמפינג', 'לינה'], attraction: ['אתר', 'אטרקציה'],
     water_poi: ['ברזייה', 'ברזיה', 'מים', 'שתייה'], area: ['אזור'], preset: ['אזור'],
   };

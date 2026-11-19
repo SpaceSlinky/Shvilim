@@ -30,14 +30,22 @@ out geom(${b});
   node["historic"~"^(ruins|archaeological_site)$"](${b});
   node["place"~"^(city|town|village|hamlet|suburb|neighbourhood|locality)$"](${b});
 );
-out;`;
+out;
+(
+  node["amenity"="parking"](${b});
+  way["amenity"="parking"](${b});
+);
+out center tags;`;
   }
 
   const nameOf = (t) => t['name:he'] || t.name || '';
+  // התגים המקוריים של הסימון – מוצגים בהקשה על שביל
+  const tagInfo = (t) => Object.fromEntries([['o', t['osmc:symbol']], ['cl', t.colour], ['ref', t.ref]].filter(([, v]) => v));
   const r6 = (v) => Math.round(v * 1e6) / 1e6;
 
   function trailColor(t) {
-    for (const src of [(t['osmc:symbol'] || '').split(':')[0], t.colour || '']) {
+    const osmc = (t['osmc:symbol'] || '').toLowerCase();
+    for (const src of [osmc.split(':')[0], t.colour || '']) {
       const c = src.trim().toLowerCase();
       if (TRAIL_COLORS[c]) return TRAIL_COLORS[c];
       if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/.test(c)) return c;
@@ -64,17 +72,28 @@ out;`;
       const t = el.tags || {};
       const n = nameOf(t);
       if (el.type === 'relation') {
-        const props = { k: 'trail', c: trailColor(t) };
+        const props = { k: 'trail', c: trailColor(t), ...tagInfo(t) };
         if (n) props.n = n;
         for (const m of el.members || []) if (m.type === 'way') lines(m.geometry).forEach((c) => add('LineString', c, props));
+      } else if (el.type === 'way' && el.center) {
+        // חניון (שטח) – מוצג כנקודה במרכזו
+        add('Point', [r6(el.center.lon), r6(el.center.lat)], { k: 'poi', t: 'parking', ...(n ? { n } : {}) });
       } else if (el.type === 'way') {
-        const props = t.waterway ? { k: 'water' } : { k: 'road', r: ROAD_CLASS[t.highway] || 'minor' };
+        const props = t.waterway ? { k: 'water' } : { k: 'road', r: ROAD_CLASS[t.highway] || 'minor', h: t.highway };
         if (n) props.n = n;
-        lines(el.geometry).forEach((c) => add('LineString', c, props));
+        const segs = lines(el.geometry);
+        segs.forEach((c) => add('LineString', c, props));
+        // שביל שהסימון שלו רשום על הדרך עצמה (ולא כמסלול) – מציירים גם כשביל מסומן
+        if (!t.waterway && (t['osmc:symbol'] || t.colour)) {
+          const tp = { k: 'trail', c: trailColor(t), ...tagInfo(t), w: 1 };
+          if (n) tp.n = n;
+          segs.forEach((c) => add('LineString', c, tp));
+        }
       } else if (el.type === 'node') {
         const p = [r6(el.lon), r6(el.lat)];
         if (t.place) { if (n) add('Point', p, { k: 'place', t: t.place, n }); continue; }
-        const kind = t.natural || t.tourism || t.historic || (t.amenity === 'drinking_water' ? 'water' : null);
+        const kind = t.natural || t.tourism || t.historic
+          || (t.amenity === 'drinking_water' ? 'water' : t.amenity === 'parking' ? 'parking' : null);
         if (!kind) continue;
         const props = { k: 'poi', t: kind };
         if (n) props.n = n;

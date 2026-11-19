@@ -127,3 +127,7 @@ body.night .maplibregl-popup-content { background: #23282e; color: #eee; }
 body.night #layers-dlg h3 { color: #aaa; }
 body.night #btn-compass.active { background: #1e88e5; }
 @media (max-height: 640px) { #controls { gap: 7px; } #controls button { width: 46px; height: 46px; } }
+.info-row { padding: 3px 0; line-height: 1.35; }
+.info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }
+.info-row small { display: block; color: #777; font-size: 11px; direction: ltr; text-align: right; }
+body.night .info-row + .info-row { border-color: #444; }
