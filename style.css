@@ -174,17 +174,23 @@ body.night #plan-name { background: #1d2227; color: #eee; border-color: #444; }
 dialog.tall { max-height: 85vh; }
 #lib-list details { margin: 6px 0; border-bottom: 1px solid #eee; }
 #lib-list summary { font-weight: 700; padding: 8px 0; cursor: pointer; }
-.lib-row { display: flex; align-items: center; gap: 6px; padding: 7px 4px; border-top: 1px solid #f0f0f0; }
+.lib-row { padding: 9px 6px; border-top: 1px solid #f0f0f0; cursor: pointer; }
 .lib-row.current { background: rgba(46,125,79,.1); border-radius: 8px; }
-.lib-main { flex: 1; min-width: 0; }
-.lib-main b, .lib-main span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lib-btns { display: flex; gap: 4px; }
-.lib-btns button { width: auto; margin: 0; padding: 7px 8px; font-size: 13px; }
+.lib-row.current .lib-main b::after { content: " · פעיל"; font-weight: 400; color: var(--green); }
+.lib-main b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.lib-main span { display: block; margin-top: 2px; }
+/* הפעולות מופיעות רק לשורה שנבחרה */
+.lib-btns { display: none; gap: 6px; margin-top: 8px; }
+.lib-row.open { background: rgba(0,0,0,.04); border-radius: 8px; }
+.lib-row.open .lib-btns { display: flex; }
+.lib-btns button { flex: 1; width: auto; margin: 0; padding: 9px 6px; font-size: 14px; }
 .lib-btns button.armed { background: #c62828; color: #fff; border-color: #c62828; }
 .fld { display: block; font-size: 13px; color: #666; margin: 6px 0; }
 .fld input { display: block; width: 100%; font-size: 16px; padding: 9px; border-radius: 10px; border: 1px solid #ccc; margin-top: 3px; color: #222; }
 #ri-folder { margin: 0; }
 body.night #lib-list details, body.night .lib-row { border-color: #333; }
+body.night .lib-row.open { background: rgba(255,255,255,.06); }
+body.night .lib-row.current .lib-main b::after { color: #81c784; }
 body.night .fld { color: #aaa; }
 body.night .fld input { background: #1d2227; color: #eee; border-color: #444; }
 

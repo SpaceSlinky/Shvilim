@@ -632,26 +632,9 @@
   $('ri-close').addEventListener('click', closeRouteInfo);
   $('ri-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
   $('ri-clear').addEventListener('click', () => clearRoute());
-  $('ri-gpx').addEventListener('click', () => exportGpx());
   $('ri-save').addEventListener('click', () => openSaveDlg('active', { name: active.name, coords: route.pts }));
   $('ri-edit').addEventListener('click', () => { closeRouteInfo(); startPlan(active); });
   $('ri-focus').addEventListener('change', (e) => { layerPrefs.focus = e.target.checked; applyLayers(); });
-
-  async function exportGpx() {
-    if (!active) return;
-    const name = active.name || 'מסלול';
-    const x = (t) => esc(t);
-    const pts = segsToLines(active.segs).map((l) => '<trkseg>' + l.map((p) => `<trkpt lat="${p[1].toFixed(6)}" lon="${p[0].toFixed(6)}"/>`).join('') + '</trkseg>').join('');
-    const wpts = (active.waypoints || []).map((w) => `<wpt lat="${w.coord[1]}" lon="${w.coord[0]}"><name>${x(w.name || '')}</name></wpt>`).join('');
-    const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="שבילים" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${x(name)}</name></metadata>${wpts}<trk><name>${x(name)}</name>${pts}</trk></gpx>`;
-    const file = new File([gpx], name.replace(/[\\/:*?"<>|]/g, '_') + '.gpx', { type: 'application/gpx+xml' });
-    if (navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; }
-    }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(file); a.download = file.name; a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  }
 
   // ---------- תכנון מסלול ----------
   let plan = null;       // { wps:[[lon,lat]], opts:{snap,bike}, name, markers:[] }
@@ -886,13 +869,19 @@
         const row = document.createElement('div');
         row.className = 'lib-row' + (active?.libId === r.id ? ' current' : '');
         row.innerHTML = `<div class="lib-main"><b></b><span class="muted small"></span></div>
-          <span class="lib-btns"><button data-a="open">הפעל</button>${r.kind === 'plan' ? '<button data-a="edit">✏️</button>' : ''}<button data-a="gpx">GPX</button><button data-a="del">🗑</button></span>`;
+          <div class="lib-btns"><button data-a="open" class="primary">${active?.libId === r.id ? 'הצג על המפה' : 'הפעל'}</button>${r.kind === 'plan' ? '<button data-a="edit">✏️ עריכה</button>' : ''}<button data-a="del">🗑 מחיקה</button></div>`;
         row.querySelector('b').textContent = r.name;
         row.querySelector('.muted').textContent = [Geo.fmtDist(r.len), r.gain != null ? `↑ ${r.gain} מ'` : '', r.loss != null ? `↓ ${r.loss} מ'` : '']
           .filter(Boolean).join(' · ');
         row.addEventListener('click', async (ev) => {
-          const act = ev.target.dataset?.a;
-          if (!act) return;
+          const act = ev.target.closest('[data-a]')?.dataset.a;
+          // הקשה על השורה: בוחרת אותה (ומבטלת בחירה קודמת)
+          if (!act) {
+            const was = row.classList.contains('open');
+            box.querySelectorAll('.lib-row.open').forEach((x) => x.classList.remove('open'));
+            row.classList.toggle('open', !was);
+            return;
+          }
           const a = { ...r, libId: r.id };
           if (act === 'del') {
             if (!confirmDel(row)) return;
@@ -903,7 +892,6 @@
           $('lib-dlg').close();
           if (act === 'open') { await setActive(a, { fit: true }); toast(`"${r.name}" פעיל`); }
           if (act === 'edit') { startPlan(a); plan.libId = r.id; plan.folder = r.folder; }
-          if (act === 'gpx') { const prev = active; active = a; await exportGpx(); active = prev; }
         });
         det.appendChild(row);
       }
@@ -915,8 +903,8 @@
   function confirmDel(row) {
     const btn = row.querySelector('[data-a=del]');
     if (btn.classList.contains('armed')) return true;
-    btn.classList.add('armed'); btn.textContent = 'למחוק?';
-    setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '🗑'; }, 3000);
+    btn.classList.add('armed'); btn.textContent = 'למחוק? הקישו שוב';
+    setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '🗑 מחיקה'; }, 3000);
     return false;
   }
   $('lib-close').addEventListener('click', () => $('lib-dlg').close());
