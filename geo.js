@@ -120,7 +120,48 @@
     return [[w, s], [e, n]];
   }
 
-  const Geo = { haversine, parseGpx, buildRoute, locate, circle, fmtDist, bounds };
+  /** החלקת קו (Chaikin): מעגלת פינות, שומרת על נקודות הקצה כדי שחיבורים בין קווים יישמרו */
+  function chaikin(pts, iters = 2) {
+    for (let k = 0; k < iters && pts.length > 2; k++) {
+      const out = [pts[0]];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+        out.push([0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1], [0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1]);
+      }
+      out.push(pts[pts.length - 1]);
+      pts = out;
+    }
+    return pts;
+  }
+  /**
+   * מחליק את כל הקווים במפה. נקודות שבהן קו אחר מתחיל/נגמר (צמתים) נשארות במקומן,
+   * כדי ששביל שמתחבר לאמצע דרך לא "יתנתק" ממנה אחרי ההחלקה.
+   */
+  function smoothFC(fc, iters = 2) {
+    const key = (p) => p[0] + ',' + p[1];
+    const ends = new Set();
+    for (const f of fc.features) {
+      if (f.geometry.type !== 'LineString') continue;
+      const c = f.geometry.coordinates;
+      ends.add(key(c[0])); ends.add(key(c[c.length - 1]));
+    }
+    const smoothLine = (pts) => {
+      const out = [];
+      let start = 0;
+      for (let i = 1; i < pts.length; i++) {
+        if (i === pts.length - 1 || ends.has(key(pts[i]))) {
+          const piece = chaikin(pts.slice(start, i + 1), iters);
+          out.push(...(out.length ? piece.slice(1) : piece));
+          start = i;
+        }
+      }
+      return out;
+    };
+    return { type: 'FeatureCollection', features: fc.features.map((f) => f.geometry.type !== 'LineString' ? f
+      : { ...f, geometry: { type: 'LineString', coordinates: smoothLine(f.geometry.coordinates) } }) };
+  }
+
+  const Geo = { chaikin, smoothFC, haversine, parseGpx, buildRoute, locate, circle, fmtDist, bounds };
   if (typeof module !== 'undefined' && module.exports) module.exports = Geo;
   root.Geo = Geo;
 })(typeof self !== 'undefined' ? self : globalThis);

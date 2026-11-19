@@ -83,7 +83,7 @@
       ...['sat', 'topo', 'ihm'].map((id) => ({ id: 'base-' + id, type: 'raster', source: id,
         layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150 } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
-        paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.6, 2.4) } },
+        paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
       { id: 'major-casing', type: 'line', source: 'osm', filter: road('major'), layout: { 'line-join': 'round' },
         paint: { 'line-color': '#b8742a', 'line-width': zw(2, 9) } },
@@ -251,10 +251,19 @@
 
   let mapFC = null;
   let searchIndex = null;
-  function setMapData(fc) {
+  // הגרסה המוחלקת מחושבת פעם אחת ונשמרת, כדי שהפתיחה תהיה מהירה
+  let smoothCache = null;
+  async function setMapData(fc) {
     mapFC = fc;
     searchIndex = null;
-    map.getSource('osm').setData(fc);
+    if (!layerPrefs.smooth) return map.getSource('osm').setData(fc);
+    const stamp = fc.features.length + '|' + (fc.bbox || []).join(',');
+    if (smoothCache?.stamp !== stamp) {
+      const saved = await db.get('mapsmooth').catch(() => null);
+      smoothCache = saved?.stamp === stamp ? saved : { stamp, fc: Geo.smoothFC(fc, 2) };
+      if (saved?.stamp !== stamp) db.set('mapsmooth', smoothCache).catch(console.error);
+    }
+    if (mapFC === fc) map.getSource('osm').setData(smoothCache.fc);
   }
   Promise.all([db.get('mapdata').catch(() => null), mapReady]).then(([fc]) => {
     if (fc) setMapData(fc);
@@ -361,8 +370,8 @@
     updateMarkerHeading();
     el.classList.toggle('poor', accuracy > 50);
     map.getSource('acc')?.setData({ type: 'Feature', geometry: Geo.circle(p, accuracy), properties: {} });
-    if (follow) map.easeTo({ center: p, zoom: first ? Math.max(map.getZoom(), 15.5) : map.getZoom(), duration: first ? 600 : 400,
-      ...(compassMode && devHeading != null ? { bearing: devHeading } : {}) });
+    if (follow && first) map.easeTo({ center: p, zoom: Math.max(map.getZoom(), 15.5), duration: 600 });
+    else if (follow) startCamera();
     updateStatus();
   }
 
@@ -396,6 +405,7 @@
 
   function setFollow(on) {
     follow = on;
+    if (on) startCamera();
     $('btn-locate').classList.toggle('active', on);
   }
 
@@ -487,15 +497,38 @@
     else if (e.absolute && e.alpha != null) h = 360 - e.alpha;
     if (h == null) return;
     h = (h + (screen.orientation?.angle || 0) + 360) % 360;
-    // החלקה (low-pass) עם התחשבות במעבר 359→0
+    // סינון רעשי חיישן (low-pass) עם התחשבות במעבר 359→0
     if (devHeading == null) devHeading = h;
-    else devHeading = (devHeading + (((h - devHeading + 540) % 360) - 180) * 0.25 + 360) % 360;
-    updateMarkerHeading();
+    else devHeading = (devHeading + angDiff(h, devHeading) * 0.12 + 360) % 360;
     const now = performance.now();
-    if (compassMode && now - lastRotate > 120) {
-      lastRotate = now;
-      map.rotateTo(devHeading, { duration: 100 });
+    if (now - lastRotate > 100) { lastRotate = now; updateMarkerHeading(); }
+    if (compassMode) startCamera();
+  }
+  const angDiff = (a, b) => ((a - b + 540) % 360) - 180;
+
+  // לולאת מצלמה: מזיזה את המפה בהדרגה בכל פריים (במקום קפיצות) – לסיבוב ולמעקב אחרי המיקום
+  let camRaf = 0;
+  let touching = false;
+  const mapEl = map.getContainer();
+  mapEl.addEventListener('touchstart', () => (touching = true), { passive: true });
+  mapEl.addEventListener('touchend', (e) => { if (!e.touches.length) touching = false; }, { passive: true });
+  function startCamera() { if (!camRaf) camRaf = requestAnimationFrame(cameraStep); }
+  function cameraStep() {
+    camRaf = 0;
+    if (touching || map.isEasing?.()) { if (compassMode || follow) startCamera(); return; }
+    const opts = {};
+    let moving = false;
+    if (compassMode && devHeading != null) {
+      const d = angDiff(devHeading, map.getBearing());
+      if (Math.abs(d) > 0.15) { opts.bearing = map.getBearing() + d * 0.12; moving = true; }
     }
+    if (follow && lastPos) {
+      const c = map.getCenter();
+      const dx = lastPos.p[0] - c.lng, dy = lastPos.p[1] - c.lat;
+      if (Math.abs(dx) + Math.abs(dy) > 1e-7) { opts.center = [c.lng + dx * 0.15, c.lat + dy * 0.15]; moving = true; }
+    }
+    if (moving) map.jumpTo(opts);
+    if (moving || compassMode) startCamera();
   }
   let orientationOn = false;
   async function enableOrientation() {
@@ -542,7 +575,7 @@
   };
   const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major', 'area-label']);
   const layerPrefs = Object.assign(
-    { base: 'vector', labels: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
+    { base: 'vector', labels: true, smooth: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
 
   function applyLayers() {
@@ -566,6 +599,7 @@
       if (el.value !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);
     } else layerPrefs[el.name] = el.checked;
     applyLayers();
+    if (el.name === 'smooth' && mapFC) setMapData(mapFC);
   });
   $('btn-layers').addEventListener('click', () => { syncLayerForm(); $('layers-dlg').showModal(); });
   $('layers-close').addEventListener('click', () => $('layers-dlg').close());
