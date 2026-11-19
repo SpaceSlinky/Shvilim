@@ -19,6 +19,9 @@
     <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
     </button>
+    <button id="btn-search" title="חיפוש מקום" aria-label="חיפוש">
+      <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none"/><path d="M15.5 15.5L21 21"/></svg>
+    </button>
     <button id="btn-gpx" title="טען מסלול GPX" aria-label="טען מסלול">
       <svg viewBox="0 0 24 24"><path d="M4 19c3-1 4-5 7-6s5 2 9-6" fill="none"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="7" r="2"/></svg>
     </button>
@@ -38,13 +41,48 @@
 
   <div id="toast" hidden></div>
 
+  <div id="search" hidden>
+    <form id="search-form" action="#">
+      <input id="search-input" type="search" enterkeyhint="search" placeholder="חיפוש: שוויצריה הקטנה, נחל כלח, עין…" autocomplete="off">
+      <button type="button" id="search-close" aria-label="סגור">✕</button>
+    </form>
+    <ul id="search-results"></ul>
+  </div>
+
+  <div id="drawbar" hidden>
+    <p id="draw-hint"></p>
+    <div class="draw-btns">
+      <button id="draw-done" class="primary">סיום ושמירה</button>
+      <button id="draw-undo">בטל נקודה</button>
+      <button id="draw-cancel">ביטול</button>
+    </div>
+  </div>
+
+  <dialog id="name-dlg">
+    <form method="dialog">
+      <h2>שם לאזור</h2>
+      <input id="area-name" placeholder="למשל: שוויצריה הקטנה" maxlength="40">
+      <button value="ok" class="primary">שמור</button>
+      <button value="cancel" formnovalidate>חזרה לציור</button>
+    </form>
+  </dialog>
+
+  <dialog id="areas-dlg">
+    <h2>האזורים שלי</h2>
+    <div id="areas-list"></div>
+    <button id="areas-close" class="primary">סגור</button>
+  </dialog>
+
   <dialog id="menu">
     <h2>שבילים</h2>
     <p id="offline-info" class="muted"></p>
     <button id="m-gpx">טען מסלול GPX</button>
     <button id="m-clear">הסר מסלול</button>
-    <button id="m-area">הורד מפה לאזור שבמסך (מחליף את הנוכחית)</button>
-    <button id="m-carmel">הורד מחדש את מפת הכרמל</button>
+    <button id="m-draw">סמן אזור חדש על המפה</button>
+    <button id="m-areas">האזורים שלי</button>
+    <button id="m-area">הוסף למפה השמורה את האזור שבמסך</button>
+    <button id="m-carmel">עדכן את מפת הכרמל</button>
+    <label class="row"><input type="checkbox" id="m-night"> מצב לילה 🌙</label>
     <label class="row"><input type="checkbox" id="m-wake" checked> השאר את המסך דולק בזמן ניווט</label>
     <p class="muted small">נתוני מפה: © תורמי <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> ‏(ODbL). לחיצה ארוכה על כפתור המיקום מכבה את ה-GPS.</p>
     <button id="m-close" class="primary">סגור</button>

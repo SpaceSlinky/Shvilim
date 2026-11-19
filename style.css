@@ -64,3 +64,52 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 .maplibregl-popup-content { font-size: 15px; padding: 8px 12px; }
 body:has(#status:not([hidden])) .maplibregl-ctrl-bottom-left,
 body:has(#status:not([hidden])) .maplibregl-ctrl-bottom-right { bottom: calc(92px + var(--safe-b)); }
+
+/* חיפוש */
+#search { position: fixed; inset: 0 0 auto 0; z-index: 9; padding: calc(10px + var(--safe-t)) 10px 10px; }
+#search-form { display: flex; gap: 8px; }
+#search-input { flex: 1; font-size: 17px; padding: 12px 14px; border-radius: 12px; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#search-close { width: 48px; border-radius: 12px; border: none; background: #fff; font-size: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#search-results { list-style: none; margin: 8px 0 0; padding: 0; background: #fff; border-radius: 12px; max-height: 60vh; overflow-y: auto; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#search-results:empty { display: none; }
+#search-results li { padding: 12px 14px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 10px; }
+#search-results li.note { color: #777; font-size: 13px; justify-content: center; }
+.r-name { font-weight: 600; }
+.r-kind { color: #888; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+
+/* ציור אזור */
+#drawbar { position: fixed; left: 10px; right: 10px; bottom: calc(26px + var(--safe-b)); z-index: 6; background: #fff; border-radius: 14px; padding: 10px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+#draw-hint { margin: 0 0 8px; font-size: 14px; text-align: center; }
+.draw-btns { display: flex; gap: 8px; }
+.draw-btns button { flex: 1; padding: 11px 4px; font-size: 15px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; }
+.draw-btns button.primary { background: #e06000; border-color: #e06000; color: #fff; }
+.draw-btns button:disabled { opacity: .45; }
+body.drawing #status, body.drawing #controls { display: none; }
+body.drawing #map canvas { cursor: crosshair; }
+#area-name { width: 100%; font-size: 17px; padding: 10px; border-radius: 10px; border: 1px solid #ccc; margin: 6px 0; }
+.area-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 0; border-bottom: 1px solid #eee; }
+.area-row span { display: flex; gap: 4px; }
+.area-row button { width: auto; margin: 0; padding: 7px 9px; font-size: 13px; }
+
+/* מצב לילה */
+body.night { color-scheme: dark; }
+body.night #controls button, body.night #search-close { background: #23282e; }
+body.night #controls svg { stroke: #ddd; fill: #ddd; }
+body.night #btn-locate.gps-on svg { stroke: #64b5f6; fill: #64b5f6; }
+body.night #btn-locate.active { background: #1e88e5; }
+body.night #btn-locate.active svg { stroke: #fff; fill: #fff; }
+body.night #status, body.night #drawbar, body.night .card, body.night dialog, body.night #search-results { background: #1d2227; color: #e6e6e6; }
+body.night #status .val { color: #f0f0f0; }
+body.night #status .val.ok { color: #4cd06f; }
+body.night #status .val.warn { color: #ffa726; }
+body.night #status .val.bad { color: #ef5350; }
+body.night #status .cell + .cell, body.night #search-results li, body.night .area-row { border-color: #333; }
+body.night dialog button, body.night .card button, body.night .draw-btns button { background: #2a3036; color: #eee; border-color: #444; }
+body.night button.primary { background: #2e7d4f; border-color: #2e7d4f; }
+body.night .draw-btns button.primary { background: #e06000; }
+body.night #search-input, body.night #area-name { background: #1d2227; color: #eee; border-color: #444; }
+body.night .muted, body.night .r-kind { color: #999; }
+body.night .maplibregl-ctrl-scale { background: rgba(30,30,30,.7); color: #ddd; border-color: #ddd; }
+body.night .maplibregl-ctrl-attrib { background: rgba(30,30,30,.7); }
+body.night .maplibregl-ctrl-attrib a { color: #ccc; }
+body.night .maplibregl-popup-content { background: #23282e; color: #eee; }

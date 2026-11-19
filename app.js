@@ -8,7 +8,12 @@
   const GLYPHS = 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf';
   const RTL_PLUGIN = 'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js';
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.error);
+  if ('serviceWorker' in navigator) {
+    // עדכון אוטומטי: כשגרסה חדשה של האפליקציה מותקנת ברקע – טוענים אותה מחדש
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => hadController && location.reload());
+    navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(console.error);
+  }
   if (typeof maplibregl === 'undefined') {
     document.body.insertAdjacentHTML('beforeend', '<p style="padding:20px">יש לפתוח את האפליקציה פעם אחת עם חיבור לאינטרנט.</p>');
     return;
@@ -63,6 +68,8 @@
       route: { type: 'geojson', data: empty },
       wpts: { type: 'geojson', data: empty },
       acc: { type: 'geojson', data: empty },
+      areas: { type: 'geojson', data: empty },
+      draft: { type: 'geojson', data: empty },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#f3f0e6' } },
@@ -85,6 +92,11 @@
         paint: { 'line-color': '#8b6b3e', 'line-width': zw(0.8, 2.4), 'line-dasharray': [3, 1.5] } },
       { id: 'path', type: 'line', source: 'osm', filter: road('path'), minzoom: 12,
         paint: { 'line-color': '#4a3d30', 'line-width': zw(0.6, 1.8), 'line-dasharray': [2, 1.5] } },
+      // אזורים שסימנתם
+      { id: 'area-fill', type: 'fill', source: 'areas', filter: ['==', '$type', 'Polygon'],
+        paint: { 'fill-color': '#ff7a00', 'fill-opacity': 0.07 } },
+      { id: 'area-line', type: 'line', source: 'areas', filter: ['==', '$type', 'Polygon'],
+        paint: { 'line-color': '#ff7a00', 'line-width': 2.5, 'line-dasharray': [3, 2] } },
       // מסלול ה-GPX: פס רחב ושקוף מתחת לשבילים כדי שצבע הסימון יישאר גלוי
       { id: 'route-halo', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -140,6 +152,13 @@
           'circle-color': ['match', ['get', 'kind'], 'start', '#1a9b3c', '#c62828'] } },
       { id: 'wpts', type: 'circle', source: 'wpts',
         paint: { 'circle-radius': 6, 'circle-color': '#f39c12', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
+      { id: 'area-label', type: 'symbol', source: 'areas', filter: ['==', '$type', 'Point'],
+        layout: { 'text-field': ['get', 'name'], 'text-font': FONT, 'text-size': 15, 'text-max-width': 10 },
+        paint: { 'text-color': '#e06000', ...halo, 'text-halo-width': 2 } },
+      { id: 'draft-line', type: 'line', source: 'draft',
+        paint: { 'line-color': '#ff7a00', 'line-width': 3 } },
+      { id: 'draft-pts', type: 'circle', source: 'draft', filter: ['==', '$type', 'Point'],
+        paint: { 'circle-radius': 6, 'circle-color': '#ff7a00', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
       { id: 'acc', type: 'fill', source: 'acc',
         paint: { 'fill-color': '#1e88e5', 'fill-opacity': 0.12, 'fill-outline-color': '#1e88e5' } },
     ],
@@ -189,11 +208,13 @@
     downloading = true;
     $('nodata').hidden = true;
     try {
-      const fc = await OSM.download(bbox, (m) => toast(m, 120000));
-      if (!fc.features.length) throw new Error('לא נמצאו נתונים באזור');
+      const fresh = await OSM.download(bbox, (m) => toast(m, 120000));
+      if (!fresh.features.length) throw new Error('לא נמצאו נתונים באזור');
+      const old = await db.get('mapdata').catch(() => null);
+      const fc = old ? OSM.merge(old, fresh) : fresh;
       await db.set('mapdata', fc);
       await mapReady;
-      map.getSource('osm').setData(fc);
+      setMapData(fc);
       toast('שומר גופנים…', 60000);
       // טעינה מוקדמת של הגופנים שהשמות דורשים – ה-Service Worker שומר אותם לאופליין
       await Promise.all(OSM.glyphRanges(fc).map((r) =>
@@ -210,15 +231,25 @@
     }
   }
 
-  function downloadVisible() {
-    const b = map.getBounds();
-    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => +v.toFixed(4));
+  function downloadBbox(bbox) {
+    bbox = bbox.map((v) => +v.toFixed(4));
     if ((bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) > 0.12) return toast('האזור גדול מדי – התקרבו (זום) ונסו שוב', 5000);
     downloadArea(bbox);
   }
+  function downloadVisible() {
+    const b = map.getBounds();
+    downloadBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  }
 
+  let mapFC = null;
+  let searchIndex = null;
+  function setMapData(fc) {
+    mapFC = fc;
+    searchIndex = null;
+    map.getSource('osm').setData(fc);
+  }
   Promise.all([db.get('mapdata').catch(() => null), mapReady]).then(([fc]) => {
-    if (fc) map.getSource('osm').setData(fc);
+    if (fc) setMapData(fc);
     else $('nodata').hidden = false;
   });
   mapReady.then(() => !map.hasImage('arrow') && map.addImage('arrow', arrowImage(), { pixelRatio: 2 }));
@@ -415,9 +446,208 @@
   $('m-gpx').addEventListener('click', () => { menu.close(); gpxInput.click(); });
   $('m-clear').addEventListener('click', () => { menu.close(); clearRoute(); });
   $('m-area').addEventListener('click', () => { menu.close(); downloadVisible(); });
+  $('m-draw').addEventListener('click', () => { menu.close(); startDraw(); });
+  $('m-areas').addEventListener('click', () => { menu.close(); renderAreas(); $('areas-dlg').showModal(); });
+  $('areas-close').addEventListener('click', () => $('areas-dlg').close());
   $('m-carmel').addEventListener('click', () => { menu.close(); downloadArea(CARMEL); });
   $('w-carmel').addEventListener('click', () => downloadArea(CARMEL));
   gpxInput.addEventListener('change', () => { if (gpxInput.files[0]) loadGpxFile(gpxInput.files[0]); gpxInput.value = ''; });
+
+  // ---------- מצב לילה ----------
+  const THEME = [ // [שכבה, מאפיין, יום, לילה]
+    ['bg', 'background-color', '#f3f0e6', '#15191e'],
+    ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
+    ['major-casing', 'line-color', '#b8742a', '#4d3215'],
+    ['major', 'line-color', '#f7a656', '#9a6430'],
+    ['medium-casing', 'line-color', '#c4a03a', '#4a3e18'],
+    ['medium', 'line-color', '#ffe38f', '#7d6f38'],
+    ['minor-casing', 'line-color', '#b5b5b5', '#2c2f33'],
+    ['minor', 'line-color', '#ffffff', '#5a5e63'],
+    ['track', 'line-color', '#8b6b3e', '#a98b5e'],
+    ['path', 'line-color', '#4a3d30', '#b3a596'],
+    ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#666', '#ffffff'],
+      ['case', ['==', ['get', 'c'], '#ffffff'], '#888', '#0d0f12']],
+    ['trail', 'line-color', ['get', 'c'], ['case', ['==', ['get', 'c'], '#222222'], '#d8d8d8', ['get', 'c']]],
+    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'area-label']
+      .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
+    ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
+    ['road-label', 'text-color', '#555555', '#b9b9b9'],
+    ['trail-label', 'text-color', '#222222', '#eeeeee'],
+    ['poi-label', 'text-color', '#333333', '#dddddd'],
+    ['peak', 'text-color', '#6d4c2f', '#d9b48c'],
+    ['place-minor', 'text-color', '#444444', '#cccccc'],
+    ['place-major', 'text-color', '#222222', '#f2f2f2'],
+    ['area-label', 'text-color', '#e06000', '#ffa040'],
+    ['poi-dot', 'circle-stroke-color', '#ffffff', '#101317'],
+  ];
+  function applyTheme(night) {
+    document.body.classList.toggle('night', night);
+    document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
+    for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
+  }
+  const nightPref = localStorage.getItem('night');
+  $('m-night').checked = nightPref ? nightPref === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.body.classList.toggle('night', $('m-night').checked);
+  mapReady.then(() => applyTheme($('m-night').checked));
+  $('m-night').addEventListener('change', (e) => {
+    localStorage.setItem('night', e.target.checked ? '1' : '0');
+    applyTheme(e.target.checked);
+  });
+
+  // ---------- אזורים מסומנים ----------
+  const PRESETS = [{ name: 'שוויצריה הקטנה', bbox: [35.0, 32.735, 35.05, 32.765] }];
+  let areas = [];
+  const polyBbox = (ring) => Geo.bounds(ring).flat();
+
+  function renderAreas() {
+    const features = [];
+    for (const a of areas) {
+      features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [a.ring] }, properties: { name: a.name } });
+      const [w, s, e, n] = polyBbox(a.ring);
+      features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [(w + e) / 2, (s + n) / 2] }, properties: { name: a.name } });
+    }
+    map.getSource('areas')?.setData({ type: 'FeatureCollection', features });
+    const list = $('areas-list');
+    list.replaceChildren();
+    if (!areas.length) list.innerHTML = '<p class="muted">עדיין לא סימנתם אזורים.</p>';
+    for (const a of areas) {
+      const row = document.createElement('div');
+      row.className = 'area-row';
+      row.innerHTML = '<b></b><span><button data-a="go">הצג</button><button data-a="dl">הורד מפה</button><button data-a="del">מחק</button></span>';
+      row.querySelector('b').textContent = a.name;
+      row.addEventListener('click', async (ev) => {
+        const act = ev.target.dataset?.a;
+        if (!act) return;
+        $('areas-dlg').close();
+        if (act === 'go') flyToBbox(polyBbox(a.ring));
+        if (act === 'dl') { const [w, s, e, n] = polyBbox(a.ring); downloadBbox([w - 0.003, s - 0.003, e + 0.003, n + 0.003]); }
+        if (act === 'del') { areas = areas.filter((x) => x !== a); await db.set('areas', areas); renderAreas(); toast('האזור נמחק'); }
+      });
+      list.appendChild(row);
+    }
+  }
+  Promise.all([db.get('areas').catch(() => null), mapReady]).then(([a]) => { areas = a || []; renderAreas(); });
+
+  function flyToBbox(b) {
+    setFollow(false);
+    if (b[0] === b[2] && b[1] === b[3]) map.flyTo({ center: [b[0], b[1]], zoom: 15.5 });
+    else map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 50, maxZoom: 16 });
+  }
+
+  // מצב ציור: הקשה על המפה מוסיפה נקודה
+  let draft = null;
+  function renderDraft() {
+    const f = draft.map((p) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: p }, properties: {} }));
+    if (draft.length > 1) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: draft.length > 2 ? [...draft, draft[0]] : draft }, properties: {} });
+    map.getSource('draft').setData({ type: 'FeatureCollection', features: f });
+    $('draw-hint').textContent = draft.length < 3 ? `הקישו על המפה כדי לסמן את גבולות האזור (${draft.length}/3 לפחות)` : `${draft.length} נקודות · אפשר להמשיך או לסיים`;
+    $('draw-done').disabled = draft.length < 3;
+  }
+  function startDraw() {
+    draft = [];
+    setFollow(false);
+    $('drawbar').hidden = false;
+    document.body.classList.add('drawing');
+    renderDraft();
+  }
+  function endDraw() {
+    draft = null;
+    map.getSource('draft').setData(empty);
+    $('drawbar').hidden = true;
+    document.body.classList.remove('drawing');
+  }
+  map.on('click', (e) => { if (draft) { draft.push([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]); renderDraft(); } });
+  $('draw-undo').addEventListener('click', () => { draft.pop(); renderDraft(); });
+  $('draw-cancel').addEventListener('click', endDraw);
+  $('draw-done').addEventListener('click', () => { $('area-name').value = ''; $('name-dlg').showModal(); $('area-name').focus(); });
+  $('name-dlg').addEventListener('close', async () => {
+    if ($('name-dlg').returnValue !== 'ok' || !draft) return;
+    const name = $('area-name').value.trim() || `אזור ${areas.length + 1}`;
+    areas.push({ id: Date.now(), name, ring: [...draft, draft[0]] });
+    await db.set('areas', areas);
+    endDraw();
+    renderAreas();
+    toast(`"${name}" נשמר ✓ אפשר להוריד לו מפה מ"האזורים שלי"`, 5000);
+  });
+
+  // ---------- חיפוש ----------
+  const KIND = { trail: 'שביל', road: 'דרך', water: 'נחל', place: 'יישוב / מקום', area: 'האזור שלי', preset: 'אזור',
+    peak: 'פסגה', spring: 'מעיין', viewpoint: 'תצפית', ruins: 'חורבה', archaeological_site: 'אתר עתיקות',
+    cave_entrance: 'מערה', picnic_site: 'חניון', camp_site: 'חניון לילה', attraction: 'אתר', water_poi: 'ברזייה' };
+  const norm = (s) => s.toLowerCase().replace(/[\u0591-\u05C7]/g, '').replace(/["'״׳\-–]/g, ' ')
+    .replace(/וו/g, 'ו').replace(/יי/g, 'י').replace(/\s+/g, ' ').trim();
+  const loose = (s) => s.replace(/[וי]/g, ''); // כתיב מלא/חסר: שוויצריה = שווצריה = שויצריה
+
+  function buildIndex() {
+    const idx = new Map();
+    for (const f of mapFC?.features || []) {
+      const n = f.properties.n;
+      if (!n) continue;
+      const kind = f.properties.k === 'poi' ? (f.properties.t === 'water' ? 'water_poi' : f.properties.t) : f.properties.k;
+      const key = kind + '|' + n;
+      const coords = f.geometry.type === 'Point' ? [f.geometry.coordinates] : f.geometry.coordinates;
+      const b = Geo.bounds(coords).flat();
+      const cur = idx.get(key);
+      if (cur) cur.bbox = [Math.min(cur.bbox[0], b[0]), Math.min(cur.bbox[1], b[1]), Math.max(cur.bbox[2], b[2]), Math.max(cur.bbox[3], b[3])];
+      else idx.set(key, { name: n, kind, bbox: b, key: norm(n) });
+    }
+    return [...idx.values()];
+  }
+
+  function localSearch(q) {
+    const nq = norm(q);
+    if (!nq) return [];
+    searchIndex ||= buildIndex();
+    const extra = [...PRESETS.map((p) => ({ ...p, kind: 'preset' })), ...areas.map((a) => ({ name: a.name, kind: 'area', bbox: polyBbox(a.ring) }))]
+      .map((x) => ({ ...x, key: norm(x.name) }));
+    const rank = { area: 0, preset: 0, place: 1, peak: 2, spring: 2, viewpoint: 2, trail: 3 };
+    const lq = loose(nq);
+    return [...extra, ...searchIndex]
+      .filter((x) => x.key.includes(nq) || (lq.length > 1 && loose(x.key).includes(lq)))
+      .sort((a, b) => (b.key.startsWith(nq) - a.key.startsWith(nq)) || ((rank[a.kind] ?? 4) - (rank[b.kind] ?? 4)) || a.name.length - b.name.length)
+      .slice(0, 30);
+  }
+
+  function showResults(items, note) {
+    const ul = $('search-results');
+    ul.replaceChildren();
+    for (const it of items) {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="r-name"></span><span class="r-kind"></span>';
+      li.querySelector('.r-name').textContent = it.name;
+      li.querySelector('.r-kind').textContent = KIND[it.kind] || it.kind || '';
+      li.addEventListener('click', () => { closeSearch(); flyToBbox(it.bbox); });
+      ul.appendChild(li);
+    }
+    if (note) { const li = document.createElement('li'); li.className = 'note'; li.textContent = note; ul.appendChild(li); }
+  }
+
+  async function onlineSearch(q) {
+    if (!navigator.onLine) return showResults(localSearch(q), 'אין אינטרנט – מוצגות תוצאות מהמפה השמורה בלבד');
+    showResults(localSearch(q), 'מחפש גם באינטרנט…');
+    try {
+      const u = 'https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=il&accept-language=he&limit=8&q=' + encodeURIComponent(q);
+      const res = await (await fetch(u)).json();
+      const web = res.map((r) => {
+        const [s, n, w, e] = r.boundingbox.map(Number);
+        return { name: r.name || r.display_name.split(',')[0], kind: 'אינטרנט · ' + r.display_name.split(',').slice(1, 3).join(','), bbox: [w, s, e, n] };
+      });
+      const local = localSearch(q);
+      showResults([...local, ...web], local.length + web.length ? '' : 'לא נמצאו תוצאות');
+    } catch {
+      showResults(localSearch(q), 'החיפוש באינטרנט נכשל');
+    }
+  }
+
+  function openSearch() { $('toast').hidden = true; $('search').hidden = false; $('search-input').value = ''; showResults([]); $('search-input').focus(); }
+  function closeSearch() { $('search').hidden = true; $('search-input').blur(); }
+  $('btn-search').addEventListener('click', openSearch);
+  $('search-close').addEventListener('click', closeSearch);
+  $('search-input').addEventListener('input', (e) => {
+    const r = localSearch(e.target.value);
+    showResults(r, e.target.value.trim() ? (r.length ? 'לא מצאתם? הקישו "חפש" במקלדת לחיפוש באינטרנט' : 'אין תוצאות במפה השמורה – הקישו "חפש" לחיפוש באינטרנט') : '');
+  });
+  $('search-form').addEventListener('submit', (e) => { e.preventDefault(); if ($('search-input').value.trim()) onlineSearch($('search-input').value.trim()); });
 
   // ---------- הפעלה ----------
   db.get('gpx').then((t) => t && showGpx(t, false)).catch(console.error);

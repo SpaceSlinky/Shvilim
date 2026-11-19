@@ -1,7 +1,7 @@
 /* Service Worker: שומר את האפליקציה, הספריות והגופנים לשימוש אופליין.
    נתוני המפה עצמם נשמרים ב-IndexedDB (ראו app.js).
    קבצי האפליקציה: מוגשים מהמטמון ומתעדכנים ברקע. ספריות וגופנים מ-CDN: מהמטמון בלבד אחרי הפעם הראשונה. */
-const CACHE = 'shvilim-v2';
+const CACHE = 'shvilim-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png'];
 const CDN = [
@@ -14,7 +14,7 @@ const CDN_HOSTS = ['unpkg.com', 'protomaps.github.io'];
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    await c.addAll(SHELL);
+    await c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })));
     await Promise.all(CDN.map((u) => c.add(new Request(u, { mode: 'cors' })).catch(() => {})));
     await self.skipWaiting();
   })());

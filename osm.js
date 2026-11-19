@@ -116,7 +116,19 @@ out;`;
     throw last;
   }
 
-  const OSM = { query, convert, glyphRanges, download, trailColor };
+  /** מיזוג הורדה חדשה לתוך המפה הקיימת: מה שבתוך האזור החדש מוחלף, השאר נשמר */
+  function merge(old, fresh) {
+    const [w, s, e, n] = fresh.bbox;
+    const inside = (c) => c[0] >= w && c[0] <= e && c[1] >= s && c[1] <= n;
+    const touches = (f) => (f.geometry.type === 'Point' ? inside(f.geometry.coordinates) : f.geometry.coordinates.some(inside));
+    const feats = old.features.filter((f) => !touches(f)).concat(fresh.features);
+    feats.sort((a, b) => (a.properties.k === 'trail') - (b.properties.k === 'trail'));
+    const ob = old.bbox || fresh.bbox;
+    return { type: 'FeatureCollection', features: feats,
+      bbox: [Math.min(ob[0], w), Math.min(ob[1], s), Math.max(ob[2], e), Math.max(ob[3], n)] };
+  }
+
+  const OSM = { query, convert, glyphRanges, download, trailColor, merge };
   if (typeof module !== 'undefined' && module.exports) module.exports = OSM;
   root.OSM = OSM;
 })(typeof self !== 'undefined' ? self : globalThis);
