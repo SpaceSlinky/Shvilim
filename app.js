@@ -385,9 +385,9 @@
     map.getSource('route').setData(routeFeatures(a.segs));
     map.getSource('wpts').setData({ type: 'FeatureCollection',
       features: (a.waypoints || []).map((w) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: w.coord }, properties: { name: w.name } })) });
-    $('btn-fit').hidden = false;
-    $('status').hidden = route.pts.length < 2;
+    dock.panel = null; ri.move = false; ri.renaming = false;
     applyLayers();
+    renderDock();
     if (fit) fitRoute();
     if (save) db.set('active', a).catch(console.error);
     updateStatus();
@@ -403,7 +403,7 @@
   function fitRoute() {
     if (!active) return;
     const all = active.segs.flatMap((sg) => sg.coords).concat((active.waypoints || []).map((w) => w.coord));
-    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 70, bottom: 110, left: 40, right: 76 }, maxZoom: 16 });
+    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 40, bottom: $('dock').offsetHeight + 30, left: 40, right: 76 }, maxZoom: 16 });
   }
 
   async function showGpx(text, fit, save = true) {
@@ -420,10 +420,9 @@
     await mapReady;
     map.getSource('route').setData(empty);
     map.getSource('wpts').setData(empty);
-    $('btn-fit').hidden = true;
-    $('status').hidden = true;
-    closeRouteInfo();
+    clearScrub();
     applyLayers();
+    renderDock();
     await db.del('active');
     await db.del('gpx');
   }
@@ -561,43 +560,46 @@
     map.getSource('scrub')?.setData(pt ? { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: pt } } : empty);
   }
   function clearScrub() { scrubAt = null; setScrubPoint(null); }
-  function closeRouteInfo() { $('routeinfo').hidden = true; clearScrub(); }
+
   // מרחק בגרף -> מרחק על המסלול (כמעט זהים; מתקן הבדלים קטנים בשיטת החישוב)
   const profToRoute = (p, r, d) => (p.total ? (d * r.total) / p.total : 0);
 
+  // ---------- המסלול בדוק: שם, נתונים, איפה אני, גרף ופעולות ----------
+  const ri = { move: false, renaming: false };
   function renderRouteInfo() {
-    if ($('routeinfo').hidden || !active) return;
+    if (!active || !route || dockMode() !== 'route') return;
     const total = route.total;
     const bike = !!active.opts?.bike;
-    $('ri-name').textContent = active.name || (active.kind === 'plan' ? 'מסלול מתוכנן' : 'מסלול');
-    $('ri-len').textContent = Geo.fmtDist(total);
-    $('ri-up').textContent = prof ? Math.round(prof.gain) + " מ'" : '…';
-    $('ri-down').textContent = prof ? Math.round(prof.loss) + " מ'" : '…';
-    $('ri-time').textContent = prof ? fmtTime(estTime(total, prof.gain, bike)) : '…';
-    const rem = prevAlong != null && prof ? profileStats(prof, prevAlong) : null;
-    $('ri-remain').textContent = rem ? `נותרו ${Geo.fmtDist(total - prevAlong)} · ↑ ${Math.round(rem.gain)} מ' · ↓ ${Math.round(rem.loss)} מ'`
-      : prof ? '👆 געו בגרף כדי לראות מרחק וגובה עד כל נקודה' : '';
+    const name = active.name || (active.kind === 'plan' ? 'מסלול מתוכנן' : 'מסלול');
+    $('ri-name').textContent = name;
+    $('ri-name').hidden = ri.renaming;
+    $('ri-name-in').hidden = !ri.renaming;
+    $('ri-line').textContent = [Geo.fmtDist(total), prof ? `↑${Math.round(prof.gain)} ↓${Math.round(prof.loss)} מ'` : '',
+      prof ? fmtTime(estTime(total, prof.gain, bike)) : '', active.libId ? '📁 ' + (active.folder || 'כללי') : 'לא שמור'].filter(Boolean).join(' · ');
+    // בזמן ניווט: כמה נשאר לעלות ולרדת, מתחת ל"נותרו"
+    const atP = prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
+    const rem = atP != null ? profileStats(prof, atP) : null;
+    $('s-left-ele').textContent = rem ? `↑${Math.round(rem.gain)} ↓${Math.round(rem.loss)}` : '';
     const sc = $('ri-scrub');
     sc.hidden = scrubAt == null || !prof;
     if (!sc.hidden) {
       // מהמיקום שלך קדימה; נקודה שכבר עברת – מתחילת המסלול
-      const here = prevAlong != null ? (prevAlong * prof.total) / (total || 1) : null;
-      const from = here != null && here <= scrubAt ? here : 0;
+      const from = atP != null && atP <= scrubAt ? atP : 0;
       const L = legInfo(prof, from, scrubAt, bike);
-      $('ri-sc-title').textContent = from > 0 ? 'ממך עד הנקודה' : here != null ? 'מההתחלה עד הנקודה (כבר עברת)' : 'מההתחלה עד הנקודה';
+      $('ri-sc-title').textContent = from > 0 ? 'ממך עד הנקודה' : atP != null ? 'מההתחלה עד הנקודה (כבר עברת)' : 'מההתחלה עד הנקודה';
       $('ri-sc-len').textContent = Geo.fmtDist(L.len);
       $('ri-sc-ele').textContent = Math.round(L.ele) + " מ'";
       $('ri-sc-up').textContent = Math.round(L.gain) + " מ'";
       $('ri-sc-down').textContent = Math.round(L.loss) + " מ'";
       $('ri-sc-time').textContent = fmtTime(L.time);
     }
-    $('ri-remain').hidden = !sc.hidden;
     $('ri-edit').hidden = active.kind !== 'plan';
     $('ri-save').hidden = !!active.libId;
-    $('ri-folder').textContent = active.libId ? '📁 ' + (active.folder || 'כללי') : '';
-    $('ri-focus').checked = layerPrefs.focus;
-    const atP = prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
-    drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
+    $('ri-folder').hidden = $('ri-del').hidden = !active.libId;
+    $('ri-folder').textContent = '📁 ' + (active.folder || 'כללי');
+    $('ri-dim').value = dimValue();
+    $('ri-move').hidden = !ri.move;
+    if (dock.open) drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
   }
   attachScrub($('ri-profile'), () => prof, (d) => {
     scrubAt = d;
@@ -605,13 +607,75 @@
     renderRouteInfo();
   });
   $('ri-sc-x').addEventListener('click', () => { clearScrub(); renderRouteInfo(); });
-  $('status').addEventListener('click', () => { $('routeinfo').hidden = !$('routeinfo').hidden; renderRouteInfo(); });
-  $('ri-close').addEventListener('click', closeRouteInfo);
-  $('ri-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
   $('ri-clear').addEventListener('click', () => clearRoute());
+  $('ri-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
   $('ri-save').addEventListener('click', () => openSaveDlg('active', { name: active.name, coords: route.pts }));
-  $('ri-edit').addEventListener('click', () => { closeRouteInfo(); startPlan(active); });
-  $('ri-focus').addEventListener('change', (e) => { layerPrefs.focus = e.target.checked; applyLayers(); });
+  $('ri-edit').addEventListener('click', () => { clearScrub(); startPlan(active); });
+  $('ri-lib').addEventListener('click', () => { dock.panel = 'lib'; renderDock(); });
+  $('ri-dim').addEventListener('input', (e) => setDim(+e.target.value));
+
+  // שינוי שם: השם הופך לשדה עריכה
+  $('ri-rename').addEventListener('click', () => {
+    ri.renaming = true; renderRouteInfo();
+    const inp = $('ri-name-in');
+    inp.value = active.name || ''; inp.focus(); inp.select();
+  });
+  async function finishRename() {
+    if (!ri.renaming) return;
+    ri.renaming = false;
+    const v = $('ri-name-in').value.trim();
+    if (v && v !== active.name) {
+      active.name = v;
+      db.set('active', active);
+      if (active.libId) { const lib = await libLoad(); const r = lib.find((x) => x.id === active.libId); if (r) { r.name = v; await db.set('library', lib); } }
+    }
+    renderRouteInfo();
+  }
+  $('ri-name-in').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); finishRename(); } if (e.key === 'Escape') { ri.renaming = false; renderRouteInfo(); } });
+  $('ri-name-in').addEventListener('blur', finishRename);
+
+  // העברה לתיקייה: התיקיות הקיימות, או שם חדש
+  $('ri-folder').addEventListener('click', async () => {
+    ri.move = !ri.move;
+    if (ri.move) {
+      const folders = [...new Set((await libLoad()).map((r) => r.folder || 'כללי'))].sort((a, b) => a.localeCompare(b, 'he'));
+      const mv = $('ri-move');
+      mv.innerHTML = '<p class="muted small">להעביר לתיקייה:</p><div class="chips"></div><form class="new-folder"><input placeholder="תיקייה חדשה" maxlength="40"><button>העבר</button></form>';
+      for (const f of folders.filter((f) => f !== (active.folder || 'כללי'))) {
+        const c = Object.assign(document.createElement('button'), { type: 'button', textContent: '📁 ' + f });
+        c.addEventListener('click', () => moveTo(f));
+        mv.querySelector('.chips').appendChild(c);
+      }
+      mv.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const f = mv.querySelector('input').value.trim(); if (f) moveTo(f); });
+    }
+    renderRouteInfo();
+  });
+  async function moveTo(folder) {
+    const lib = await libLoad();
+    const r = lib.find((x) => x.id === active?.libId);
+    if (!r) return;
+    r.folder = active.folder = folder;
+    await db.set('library', lib);
+    db.set('active', active);
+    ri.move = false;
+    toast(`הועבר ל"${folder}"`);
+    renderRouteInfo();
+  }
+
+  // מחיקה מהספרייה בשתי הקשות; המסלול יורד גם מהמפה
+  $('ri-del').addEventListener('click', async () => {
+    const btn = $('ri-del');
+    if (!btn.classList.contains('armed')) {
+      btn.classList.add('armed'); btn.textContent = 'בטוח? הקישו שוב';
+      setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '🗑 מחק'; }, 3000);
+      return;
+    }
+    btn.classList.remove('armed'); btn.textContent = '🗑 מחק';
+    const id = active?.libId, name = active?.name;
+    await db.set('library', (await libLoad()).filter((x) => x.id !== id));
+    await clearRoute();
+    toast(`"${name}" נמחק`);
+  });
 
   // ---------- תכנון מסלול ----------
   let plan = null;       // { wps:[[lon,lat]], opts:{snap,bike}, name, markers:[] }
@@ -719,10 +783,10 @@
       name: from?.name || '', folder: from?.folder, libId: from?.libId, markers: [] };
     $('pl-snap').checked = plan.opts.snap;
     $('pl-bike').checked = plan.opts.bike;
-    $('planbar').hidden = false;
-    $('status').hidden = true;
-    closeRouteInfo();
+    clearScrub();
+    dock.panel = null;
     document.body.classList.add('planning');
+    renderDock();
     if (!plan.wps.length) map.getSource('route').setData(empty);
     if (plan.opts.snap) { toast('מכין את רשת השבילים…', 1500); setTimeout(() => { getGraph(plan.opts.bike); renderPlan(); }, 30); }
     else renderPlan();
@@ -733,9 +797,9 @@
     plan?.markers.forEach((m) => m.remove());
     setScrubPoint(null);
     plan = null;
-    $('planbar').hidden = true;
     document.body.classList.remove('planning');
-    if (active) { map.getSource('route').setData(routeFeatures(active.segs)); $('status').hidden = false; }
+    renderDock();
+    if (active) map.getSource('route').setData(routeFeatures(active.segs));
     else map.getSource('route').setData(empty);
     applyLayers();
   }
@@ -820,109 +884,36 @@
     return best || 'כללי';
   }
 
-  // ---------- מסלולים: תכנון, המסלול הפעיל, ותיקיות ----------
-  let libSel = null;    // המסלול שנבחר ברשימה (הפעולות שלו פתוחות)
-  let libMoving = false; // בחירת תיקייה למסלול שנבחר
-  async function openLibrary() {
+  // ---------- רשימת המסלולים השמורים (בדוק): לפי תיקיות; הקשה פותחת את המסלול ----------
+  async function renderLibrary() {
     const lib = await libLoad();
-    // למעלה: מסלול חדש, והמסלול שמוצג עכשיו על המפה
-    const top = $('lib-top');
-    top.replaceChildren();
-    const planBtn = Object.assign(document.createElement('button'), { className: 'primary', textContent: '✏️ תכנון מסלול חדש' });
-    planBtn.addEventListener('click', () => { $('lib-dlg').close(); startPlan(); });
-    top.appendChild(planBtn);
-    if (active) {
-      const cur = document.createElement('div');
-      cur.className = 'lib-active';
-      cur.innerHTML = '<span><small class="muted">על המפה עכשיו</small><b></b></span><button>הסר מהמפה</button>';
-      cur.querySelector('b').textContent = active.name || 'מסלול';
-      cur.querySelector('button').addEventListener('click', async () => { await clearRoute(); openLibrary(); });
-      top.appendChild(cur);
-    }
-
     const box = $('lib-list');
     box.replaceChildren();
-    if (!lib.some((r) => r.id === libSel)) { libSel = null; libMoving = false; }
-    if (!lib.length) box.innerHTML = '<p class="muted">עדיין אין מסלולים שמורים. מסלול שתתכננו ותשמרו יופיע כאן, בתיקייה לפי האזור.</p>';
+    if (!lib.length) {
+      box.innerHTML = '<p class="muted center">עדיין אין מסלולים שמורים. מסלול שתתכננו ותשמרו יופיע כאן, בתיקייה לפי האזור.</p>';
+      return;
+    }
     const groups = {};
     for (const r of lib) (groups[r.folder || 'כללי'] ||= []).push(r);
-    const folders = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'he'));
-    for (const folder of folders) {
+    for (const folder of Object.keys(groups).sort((a, b) => a.localeCompare(b, 'he'))) {
       const det = document.createElement('details');
       det.open = true;
       det.innerHTML = '<summary></summary>';
       det.querySelector('summary').textContent = `📁 ${folder} (${groups[folder].length})`;
       for (const r of groups[folder].sort((a, b) => (b.updated || 0) - (a.updated || 0))) {
-        const row = document.createElement('div');
-        const sel = r.id === libSel;
-        row.className = 'lib-row' + (active?.libId === r.id ? ' current' : '') + (sel ? ' open' : '');
-        row.innerHTML = `<div class="lib-main"><b></b><span class="muted small"></span></div>
-          <div class="lib-btns"><button data-a="open" class="primary">${active?.libId === r.id ? 'הצג' : 'הפעל'}</button>${r.kind === 'plan' ? '<button data-a="edit">✏️ ערוך</button>' : ''}<button data-a="move">📁 העבר</button><button data-a="del">🗑 מחק</button></div>`;
+        const row = document.createElement('button');
+        row.className = 'lib-row' + (active?.libId === r.id ? ' current' : '');
+        row.innerHTML = '<b></b><span class="muted small"></span>';
         row.querySelector('b').textContent = r.name;
-        row.querySelector('.muted').textContent = [Geo.fmtDist(r.len), r.gain != null ? `↑ ${r.gain} מ'` : '', r.loss != null ? `↓ ${r.loss} מ'` : '']
+        row.querySelector('span').textContent = [Geo.fmtDist(r.len), r.gain != null ? `↑ ${r.gain} מ'` : '', r.loss != null ? `↓ ${r.loss} מ'` : '']
           .filter(Boolean).join(' · ');
-        // בחירת תיקייה: התיקיות הקיימות, או שם חדש
-        if (sel && libMoving) {
-          const mv = document.createElement('div');
-          mv.className = 'lib-move';
-          mv.innerHTML = '<p class="muted small">להעביר לתיקייה:</p><div class="chips"></div><form class="new-folder"><input placeholder="תיקייה חדשה" maxlength="40"><button>העבר</button></form>';
-          for (const f of folders.filter((f) => f !== folder)) {
-            const c = Object.assign(document.createElement('button'), { type: 'button', textContent: '📁 ' + f });
-            c.addEventListener('click', () => moveTo(r.id, f));
-            mv.querySelector('.chips').appendChild(c);
-          }
-          if (folders.length < 2) mv.querySelector('.chips').remove();
-          mv.querySelector('form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const f = mv.querySelector('input').value.trim();
-            if (f) moveTo(r.id, f);
-          });
-          row.appendChild(mv);
-        }
-        row.addEventListener('click', async (ev) => {
-          if (ev.target.closest('.lib-move')) return;
-          const act = ev.target.closest('[data-a]')?.dataset.a;
-          // הקשה על השורה: בוחרת אותה (ומבטלת בחירה קודמת)
-          if (!act) { libSel = sel ? null : r.id; libMoving = false; return openLibrary(); }
-          const a = { ...r, libId: r.id };
-          if (act === 'move') { libMoving = !libMoving; return openLibrary(); }
-          if (act === 'del') {
-            if (!confirmDel(row)) return;
-            await db.set('library', (await libLoad()).filter((x) => x.id !== r.id));
-            if (active?.libId === r.id) { active.libId = undefined; db.set('active', active); }
-            return openLibrary();
-          }
-          $('lib-dlg').close();
-          if (act === 'open') { await setActive(a, { fit: true }); toast(`"${r.name}" על המפה`); }
-          if (act === 'edit') { startPlan(a); plan.libId = r.id; plan.folder = r.folder; }
-        });
+        row.addEventListener('click', () => setActive({ ...r, libId: r.id }, { fit: true }));
         det.appendChild(row);
       }
       box.appendChild(det);
     }
-    if (!$('lib-dlg').open) $('lib-dlg').showModal();
   }
-  async function moveTo(id, folder) {
-    const lib = await libLoad();
-    const r = lib.find((x) => x.id === id);
-    if (!r) return;
-    r.folder = folder;
-    await db.set('library', lib);
-    if (active?.libId === id) { active.folder = folder; db.set('active', active); renderRouteInfo(); }
-    libMoving = false;
-    toast(`הועבר ל"${folder}"`);
-    openLibrary();
-  }
-  // מחיקה בשתי הקשות (בלי חלונות אישור של הדפדפן)
-  function confirmDel(row) {
-    const btn = row.querySelector('[data-a=del]');
-    if (btn.classList.contains('armed')) return true;
-    btn.classList.add('armed'); btn.textContent = 'בטוח?';
-    setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '🗑 מחק'; }, 3000);
-    return false;
-  }
-  $('lib-close').addEventListener('click', () => $('lib-dlg').close());
-  $('lib-dlg').addEventListener('close', () => { libSel = null; libMoving = false; });
+  $('dl-close').addEventListener('click', () => { dock.panel = null; renderDock(); });
 
   // ---------- GPS ----------
   let watchId = null;
@@ -982,8 +973,10 @@
     updateStatus();
   }
 
+  let followedOnce = false; // אחרי שעקבו פעם אחת – כפתור המרכוז נשאר בחוץ כשהמפה זזה מהמיקום
   function setFollow(on) {
     follow = on;
+    if (on) followedOnce = true;
     if (on) startCamera();
     $('btn-locate').classList.toggle('active', on);
   }
@@ -1016,6 +1009,7 @@
   function updateStatus() {
     if (!route || route.pts.length < 2) return;
     const offEl = $('s-off');
+    $('status').hidden = !lastPos;
     if (!lastPos) {
       offEl.textContent = '–';
       offEl.className = 'val';
@@ -1034,9 +1028,7 @@
 
   // ---------- כפתורים ותפריט ----------
   const menu = $('menu');
-  $('btn-lib').addEventListener('click', () => openLibrary());
-  $('btn-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
-  $('btn-menu').addEventListener('click', async () => {
+  $('btn-settings').addEventListener('click', async () => {
     const ready = navigator.serviceWorker?.controller ? 'האפליקציה והמפה שמורות לשימוש אופליין ✓' : 'טוען לשימוש אופליין…';
     $('offline-info').textContent = ready;
     storageInfo().then((t) => ($('storage-info').textContent = t));
@@ -1160,7 +1152,7 @@
   };
   const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major']);
   const layerPrefs = Object.assign(
- { base: 'vector', labels: true, smooth: true, focus: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
+ { base: 'vector', labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
 
   function applyLayers() {
@@ -1169,7 +1161,8 @@
     for (const [g, ids] of Object.entries(GROUPS)) {
       for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
     }
-    map.setLayoutProperty('dim', 'visibility', vis(layerPrefs.focus && layerPrefs.route && (!!active || !!plan)));
+    map.setLayoutProperty('dim', 'visibility', vis(dimValue() > 0 && layerPrefs.route && (!!active || !!plan)));
+    map.setPaintProperty('dim', 'fill-opacity', dimValue());
     try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
@@ -1188,7 +1181,6 @@
     } else layerPrefs[el.name] = el.checked;
     applyLayers();
     if (el.name === 'smooth' && mapFC) setTimeout(() => setMapData(mapFC), 30);
-    if (el.name === 'focus') $('ri-focus').checked = el.checked;
   });
   $('btn-layers').addEventListener('click', () => { syncLayerForm(); $('layers-dlg').showModal(); });
   $('layers-close').addEventListener('click', () => $('layers-dlg').close());
@@ -1223,7 +1215,6 @@
     ['place-major', 'text-color', '#222222', '#f2f2f2'],
     ['area-label', 'text-color', '#e06000', '#ffa040'],
     ['dim', 'fill-color', '#ffffff', '#000000'],
-    ['dim', 'fill-opacity', 0.55, 0.5],
   ];
   function applyTheme(night) {
     document.body.classList.toggle('night', night);
@@ -1238,6 +1229,7 @@
   $('m-night').addEventListener('change', (e) => {
     localStorage.setItem('night', e.target.checked ? '1' : '0');
     applyTheme(e.target.checked);
+    applyLayers(); renderRouteInfo();
   });
 
   // אזורים מוכרים (לחיפוש ולהצעת תיקייה)
@@ -1348,13 +1340,110 @@
 
   function openSearch() { $('toast').hidden = true; $('search').hidden = false; $('search-input').value = ''; showResults([]); $('search-input').focus(); }
   function closeSearch() { $('search').hidden = true; $('search-input').blur(); }
-  $('btn-search').addEventListener('click', openSearch);
+  $('d-search').addEventListener('click', openSearch);
   $('search-close').addEventListener('click', closeSearch);
   $('search-input').addEventListener('input', (e) => {
     const r = localSearch(e.target.value);
     showResults(r, e.target.value.trim() ? (r.length ? 'לא מצאתם? הקישו "חפש" במקלדת לחיפוש באינטרנט' : 'אין תוצאות במפה השמורה – הקישו "חפש" לחיפוש באינטרנט') : '');
   });
   $('search-form').addEventListener('submit', (e) => { e.preventDefault(); if ($('search-input').value.trim()) onlineSearch($('search-input').value.trim()); });
+
+  // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה) בשקיפות שבוחרים ----------
+  function dimValue() { return document.body.classList.contains('night') ? layerPrefs.dimNight : layerPrefs.dimDay; }
+  function setDim(v) {
+    layerPrefs[document.body.classList.contains('night') ? 'dimNight' : 'dimDay'] = v;
+    applyLayers();
+  }
+
+  // ---------- הדוק התחתון: בית / רשימת מסלולים / מסלול / תכנון ----------
+  const dock = { panel: null, open: false }; // panel: 'lib' – רשימת המסלולים מעל כל מצב; open – פרטי המסלול פתוחים
+  const dockEl = $('dock');
+  function dockMode() {
+    if (plan) return 'plan';
+    if (dock.panel) return dock.panel;
+    return active && route?.pts.length > 1 ? 'route' : 'home';
+  }
+  function renderDock() {
+    const m = dockMode();
+    for (const sec of dockEl.children) sec.hidden = sec.dataset.mode !== m;
+    dockEl.dataset.mode = m;
+    dockEl.classList.toggle('open', dock.open);
+    if (m === 'route') renderRouteInfo();
+    if (m === 'lib') renderLibrary();
+  }
+  function setDockOpen(on) {
+    dock.open = on;
+    if (!on) { clearScrub(); ri.move = false; }
+    renderDock();
+  }
+  $('d-lib').addEventListener('click', () => { dock.panel = 'lib'; renderDock(); });
+  $('d-new').addEventListener('click', () => startPlan());
+
+  // פרטי המסלול: הקשה על הידית או על השם פותחת/סוגרת; משיכה למעלה פותחת, למטה סוגרת
+  function attachDockDrag(el) {
+    let y0 = null, moved = false;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('input, #ri-clear')) return;
+      y0 = e.clientY; moved = false;
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (y0 == null || moved || Math.abs(e.clientY - y0) < 12) return;
+      moved = true;
+      setDockOpen(e.clientY < y0);
+    });
+    el.addEventListener('pointerup', () => { if (y0 != null && !moved) setDockOpen(!dock.open); y0 = null; });
+    el.addEventListener('pointercancel', () => (y0 = null));
+  }
+  attachDockDrag($('r-grip'));
+  attachDockDrag(document.querySelector('#dock .r-title'));
+
+  // גובה הדוק -> משתנה CSS, כדי שקנה המידה וזכויות היוצרים יישבו מעליו
+  new ResizeObserver(() => document.documentElement.style.setProperty('--dock-h', dockEl.offsetHeight + 'px')).observe(dockEl);
+  renderDock();
+
+  // ---------- עמודת הכלים ("אולר"): סגורה = רק ☰; פותחים לרגע, ונסגרת אחרי פעולה ----------
+  const knife = $('controls');
+  let knifeOpen = false;
+  function setKnife(on) {
+    knifeOpen = on;
+    knife.classList.toggle('open', on);
+    knife.style.removeProperty('--k');
+    $('btn-menu').setAttribute('aria-expanded', on);
+  }
+  // כפתורים שנשארים בחוץ גם כשהעמודה סגורה: צפון (כשהמפה מסובבת) ומרכוז (כש-GPS פועל והמפה זזה ממך)
+  function updatePins() {
+    $('btn-compass').classList.toggle('pin', compassMode || Math.abs(map.getBearing()) > 0.5);
+    $('btn-locate').classList.toggle('pin', watchId != null && !follow && followedOnce);
+  }
+  map.on('rotate', updatePins);
+  setInterval(updatePins, 1000); // מצב ה-GPS והמעקב משתנים בכמה מקומות; בדיקה זולה
+  // משיכת ☰ למטה פותחת את העמודה בהדרגה; למעלה סוגרת; הקשה מחליפה
+  (() => {
+    const h = $('btn-menu');
+    let y0 = null, moved = false, base = 0;
+    const full = () => knife.querySelector('.knife').childElementCount * 62;
+    h.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; base = knifeOpen ? 1 : 0; h.setPointerCapture(e.pointerId); });
+    h.addEventListener('pointermove', (e) => {
+      if (y0 == null) return;
+      const dy = e.clientY - y0;
+      if (!moved && Math.abs(dy) < 6) return;
+      moved = true;
+      knife.classList.add('dragging');
+      knife.style.setProperty('--k', Math.max(0, Math.min(1, base + dy / full())));
+    });
+    h.addEventListener('pointerup', (e) => {
+      if (y0 == null) return;
+      knife.classList.remove('dragging');
+      const k = moved ? parseFloat(knife.style.getPropertyValue('--k')) : null;
+      y0 = null;
+      setKnife(k == null ? !knifeOpen : k > 0.4);
+    });
+    h.addEventListener('pointercancel', () => { y0 = null; knife.classList.remove('dragging'); setKnife(knifeOpen); });
+  })();
+  // אחרי פעולה בעמודה – היא נסגרת
+  for (const b of knife.querySelectorAll('.knife > button')) b.addEventListener('click', () => setTimeout(() => setKnife(false), 250));
+  map.on('click', () => knifeOpen && setKnife(false));
+  map.on('dragstart', () => knifeOpen && setKnife(false));
 
   // ---------- הפעלה ----------
   // שחזור המסלול הפעיל (וגם מסלול GPX מגרסה קודמת)

@@ -11,7 +11,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 #map { position: fixed; inset: 0; }
 
 /* כפתורים צפים */
-#controls { position: fixed; top: calc(12px + var(--safe-t)); right: 12px; display: flex; flex-direction: column; gap: 10px; z-index: 8; }
+#controls { position: fixed; top: calc(12px + var(--safe-t)); right: 12px; display: flex; flex-direction: column; z-index: 8; --k: 0; }
 #controls button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #fff;
   box-shadow: 0 2px 8px rgba(0,0,0,.28); display: grid; place-items: center; padding: 0; }
 #controls button:active { transform: scale(.94); }
@@ -21,16 +21,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 #btn-locate.active { background: var(--blue); }
 #btn-locate.active svg { stroke: #fff; fill: #fff; }
 
-/* שורת סטטוס */
-#status { position: fixed; left: 10px; right: 10px; bottom: calc(26px + var(--safe-b)); z-index: 5;
-  display: flex; background: rgba(255,255,255,.95); border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
-#status .cell { flex: 1; text-align: center; padding: 8px 4px; }
-#status .cell + .cell { border-right: 1px solid #e3e3e3; }
-#status .lbl { display: block; font-size: 12px; color: #777; }
-#status .val { display: block; font-size: 20px; font-weight: 700; color: #222; direction: rtl; }
-#status .val.ok { color: #1a9b3c; }
-#status .val.warn { color: #e67e00; }
-#status .val.bad { color: #c62828; }
 
 /* מיקום המשתמש */
 .me { width: 22px; height: 22px; position: relative; }
@@ -60,10 +50,8 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 .card { background: #fff; border-radius: 16px; padding: 20px; width: min(92vw, 380px); line-height: 1.5; }
 
 /* MapLibre */
-.maplibregl-ctrl-bottom-left { bottom: calc(var(--safe-b)); }
+.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: var(--dock-h, 0px); }
 .maplibregl-popup-content { font-size: 15px; padding: 8px 12px; }
-body:has(#status:not([hidden])) .maplibregl-ctrl-bottom-left,
-body:has(#status:not([hidden])) .maplibregl-ctrl-bottom-right { bottom: calc(92px + var(--safe-b)); }
 
 /* חיפוש */
 #search { position: fixed; inset: 0 0 auto 0; z-index: 9; padding: calc(10px + var(--safe-t)) 10px 10px; }
@@ -85,12 +73,8 @@ body.night #controls svg { stroke: #ddd; fill: #ddd; }
 body.night #btn-locate.gps-on svg { stroke: #64b5f6; fill: #64b5f6; }
 body.night #btn-locate.active { background: #1e88e5; }
 body.night #btn-locate.active svg { stroke: #fff; fill: #fff; }
-body.night #status, body.night .card, body.night dialog, body.night #search-results { background: #1d2227; color: #e6e6e6; }
-body.night #status .val { color: #f0f0f0; }
-body.night #status .val.ok { color: #4cd06f; }
-body.night #status .val.warn { color: #ffa726; }
-body.night #status .val.bad { color: #ef5350; }
-body.night #status .cell + .cell, body.night #search-results li { border-color: #333; }
+body.night .card, body.night dialog, body.night #search-results { background: #1d2227; color: #e6e6e6; }
+body.night #search-results li { border-color: #333; }
 body.night dialog button, body.night .card button { background: #2a3036; color: #eee; border-color: #444; }
 body.night button.primary { background: #2e7d4f; border-color: #2e7d4f; }
 body.night #search-input { background: #1d2227; color: #eee; border-color: #444; }
@@ -112,18 +96,13 @@ body.night .maplibregl-popup-content { background: #23282e; color: #eee; }
 .grid2 .row { font-size: 14px; }
 body.night #layers-dlg h3 { color: #aaa; }
 body.night #btn-compass.active { background: #1e88e5; }
-@media (max-height: 640px) { #controls { gap: 7px; } #controls button { width: 46px; height: 46px; } }
+@media (max-height: 640px) { #controls button { width: 46px; height: 46px; } }
 .info-row { padding: 3px 0; line-height: 1.35; }
 .info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }
 .info-row small { display: block; color: #777; font-size: 11px; direction: ltr; text-align: right; }
 body.night .info-row + .info-row { border-color: #444; }
 
 /* גיליון תחתון: נתוני מסלול ותכנון */
-.sheet { position: fixed; left: 8px; right: 8px; bottom: calc(10px + var(--safe-b)); z-index: 7; background: #fff;
-  border-radius: 16px; padding: 10px 12px; box-shadow: 0 2px 14px rgba(0,0,0,.3); }
-#routeinfo { bottom: calc(10px + var(--safe-b)); }
-.sheet-head { display: flex; justify-content: space-between; align-items: center; }
-.sheet-head button { border: none; background: none; font-size: 18px; padding: 4px 8px; color: inherit; }
 .stats { display: flex; text-align: center; margin: 4px 0; }
 .stats > div { flex: 1; }
 .stats .lbl { display: block; font-size: 11px; color: #777; }
@@ -139,9 +118,7 @@ body.night .info-row + .info-row { border-color: #444; }
 .btns button { flex: 1; padding: 10px 2px; font-size: 14px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; color: inherit; }
 .btns button.primary { background: var(--green); border-color: var(--green); color: #fff; }
 .btns button:disabled { opacity: .45; }
-#routeinfo .row { font-size: 14px; margin: 4px 0; }
-#status { cursor: pointer; }
-body.planning #status, body.planning #btn-lib, body.planning #btn-fit, body.planning #btn-locate { display: none; }
+
 #plan-name { width: 100%; font-size: 17px; padding: 10px; border-radius: 10px; border: 1px solid #ccc; margin: 6px 0; }
 
 /* נקודות המסלול בתכנון */
@@ -150,7 +127,6 @@ body.planning #status, body.planning #btn-lib, body.planning #btn-fit, body.plan
 .wp.first { background: #1a9b3c; border-color: #fff; color: #fff; }
 .wp.last { background: #c62828; border-color: #fff; color: #fff; }
 
-body.night .sheet { background: #1d2227; color: #e6e6e6; }
 body.night .stats .lbl { color: #999; }
 body.night .btns button { background: #2a3036; border-color: #444; }
 body.night .btns button.primary { background: #2e7d4f; border-color: #2e7d4f; }
@@ -158,25 +134,9 @@ body.night #plan-name { background: #1d2227; color: #eee; border-color: #444; }
 
 /* ספריית מסלולים */
 dialog.tall { max-height: 85vh; }
-#lib-list details { margin: 6px 0; border-bottom: 1px solid #eee; }
-#lib-list summary { font-weight: 700; padding: 8px 0; cursor: pointer; }
-.lib-row { padding: 9px 6px; border-top: 1px solid #f0f0f0; cursor: pointer; }
-.lib-row.current { background: rgba(46,125,79,.1); border-radius: 8px; }
-.lib-row.current .lib-main b::after { content: " · פעיל"; font-weight: 400; color: var(--green); }
-.lib-main b { display: block; font-size: 16px; overflow-wrap: anywhere; }
-.lib-main span { display: block; margin-top: 2px; }
-/* הפעולות מופיעות רק לשורה שנבחרה */
-.lib-btns { display: none; gap: 6px; margin-top: 8px; }
-.lib-row.open { background: rgba(0,0,0,.04); border-radius: 8px; }
-.lib-row.open .lib-btns { display: flex; }
-.lib-btns button { flex: 1; width: auto; margin: 0; padding: 9px 6px; font-size: 14px; }
-.lib-btns button.armed { background: #c62828; color: #fff; border-color: #c62828; }
 .fld { display: block; font-size: 13px; color: #666; margin: 6px 0; }
 .fld input { display: block; width: 100%; font-size: 16px; padding: 9px; border-radius: 10px; border: 1px solid #ccc; margin-top: 3px; color: #222; }
 #ri-folder { margin: 0; }
-body.night #lib-list details, body.night .lib-row { border-color: #333; }
-body.night .lib-row.open { background: rgba(255,255,255,.06); }
-body.night .lib-row.current .lib-main b::after { color: #81c784; }
 body.night .fld { color: #aaa; }
 body.night .fld input { background: #1d2227; color: #eee; border-color: #444; }
 
@@ -189,13 +149,6 @@ body.night .fld input { background: #1d2227; color: #eee; border-color: #444; }
 body.night .scrub { background: rgba(255,109,0,.12); }
 body.night .scrub-head { color: #ffab40; }
 
-/* מסלולים: למעלה – מסלול חדש והמסלול שעל המפה */
-#lib-top { margin-bottom: 4px; }
-.lib-active { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(46,125,79,.1); }
-.lib-active span { flex: 1; min-width: 0; }
-.lib-active small, .lib-active b { display: block; }
-.lib-active b { overflow-wrap: anywhere; }
-.lib-active button { width: auto; margin: 0; padding: 8px 10px; font-size: 14px; flex: none; }
 /* העברה לתיקייה */
 .lib-move { margin-top: 8px; }
 .lib-move p { margin: 0 0 6px; }
@@ -204,5 +157,83 @@ body.night .scrub-head { color: #ffab40; }
 .new-folder { display: flex; gap: 6px; }
 .new-folder input { flex: 1; min-width: 0; font-size: 15px; padding: 8px 10px; border-radius: 10px; border: 1px solid #ccc; }
 .new-folder button { width: auto; margin: 0; padding: 8px 14px; font-size: 14px; }
-body.night .lib-active { background: rgba(76,175,80,.15); }
 body.night .new-folder input { background: #1d2227; color: #eee; border-color: #444; }
+
+/* ===== עמודת הכלים ("אולר"): סגורה – רק ☰; נפתחת במשיכה למטה או בהקשה, ונסגרת אחרי פעולה ===== */
+#controls.open { --k: 1; }
+#btn-menu svg { transition: transform .2s; }
+#controls.open #btn-menu svg { transform: rotate(90deg); }
+.knife { display: flex; flex-direction: column; }
+#controls .knife > button { overflow: hidden; height: calc(52px * var(--k)); margin-top: calc(10px * var(--k)); opacity: var(--k);
+  transform: scale(var(--k)); transform-origin: top center; pointer-events: none;
+  transition: height .22s cubic-bezier(.22,1,.36,1), margin .22s cubic-bezier(.22,1,.36,1), opacity .18s, transform .22s cubic-bezier(.22,1,.36,1); }
+#controls.open .knife > button { pointer-events: auto; }
+#controls.dragging .knife > button { transition: none; }
+/* צפון ומרכוז נשארים בחוץ כשצריך אותם */
+#controls .knife > button.pin { height: 52px; margin-top: 10px; opacity: 1; transform: none; pointer-events: auto; }
+@media (max-height: 640px) { #controls .knife > button { height: calc(46px * var(--k)); } #controls .knife > button.pin { height: 46px; } }
+
+/* ===== הדוק התחתון: צר, ומשתנה לפי מה שעושים ===== */
+#dock { position: fixed; left: 8px; right: 8px; bottom: calc(8px + var(--safe-b)); z-index: 7; margin: 0 auto; max-width: 560px;
+  background: #fff; border-radius: 16px; box-shadow: 0 2px 14px rgba(0,0,0,.28); }
+#dock > section { padding: 8px 10px; }
+.dock-home { display: flex; gap: 6px; }
+.dock-home button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border: 0; border-radius: 12px;
+  background: #f2f4f3; color: #222; font: inherit; font-size: 13px; }
+.dock-home button:active { background: #e3ece6; }
+.dock-home .ico { font-size: 20px; line-height: 1.1; }
+.dock-head { display: flex; align-items: flex-start; gap: 8px; }
+.dock-head > b { flex: 1; font-size: 16px; padding: 4px 2px; }
+.dock-head .x { flex: none; border: 0; background: none; font-size: 18px; padding: 4px 8px; color: inherit; }
+.dock-scroll { max-height: min(58vh, 480px); overflow-y: auto; overscroll-behavior: contain; margin-top: 4px; }
+
+/* רשימת המסלולים */
+#lib-list details { margin: 2px 0 6px; }
+#lib-list summary { font-weight: 700; font-size: 14px; color: #555; padding: 6px 2px; cursor: pointer; }
+.lib-row { display: block; width: 100%; text-align: start; border: 0; border-top: 1px solid #eee; background: none; padding: 9px 6px; font: inherit; color: inherit; }
+.lib-row b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.lib-row span { display: block; margin-top: 2px; }
+.lib-row.current { background: rgba(46,125,79,.1); border-radius: 8px; }
+.lib-row.current b::after { content: " · על המפה"; font-weight: 400; color: var(--green); }
+.lib-row:active { background: rgba(0,0,0,.05); }
+
+/* המסלול */
+.grip { display: block; width: 44px; height: 14px; margin: -6px auto 0; padding: 0; border: 0; background: none; touch-action: none; position: relative; }
+.grip::before { content: ""; position: absolute; left: 50%; top: 5px; translate: -50% 0; width: 36px; height: 4px; border-radius: 2px; background: #c9c9c9; }
+.r-title { flex: 1; min-width: 0; touch-action: none; cursor: pointer; padding: 2px; }
+.r-title b { display: block; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+.r-title span { display: block; margin-top: 2px; }
+#ri-name-in { width: 100%; font-size: 16px; font-weight: 700; padding: 6px 8px; border-radius: 8px; border: 1px solid #bbb; }
+.navrow { display: flex; margin-top: 6px; border-radius: 10px; overflow: hidden; gap: 1px; background: #e3e3e3; }
+.navrow > div { flex: 1; text-align: center; background: #f6f7f6; padding: 4px 2px; }
+.navrow .lbl { display: block; font-size: 11px; color: #777; }
+.navrow .val { display: block; font-size: 19px; font-weight: 800; color: #222; }
+.navrow .sub { display: block; font-size: 11px; color: #777; }
+.navrow .sub:empty { display: none; }
+.navrow .val.ok { color: #1a9b3c; } .navrow .val.warn { color: #e67e00; } .navrow .val.bad { color: #c62828; }
+.r-more { display: none; }
+#dock.open .r-more { display: block; }
+.r-more .profile { margin-top: 6px; }
+.dimrow { display: flex; align-items: center; gap: 10px; margin: 8px 2px 4px; font-size: 14px; }
+.dimrow input { flex: 1; accent-color: var(--green); }
+.r-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.r-acts button { flex: 1 1 30%; padding: 9px 4px; font-size: 14px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; color: inherit; }
+.r-acts button.danger { color: #c62828; }
+.r-acts button.armed { background: #c62828; color: #fff; border-color: #c62828; }
+#dock[data-mode="plan"] .btns { margin-top: 4px; }
+
+/* לילה */
+body.night #dock { background: #1d2227; color: #e6e6e6; }
+body.night .dock-home button { background: #2a3036; color: #eee; }
+body.night .lib-row { border-color: #333; }
+body.night #lib-list summary { color: #aaa; }
+body.night .lib-row.current { background: rgba(76,175,80,.15); }
+body.night .lib-row.current b::after { color: #81c784; }
+body.night .grip::before { background: #555; }
+body.night .navrow { background: #333; }
+body.night .navrow > div { background: #252b31; }
+body.night .navrow .val { color: #f0f0f0; }
+body.night .navrow .val.ok { color: #4cd06f; } body.night .navrow .val.warn { color: #ffa726; } body.night .navrow .val.bad { color: #ef5350; }
+body.night .r-acts button { background: #2a3036; border-color: #444; }
+body.night .r-acts button.danger { color: #ef5350; }
+body.night #ri-name-in { background: #1d2227; color: #eee; border-color: #555; }
