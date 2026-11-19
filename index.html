@@ -19,6 +19,12 @@
     <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
     </button>
+    <button id="btn-compass" title="מצפן: הקשה – סיבוב לפי כיוון הטלפון / צפון למעלה" aria-label="מצפן">
+      <svg viewBox="0 0 24 24" id="compass-needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg>
+    </button>
+    <button id="btn-layers" title="שכבות" aria-label="שכבות">
+      <svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5" fill="none"/></svg>
+    </button>
     <button id="btn-search" title="חיפוש מקום" aria-label="חיפוש">
       <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none"/><path d="M15.5 15.5L21 21"/></svg>
     </button>
@@ -65,6 +71,30 @@
       <button value="ok" class="primary">שמור</button>
       <button value="cancel" formnovalidate>חזרה לציור</button>
     </form>
+  </dialog>
+
+  <dialog id="layers-dlg">
+    <h2>שכבות</h2>
+    <h3>רקע</h3>
+    <label class="row"><input type="radio" name="base" value="vector"> מפה וקטורית (אופליין)</label>
+    <label class="row"><input type="radio" name="base" value="topo"> טופוגרפית עם קווי גובה 🌐</label>
+    <label class="row"><input type="radio" name="base" value="ihm"> מפת ישראל להליכה 🌐</label>
+    <label class="row"><input type="radio" name="base" value="sat"> תצלום אוויר 🌐</label>
+    <p class="muted small">🌐 = דורש אינטרנט. מעל רקע אונליין כדאי לכבות כבישים ושבילים לא מסומנים.</p>
+    <h3>מה להציג</h3>
+    <div class="grid2">
+      <label class="row"><input type="checkbox" name="trails"> שבילים מסומנים</label>
+      <label class="row"><input type="checkbox" name="paths"> שבילים לא מסומנים</label>
+      <label class="row"><input type="checkbox" name="tracks"> דרכי עפר</label>
+      <label class="row"><input type="checkbox" name="roads"> כבישים</label>
+      <label class="row"><input type="checkbox" name="water"> נחלים</label>
+      <label class="row"><input type="checkbox" name="poi"> פסגות, מעיינות, אתרים</label>
+      <label class="row"><input type="checkbox" name="places"> יישובים</label>
+      <label class="row"><input type="checkbox" name="areas"> האזורים שלי</label>
+      <label class="row"><input type="checkbox" name="route"> מסלול GPX</label>
+      <label class="row"><input type="checkbox" name="labels"> שמות על המפה</label>
+    </div>
+    <button id="layers-close" class="primary">סגור</button>
   </dialog>
 
   <dialog id="areas-dlg">

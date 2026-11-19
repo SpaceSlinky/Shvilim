@@ -113,3 +113,17 @@ body.night .maplibregl-ctrl-scale { background: rgba(30,30,30,.7); color: #ddd; 
 body.night .maplibregl-ctrl-attrib { background: rgba(30,30,30,.7); }
 body.night .maplibregl-ctrl-attrib a { color: #ccc; }
 body.night .maplibregl-popup-content { background: #23282e; color: #eee; }
+
+/* מצפן ושכבות */
+#compass-needle { transition: transform .15s linear; }
+#controls #compass-needle .n { fill: #d32f2f; stroke: none; }
+#controls #compass-needle .s { fill: #9e9e9e; stroke: none; }
+#btn-compass.active { background: #1e88e5; box-shadow: 0 0 0 3px rgba(30,136,229,.35), 0 2px 8px rgba(0,0,0,.28); }
+#btn-compass.active #compass-needle .s { fill: #fff; }
+#layers-dlg h3 { margin: 12px 0 2px; font-size: 15px; color: #555; }
+#layers-dlg .row { margin: 7px 0; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
+.grid2 .row { font-size: 14px; }
+body.night #layers-dlg h3 { color: #aaa; }
+body.night #btn-compass.active { background: #1e88e5; }
+@media (max-height: 640px) { #controls { gap: 7px; } #controls button { width: 46px; height: 46px; } }

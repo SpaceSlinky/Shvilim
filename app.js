@@ -69,10 +69,19 @@
       wpts: { type: 'geojson', data: empty },
       acc: { type: 'geojson', data: empty },
       areas: { type: 'geojson', data: empty },
+      // רקעים אונליין (דורשים אינטרנט)
+      sat: { type: 'raster', tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'] },
+      topo: { type: 'raster', tileSize: 256, maxzoom: 17, attribution: '© OpenTopoMap (CC-BY-SA)',
+        tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png'] },
+      ihm: { type: 'raster', tileSize: 256, maxzoom: 16, attribution: '© Israel Hiking Map',
+        tiles: ['https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png'] },
       draft: { type: 'geojson', data: empty },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#f3f0e6' } },
+      ...['sat', 'topo', 'ihm'].map((id) => ({ id: 'base-' + id, type: 'raster', source: id,
+        layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150 } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.6, 2.4) } },
       // דרכים
@@ -182,13 +191,12 @@
     zoom: saved?.zoom || DEFAULT_VIEW.zoom,
     minZoom: 9,
     maxZoom: 19,
-    dragRotate: false,
+    dragRotate: true,
     pitchWithRotate: false,
     touchPitch: false,
     attributionControl: { compact: true },
   });
-  map.touchZoomRotate.disableRotation();
-  map.keyboard.disableRotation();
+  map.touchPitch?.disable?.();
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 100 }), 'bottom-left');
   map.on('moveend', () => {
     try {
@@ -349,11 +357,12 @@
     marker.setLngLat(p);
     const el = marker.getElement();
     const moving = Number.isFinite(heading) && (speed ?? 0) > 0.4;
-    el.classList.toggle('has-heading', moving);
-    if (moving) marker.setRotation(heading);
+    gpsHeading = moving ? heading : null;
+    updateMarkerHeading();
     el.classList.toggle('poor', accuracy > 50);
     map.getSource('acc')?.setData({ type: 'Feature', geometry: Geo.circle(p, accuracy), properties: {} });
-    if (follow) map.easeTo({ center: p, zoom: first ? Math.max(map.getZoom(), 15.5) : map.getZoom(), duration: first ? 600 : 400 });
+    if (follow) map.easeTo({ center: p, zoom: first ? Math.max(map.getZoom(), 15.5) : map.getZoom(), duration: first ? 600 : 400,
+      ...(compassMode && devHeading != null ? { bearing: devHeading } : {}) });
     updateStatus();
   }
 
@@ -453,6 +462,115 @@
   $('w-carmel').addEventListener('click', () => downloadArea(CARMEL));
   gpxInput.addEventListener('change', () => { if (gpxInput.files[0]) loadGpxFile(gpxInput.files[0]); gpxInput.value = ''; });
 
+  // ---------- סיבוב ומצפן ----------
+  let compassMode = false;
+  let devHeading = null;   // כיוון הטלפון (מצפן), מעלות מהצפון
+  let gpsHeading = null;   // כיוון התנועה לפי GPS
+  let lastRotate = 0;
+
+  function updateMarkerHeading() {
+    if (!marker) return;
+    const h = compassMode && devHeading != null ? devHeading : gpsHeading;
+    marker.getElement().classList.toggle('has-heading', h != null);
+    if (h != null) marker.setRotation(h);
+  }
+  function updateCompassIcon() {
+    $('compass-needle').style.transform = `rotate(${-map.getBearing()}deg)`;
+    $('btn-compass').classList.toggle('active', compassMode);
+    $('btn-compass').classList.toggle('rotated', Math.abs(map.getBearing()) > 0.5);
+  }
+  map.on('rotate', updateCompassIcon);
+
+  function onOrientation(e) {
+    let h = null;
+    if (e.webkitCompassHeading != null) h = e.webkitCompassHeading;
+    else if (e.absolute && e.alpha != null) h = 360 - e.alpha;
+    if (h == null) return;
+    h = (h + (screen.orientation?.angle || 0) + 360) % 360;
+    // החלקה (low-pass) עם התחשבות במעבר 359→0
+    if (devHeading == null) devHeading = h;
+    else devHeading = (devHeading + (((h - devHeading + 540) % 360) - 180) * 0.25 + 360) % 360;
+    updateMarkerHeading();
+    const now = performance.now();
+    if (compassMode && now - lastRotate > 120) {
+      lastRotate = now;
+      map.rotateTo(devHeading, { duration: 100 });
+    }
+  }
+  let orientationOn = false;
+  async function enableOrientation() {
+    if (orientationOn) return true;
+    // ב-iOS חובה לבקש הרשאה; באנדרואיד מנסים, ואם אין נתונים – מודיעים אחרי 2.5 שניות
+    if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+      try { await DeviceOrientationEvent.requestPermission(); } catch { /* ignore */ }
+    }
+    const ev = 'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
+    window.addEventListener(ev, onOrientation);
+    orientationOn = true;
+    return true;
+  }
+
+  $('btn-compass').addEventListener('click', async () => {
+    if (compassMode) {
+      compassMode = false;
+      map.rotateTo(0, { duration: 400 });
+      toast('צפון למעלה', 1500);
+    } else if (Math.abs(map.getBearing()) > 0.5) {
+      map.rotateTo(0, { duration: 400 });
+    } else {
+      if (!(await enableOrientation())) return toast('אין גישה למצפן של הטלפון');
+      compassMode = true;
+      toast('המפה מסתובבת לפי כיוון הטלפון · הקשה נוספת: צפון למעלה', 3500);
+      setTimeout(() => devHeading == null && compassMode && toast('לא מתקבל מצפן מהטלפון'), 2500);
+    }
+    updateCompassIcon();
+  });
+  // סיבוב ידני בשתי אצבעות מבטל את מצב המצפן
+  map.on('rotatestart', (e) => { if (e.originalEvent && compassMode) { compassMode = false; updateCompassIcon(); } });
+
+  // ---------- שכבות ----------
+  const GROUPS = {
+    trails: ['trail-casing', 'trail', 'trail-label'],
+    paths: ['path'],
+    tracks: ['track'],
+    roads: ['major-casing', 'major', 'medium-casing', 'medium', 'minor-casing', 'minor', 'road-label'],
+    water: ['water', 'water-label'],
+    poi: ['poi-dot', 'poi-label', 'peak'],
+    places: ['place-minor', 'place-major'],
+    areas: ['area-fill', 'area-line', 'area-label'],
+    route: ['route-halo', 'route-line', 'route-arrows', 'route-ends', 'wpts'],
+  };
+  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major', 'area-label']);
+  const layerPrefs = Object.assign(
+    { base: 'vector', labels: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
+    (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
+
+  function applyLayers() {
+    const vis = (on) => (on ? 'visible' : 'none');
+    for (const b of ['sat', 'topo', 'ihm']) map.setLayoutProperty('base-' + b, 'visibility', vis(layerPrefs.base === b));
+    for (const [g, ids] of Object.entries(GROUPS)) {
+      for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
+    }
+    try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
+  }
+  function syncLayerForm() {
+    for (const el of document.querySelectorAll('#layers-dlg input')) {
+      if (el.type === 'radio') el.checked = el.value === layerPrefs.base;
+      else el.checked = !!layerPrefs[el.name];
+    }
+  }
+  $('layers-dlg').addEventListener('change', (e) => {
+    const el = e.target;
+    if (el.type === 'radio') {
+      layerPrefs.base = el.value;
+      if (el.value !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);
+    } else layerPrefs[el.name] = el.checked;
+    applyLayers();
+  });
+  $('btn-layers').addEventListener('click', () => { syncLayerForm(); $('layers-dlg').showModal(); });
+  $('layers-close').addEventListener('click', () => $('layers-dlg').close());
+  mapReady.then(applyLayers);
+
   // ---------- מצב לילה ----------
   const THEME = [ // [שכבה, מאפיין, יום, לילה]
     ['bg', 'background-color', '#f3f0e6', '#15191e'],
@@ -484,6 +602,7 @@
     document.body.classList.toggle('night', night);
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
+    for (const b of ['sat', 'topo', 'ihm']) map.setPaintProperty('base-' + b, 'raster-brightness-max', night ? 0.7 : 1);
   }
   const nightPref = localStorage.getItem('night');
   $('m-night').checked = nightPref ? nightPref === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
