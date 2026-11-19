@@ -11,7 +11,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 #map { position: fixed; inset: 0; }
 
 /* כפתורים צפים */
-#controls { position: fixed; top: calc(12px + var(--safe-t)); right: 12px; display: flex; flex-direction: column; gap: 10px; z-index: 5; }
+#controls { position: fixed; top: calc(12px + var(--safe-t)); right: 12px; display: flex; flex-direction: column; gap: 10px; z-index: 8; }
 #controls button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #fff;
   box-shadow: 0 2px 8px rgba(0,0,0,.28); display: grid; place-items: center; padding: 0; }
 #controls button:active { transform: scale(.94); }
@@ -55,7 +55,7 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 .row input { width: 20px; height: 20px; }
 .muted { color: #666; font-size: 14px; }
 .small { font-size: 12px; }
-#nodata { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(0,0,0,.35); }
+#nodata { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(0,0,0,.35); }
 #nodata[hidden] { display: none; }
 .card { background: #fff; border-radius: 16px; padding: 20px; width: min(92vw, 380px); line-height: 1.5; }
 
@@ -131,3 +131,41 @@ body.night #btn-compass.active { background: #1e88e5; }
 .info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }
 .info-row small { display: block; color: #777; font-size: 11px; direction: ltr; text-align: right; }
 body.night .info-row + .info-row { border-color: #444; }
+
+/* גיליון תחתון: נתוני מסלול ותכנון */
+.sheet { position: fixed; left: 8px; right: 8px; bottom: calc(10px + var(--safe-b)); z-index: 7; background: #fff;
+  border-radius: 16px; padding: 10px 12px; box-shadow: 0 2px 14px rgba(0,0,0,.3); }
+#routeinfo { bottom: calc(10px + var(--safe-b)); }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; }
+.sheet-head button { border: none; background: none; font-size: 18px; padding: 4px 8px; color: inherit; }
+.stats { display: flex; text-align: center; margin: 4px 0; }
+.stats > div { flex: 1; }
+.stats .lbl { display: block; font-size: 11px; color: #777; }
+.stats .v { display: block; font-size: 17px; font-weight: 700; }
+.profile { width: 100%; height: 90px; display: block; }
+.small-profile { height: 60px; }
+.center { text-align: center; }
+#pl-hint { margin: 2px 0 4px; font-size: 13px; }
+.opts { display: flex; justify-content: space-around; font-size: 14px; margin: 6px 0; }
+.opts label { display: flex; align-items: center; gap: 5px; }
+.opts input { width: 18px; height: 18px; }
+.btns { display: flex; gap: 6px; margin-top: 6px; }
+.btns button { flex: 1; padding: 10px 2px; font-size: 14px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; color: inherit; }
+.btns button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+.btns button:disabled { opacity: .45; }
+#routeinfo .row { font-size: 14px; margin: 4px 0; }
+#status { cursor: pointer; }
+body.planning #status, body.planning #btn-gpx, body.planning #btn-fit, body.planning #btn-locate { display: none; }
+#plan-name { width: 100%; font-size: 17px; padding: 10px; border-radius: 10px; border: 1px solid #ccc; margin: 6px 0; }
+
+/* נקודות המסלול בתכנון */
+.wp { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 3px solid #333; color: #222;
+  font: bold 13px sans-serif; display: grid; place-items: center; box-shadow: 0 1px 5px rgba(0,0,0,.45); cursor: grab; }
+.wp.first { background: #1a9b3c; border-color: #fff; color: #fff; }
+.wp.last { background: #c62828; border-color: #fff; color: #fff; }
+
+body.night .sheet { background: #1d2227; color: #e6e6e6; }
+body.night .stats .lbl { color: #999; }
+body.night .btns button { background: #2a3036; border-color: #444; }
+body.night .btns button.primary { background: #2e7d4f; border-color: #2e7d4f; }
+body.night #plan-name { background: #1d2227; color: #eee; border-color: #444; }

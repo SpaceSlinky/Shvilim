@@ -1,15 +1,15 @@
 /* Service Worker: שומר את האפליקציה, הספריות והגופנים לשימוש אופליין.
    נתוני המפה עצמם נשמרים ב-IndexedDB (ראו app.js).
    קבצי האפליקציה: מוגשים מהמטמון ומתעדכנים ברקע. ספריות וגופנים מ-CDN: מהמטמון בלבד אחרי הפעם הראשונה. */
-const CACHE = 'shvilim-v7';
-const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'app.js', 'manifest.webmanifest',
+const CACHE = 'shvilim-v8';
+const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'router.js', 'elev.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png'];
 const CDN = [
   'https://unpkg.com/maplibre-gl@5.15.0/dist/maplibre-gl.css',
   'https://unpkg.com/maplibre-gl@5.15.0/dist/maplibre-gl.js',
   'https://unpkg.com/@mapbox/mapbox-gl-rtl-text@0.3.0/dist/mapbox-gl-rtl-text.js',
 ];
-const CDN_HOSTS = ['unpkg.com', 'protomaps.github.io'];
+const CDN_HOSTS = ['unpkg.com', 'protomaps.github.io', 's3.amazonaws.com'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {

@@ -47,6 +47,55 @@
 
   <div id="toast" hidden></div>
 
+  <div id="routeinfo" class="sheet" hidden>
+    <div class="sheet-head"><b id="ri-name"></b><button id="ri-close" aria-label="סגור">✕</button></div>
+    <div class="stats">
+      <div><span class="lbl">אורך</span><span id="ri-len" class="v">–</span></div>
+      <div><span class="lbl">↑ עלייה</span><span id="ri-up" class="v">–</span></div>
+      <div><span class="lbl">↓ ירידה</span><span id="ri-down" class="v">–</span></div>
+      <div><span class="lbl">⏱ זמן משוער</span><span id="ri-time" class="v">–</span></div>
+    </div>
+    <canvas id="ri-profile" class="profile"></canvas>
+    <p id="ri-remain" class="muted small center"></p>
+    <label class="row"><input type="checkbox" id="ri-focus"> הדגש את המסלול (המפה מסביב דוהה)</label>
+    <div class="btns">
+      <button id="ri-edit">✏️ ערוך</button>
+      <button id="ri-fit">הצג הכול</button>
+      <button id="ri-gpx">ייצוא GPX</button>
+      <button id="ri-clear">הסר</button>
+    </div>
+  </div>
+
+  <div id="planbar" class="sheet" hidden>
+    <p id="pl-hint" class="center"></p>
+    <div class="stats">
+      <div><span class="lbl">אורך</span><span id="pl-len" class="v">–</span></div>
+      <div><span class="lbl">↑ עלייה</span><span id="pl-up" class="v">–</span></div>
+      <div><span class="lbl">↓ ירידה</span><span id="pl-down" class="v">–</span></div>
+      <div><span class="lbl">⏱ זמן</span><span id="pl-time" class="v">–</span></div>
+    </div>
+    <canvas id="pl-profile" class="profile small-profile"></canvas>
+    <div class="opts">
+      <label><input type="checkbox" id="pl-snap"> צמוד לשבילים</label>
+      <label><input type="checkbox" id="pl-bike"> כולל שבילי אופניים</label>
+    </div>
+    <div class="btns">
+      <button id="pl-done" class="primary">סיום</button>
+      <button id="pl-undo">↶ בטל</button>
+      <button id="pl-clear">נקה</button>
+      <button id="pl-cancel">ביטול</button>
+    </div>
+  </div>
+
+  <dialog id="plan-dlg">
+    <form method="dialog">
+      <h2>שם למסלול</h2>
+      <input id="plan-name" placeholder="למשל: טבעת כלח" maxlength="50">
+      <button value="ok" class="primary">שמור והפעל</button>
+      <button value="cancel" formnovalidate>חזרה לעריכה</button>
+    </form>
+  </dialog>
+
   <div id="search" hidden>
     <form id="search-form" action="#">
       <input id="search-input" type="search" enterkeyhint="search" placeholder="חיפוש: שוויצריה הקטנה, נחל כלח, עין…" autocomplete="off">
@@ -93,7 +142,9 @@
       <label class="row"><input type="checkbox" name="areas"> האזורים שלי</label>
       <label class="row"><input type="checkbox" name="route"> מסלול GPX</label>
       <label class="row"><input type="checkbox" name="labels"> שמות על המפה</label>
+      <label class="row"><input type="checkbox" name="bike"> שבילי אופניים</label>
       <label class="row"><input type="checkbox" name="smooth"> קווים מעוגלים</label>
+      <label class="row"><input type="checkbox" name="focus"> הדגשת מסלול פעיל</label>
     </div>
     <button id="layers-close" class="primary">סגור</button>
   </dialog>
@@ -109,6 +160,7 @@
     <p id="offline-info" class="muted"></p>
     <button id="m-gpx">טען מסלול GPX</button>
     <button id="m-clear">הסר מסלול</button>
+    <button id="m-plan" class="primary">✏️ תכנן מסלול</button>
     <button id="m-draw">סמן אזור חדש על המפה</button>
     <button id="m-areas">האזורים שלי</button>
     <button id="m-area">הוסף למפה השמורה את האזור שבמסך</button>
@@ -132,6 +184,8 @@
 
   <script src="geo.js"></script>
   <script src="osm.js"></script>
+  <script src="router.js"></script>
+  <script src="elev.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

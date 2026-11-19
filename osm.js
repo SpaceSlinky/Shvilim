@@ -16,7 +16,7 @@
     const b = `${s},${w},${n},${e}`;
     const hw = Object.keys(ROAD_CLASS).join('|');
     return `[out:json][timeout:300];
-relation["route"~"^(hiking|foot)$"](${b});
+relation["route"~"^(hiking|foot|mtb|bicycle)$"](${b});
 out geom(${b});
 (
   way["highway"~"^(${hw})$"](${b});
@@ -48,7 +48,11 @@ out center tags;`;
     for (const src of [osmc.split(':')[0], t.colour || '']) {
       const c = src.trim().toLowerCase();
       if (TRAIL_COLORS[c]) return TRAIL_COLORS[c];
-      if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/.test(c)) return c;
+      if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/.test(c)) {
+        const h = c.length === 4 ? c.replace(/[0-9a-f]/g, (x) => x + x) : c;
+        const lum = parseInt(h.slice(1, 3), 16) + parseInt(h.slice(3, 5), 16) + parseInt(h.slice(5, 7), 16);
+        return lum < 150 ? TRAIL_COLORS.black : h; // כמעט שחור → שחור (לטיפול אחיד במצב לילה)
+      }
     }
     return '#7b5cb8';
   }
@@ -71,7 +75,11 @@ out center tags;`;
     for (const el of osm.elements || []) {
       const t = el.tags || {};
       const n = nameOf(t);
-      if (el.type === 'relation') {
+      if (el.type === 'relation' && (t.route === 'mtb' || t.route === 'bicycle')) {
+        const props = { k: 'bike' };
+        if (n) props.n = n;
+        for (const m of el.members || []) if (m.type === 'way') lines(m.geometry).forEach((c) => add('LineString', c, props));
+      } else if (el.type === 'relation') {
         const props = { k: 'trail', c: trailColor(t), ...tagInfo(t) };
         if (n) props.n = n;
         for (const m of el.members || []) if (m.type === 'way') lines(m.geometry).forEach((c) => add('LineString', c, props));
@@ -80,6 +88,12 @@ out center tags;`;
         add('Point', [r6(el.center.lon), r6(el.center.lat)], { k: 'poi', t: 'parking', ...(n ? { n } : {}) });
       } else if (el.type === 'way') {
         const props = t.waterway ? { k: 'water' } : { k: 'road', r: ROAD_CLASS[t.highway] || 'minor', h: t.highway };
+        if (!t.waterway) {
+          if (t.foot === 'no' || t.access === 'no' || t.access === 'private') props.fn = 1;
+          // שביל ייעודי לאופניים (סינגל) – בתכנון הליכה משתמשים בו רק אם ביקשו
+          if (t.highway === 'cycleway' || (t.highway === 'path' && (t.bicycle === 'designated' || t['mtb:scale'])
+            && !['designated', 'yes'].includes(t.foot))) props.b = 1;
+        }
         if (n) props.n = n;
         const segs = lines(el.geometry);
         segs.forEach((c) => add('LineString', c, props));

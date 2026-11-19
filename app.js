@@ -66,6 +66,8 @@
     sources: {
       osm: { type: 'geojson', data: empty, attribution: '© OpenStreetMap', tolerance: 0.3 },
       route: { type: 'geojson', data: empty },
+      dim: { type: 'geojson', data: { type: 'Feature', properties: {},
+        geometry: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } } },
       wpts: { type: 'geojson', data: empty },
       acc: { type: 'geojson', data: empty },
       areas: { type: 'geojson', data: empty },
@@ -106,22 +108,15 @@
         paint: { 'fill-color': '#ff7a00', 'fill-opacity': 0.07 } },
       { id: 'area-line', type: 'line', source: 'areas', filter: ['==', '$type', 'Polygon'],
         paint: { 'line-color': '#ff7a00', 'line-width': 2.5, 'line-dasharray': [3, 2] } },
-      // מסלול ה-GPX: פס רחב ושקוף מתחת לשבילים כדי שצבע הסימון יישאר גלוי
-      { id: 'route-halo', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#ff1fa6', 'line-opacity': 0.38, 'line-width': zw(8, 18) } },
+      // שבילי אופניים (מסלולי MTB)
+      { id: 'bike', type: 'line', source: 'osm', filter: k('bike'), minzoom: 11, layout: { 'line-join': 'round', visibility: 'none' },
+        paint: { 'line-color': '#ff6d00', 'line-width': zw(1, 3), 'line-dasharray': [2, 1.2], 'line-opacity': 0.9 } },
       // שבילים מסומנים
       { id: 'trail-casing', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
           'line-opacity': 0.85, 'line-width': zw(2.8, 7.5) } },
       { id: 'trail', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': zw(1.5, 4.5) } },
-      { id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#c2007a', 'line-width': zw(1.2, 2.2) } },
-      { id: 'route-arrows', type: 'symbol', source: 'route', filter: ['==', '$type', 'LineString'],
-        layout: { 'symbol-placement': 'line', 'symbol-spacing': 80, 'icon-image': 'arrow',
-          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map' } },
       // תוויות
       { id: 'water-label', type: 'symbol', source: 'osm', filter: ['all', k('water'), ['has', 'n']], minzoom: 13,
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'symbol-spacing': 300 },
@@ -133,16 +128,11 @@
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13,
           'symbol-spacing': 400, 'text-offset': [0, -1.1] },
         paint: { 'text-color': '#222', ...halo } },
-      { id: 'poi-dot', type: 'circle', source: 'osm', filter: ['all', k('poi'), ['!=', ['get', 't'], 'peak']], minzoom: 12.5,
-        paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 3, 16, 6], 'circle-stroke-width': 1.5, 'circle-stroke-color': '#fff',
-          'circle-color': ['match', ['get', 't'], ['spring', 'water'], '#1f88e5', 'viewpoint', '#e53935', 'parking', '#3949ab',
-            ['ruins', 'archaeological_site'], '#795548', 'cave_entrance', '#424242', '#43a047'] } },
-      { id: 'parking-p', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['==', ['get', 't'], 'parking']], minzoom: 14,
-        layout: { 'text-field': 'P', 'text-font': FONT, 'text-size': ['interpolate', ['linear'], ['zoom'], 14, 7, 16, 10],
-          'text-allow-overlap': true, 'text-ignore-placement': true },
-        paint: { 'text-color': '#ffffff' } },
+      { id: 'poi-icon', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['!=', ['get', 't'], 'peak']], minzoom: 12.5,
+        layout: { 'icon-image': ['concat', 'poi-', ['get', 't']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.5, 16, 0.85],
+          'icon-padding': 1, 'icon-allow-overlap': ['step', ['zoom'], false, 15.5, true] } },
       { id: 'poi-label', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['has', 'n'], ['!=', ['get', 't'], 'peak']], minzoom: 14,
-        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'text-anchor': 'top', 'text-offset': [0, 0.6],
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'text-anchor': 'top', 'text-offset': [0, 1.3],
           'text-max-width': 8, 'text-optional': true },
         paint: { 'text-color': '#333', ...halo } },
       { id: 'peak', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['==', ['get', 't'], 'peak']], minzoom: 12,
@@ -159,6 +149,21 @@
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
           'text-size': ['match', ['get', 't'], ['city', 'town'], 17, 15] },
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
+      // מסלול פעיל: המפה מתחתיו דוהה, והמסלול מצויר עבה בצבעי השבילים עם מסגרת לבנה וקו מתאר כהה
+      { id: 'dim', type: 'fill', source: 'dim', layout: { visibility: 'none' }, paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } },
+      { id: 'route-outer', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#000000', 'line-opacity': 0.55, 'line-width': zw(7, 15) } },
+      { id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': zw(5, 11) } },
+      { id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
+        layout: { 'line-join': 'round', 'line-cap': 'round' },
+        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(3, 6.5),
+          'line-dasharray': ['case', ['==', ['get', 'h'], 'free'], ['literal', [1, 1]], ['literal', [1, 0]]] } },
+      { id: 'route-arrows', type: 'symbol', source: 'route', filter: ['==', '$type', 'LineString'],
+        layout: { 'symbol-placement': 'line', 'symbol-spacing': 70, 'icon-image': 'arrow',
+          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map' } },
       // נקודות המסלול
       { id: 'route-ends', type: 'circle', source: 'route', filter: ['==', '$type', 'Point'],
         paint: { 'circle-radius': 7, 'circle-stroke-width': 2.5, 'circle-stroke-color': '#fff',
@@ -208,7 +213,27 @@
       localStorage.setItem('view', JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }));
     } catch { /* ignore */ }
   });
-  map.on('styleimagemissing', (e) => e.id === 'arrow' && !map.hasImage('arrow') && map.addImage('arrow', arrowImage(), { pixelRatio: 2 }));
+  map.on('styleimagemissing', (e) => {
+    if (map.hasImage(e.id)) return;
+    if (e.id === 'arrow') map.addImage('arrow', arrowImage(), { pixelRatio: 2 });
+    else if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
+  });
+  const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
+    camp_site: ['⛺', '#43a047'], parking: ['P', '#3949ab'], ruins: ['🏛️', '#795548'], archaeological_site: ['🏺', '#795548'],
+    cave_entrance: ['🕳️', '#424242'], attraction: ['⭐', '#f9a825'] };
+  function poiIcon(t) {
+    const [ch, col] = POI_ICON[t] || ['•', '#43a047'];
+    const S = 64, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.beginPath(); g.arc(S / 2, S / 2, 27, 0, 2 * Math.PI);
+    g.fillStyle = ch === 'P' ? col : '#ffffff'; g.fill();
+    g.lineWidth = 5; g.strokeStyle = ch === 'P' ? '#ffffff' : col; g.stroke();
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (ch === 'P') { g.fillStyle = '#fff'; g.font = 'bold 36px sans-serif'; g.fillText('P', S / 2, S / 2 + 2); }
+    else { g.font = '32px sans-serif'; g.fillText(ch, S / 2, S / 2 + 2); }
+    return g.getImageData(0, 0, S, S);
+  }
   map.on('error', (e) => console.warn(e.error || e));
   const mapReady = new Promise((r) => map.on('load', r));
 
@@ -231,6 +256,8 @@
       // טעינה מוקדמת של הגופנים שהשמות דורשים – ה-Service Worker שומר אותם לאופליין
       await Promise.all(OSM.glyphRanges(fc).map((r) =>
         fetch(GLYPHS.replace('{fontstack}', encodeURIComponent(FONT[0])).replace('{range}', r)).catch(() => null)));
+      toast('שומר נתוני גובה…', 60000);
+      await Elev.prefetch(bbox).catch(() => 0);
       if (navigator.storage?.persist) navigator.storage.persist();
       const trails = fc.features.filter((f) => f.properties.k === 'trail').length;
       toast(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
@@ -257,9 +284,11 @@
   let searchIndex = null;
   // הגרסה המוחלקת מחושבת פעם אחת ונשמרת, כדי שהפתיחה תהיה מהירה
   let smoothCache = null;
+  let smoother = null;
   async function setMapData(fc) {
     mapFC = fc;
     searchIndex = null;
+    smoother = Geo.makeSmoother(fc, 2);
     if (!layerPrefs.smooth) return map.getSource('osm').setData(fc);
     const stamp = fc.features.length + '|' + (fc.bbox || []).join(',');
     if (smoothCache?.stamp !== stamp) {
@@ -282,7 +311,7 @@
     g.lineCap = g.lineJoin = 'round';
     const chevron = () => { g.beginPath(); g.moveTo(11, 8); g.lineTo(22, 16); g.lineTo(11, 24); g.stroke(); };
     g.strokeStyle = '#fff'; g.lineWidth = 7; chevron();
-    g.strokeStyle = '#c2007a'; g.lineWidth = 3.5; chevron();
+    g.strokeStyle = '#222'; g.lineWidth = 3.5; chevron();
     return g.getImageData(0, 0, s, s);
   }
 
@@ -299,9 +328,9 @@
     '#8e24aa': 'סגול', '#e8b800': 'צהוב', '#8d5524': 'חום', '#ffffff': 'לבן / שקוף', '#808080': 'אפור', '#7b5cb8': 'לא ידוע' };
   const HW = { path: 'שביל', footway: 'שביל הליכה', track: 'דרך עפר', steps: 'מדרגות', bridleway: 'שביל רכיבה', cycleway: 'שביל אופניים',
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
-  const INFO_LAYERS = ['trail', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-dot', 'peak'];
+  const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
   map.on('click', (e) => {
-    if (draft) return;
+    if (draft || plan) return;
     const { x, y } = e.point;
     const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
     if (!feats.length) return;
@@ -317,6 +346,7 @@
         + `<small>OSM: ${[p.o && 'osmc:symbol=' + p.o, p.cl && 'colour=' + p.cl].filter(Boolean).join(' · ') || '—'}${p.w ? ' · הסימון רשום על השביל עצמו' : ''}</small>`;
       else if (p.k === 'road') line = HW[p.h] || 'דרך';
       else if (p.k === 'water') line = 'נחל';
+      else if (p.k === 'bike') line = 'מסלול אופניים';
       else if (p.k === 'poi') line = KIND[p.t === 'water' ? 'water_poi' : p.t] || p.t;
       rows.push(`<div class="info-row"><b>${esc(p.n || '')}</b> ${line}</div>`);
       if (rows.length >= 4) break;
@@ -325,44 +355,71 @@
   });
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-  // ---------- מסלול GPX ----------
-  let route = null;
-  let routeData = null;
+  // ---------- מסלול פעיל (GPX או מסלול מתוכנן) ----------
+  let route = null;      // לחישובי מיקום (Geo.buildRoute)
+  let active = null;     // { kind:'gpx'|'plan', segs:[{coords,c,h}], waypoints, name, text?, wps?, opts? }
   let prevAlong = null;
+  let prof = null;       // פרופיל גובה
 
-  async function showGpx(text, fit) {
-    const doc = new DOMParser().parseFromString(text, 'application/xml');
-    const g = Geo.parseGpx(doc);
-    await mapReady;
-    route = Geo.buildRoute(g.lines);
-    routeData = g;
-    prevAlong = null;
-    const features = g.lines.map((l) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: l }, properties: {} }));
-    if (route.pts.length > 1) {
-      features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: route.pts[route.pts.length - 1] }, properties: { kind: 'end' } });
-      features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: route.pts[0] }, properties: { kind: 'start' } });
+  function routeFeatures(segs, wpts) {
+    const f = segs.map((sg) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: sg.coords },
+      properties: { ...(sg.c ? { c: sg.c } : {}), ...(sg.h ? { h: sg.h } : {}) } }));
+    const all = segs.flatMap((sg) => sg.coords);
+    if (all.length > 1) {
+      f.push({ type: 'Feature', geometry: { type: 'Point', coordinates: all[all.length - 1] }, properties: { kind: 'end' } });
+      f.push({ type: 'Feature', geometry: { type: 'Point', coordinates: all[0] }, properties: { kind: 'start' } });
     }
-    map.getSource('route').setData({ type: 'FeatureCollection', features });
+    return { type: 'FeatureCollection', features: f };
+  }
+
+  // מקטעים רצופים → קווים (קטעים שמתחברים מאוחדים לקו אחד לצורך חישוב מרחקים)
+  function segsToLines(segs) {
+    const lines = [];
+    for (const sg of segs) {
+      const last = lines[lines.length - 1];
+      const a = sg.coords[0];
+      if (last && Geo.haversine(last[last.length - 1], a) < 1) last.push(...sg.coords.slice(1));
+      else lines.push([...sg.coords]);
+    }
+    return lines;
+  }
+
+  async function setActive(a, { fit = false, save = true } = {}) {
+    await mapReady;
+    active = a;
+    const lines = segsToLines(a.segs);
+    route = Geo.buildRoute(lines);
+    prevAlong = null;
+    map.getSource('route').setData(routeFeatures(a.segs));
     map.getSource('wpts').setData({ type: 'FeatureCollection',
-      features: g.waypoints.map((w) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: w.coord }, properties: { name: w.name } })) });
+      features: (a.waypoints || []).map((w) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: w.coord }, properties: { name: w.name } })) });
     $('btn-fit').hidden = false;
     $('status').hidden = route.pts.length < 2;
+    applyLayers();
     if (fit) fitRoute();
+    if (save) db.set('active', a).catch(console.error);
     updateStatus();
-    return g;
+    prof = null;
+    Elev.profile(route.pts).then((p) => { if (active === a) { prof = p; updateStatus(); renderRouteInfo(); } });
   }
 
   function fitRoute() {
-    if (!routeData) return;
-    const all = routeData.lines.flat().concat(routeData.waypoints.map((w) => w.coord));
-    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 70, bottom: 100, left: 40, right: 76 }, maxZoom: 16 });
+    if (!active) return;
+    const all = active.segs.flatMap((sg) => sg.coords).concat((active.waypoints || []).map((w) => w.coord));
+    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 70, bottom: 110, left: 40, right: 76 }, maxZoom: 16 });
+  }
+
+  async function showGpx(text, fit, save = true) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    const g = Geo.parseGpx(doc);
+    await setActive({ kind: 'gpx', name: g.name, text, waypoints: g.waypoints,
+      segs: g.lines.map((l) => ({ coords: l, c: null })) }, { fit, save });
+    return g;
   }
 
   async function loadGpxFile(file) {
     try {
-      const text = await file.text();
-      const g = await showGpx(text, true);
-      await db.set('gpx', text);
+      const g = await showGpx(await file.text(), true);
       toast(`${g.name || 'מסלול'} · ${Geo.fmtDist(route.total)}`);
     } catch (e) {
       console.error(e);
@@ -371,14 +428,246 @@
   }
 
   async function clearRoute() {
-    route = routeData = null;
+    route = active = prof = null;
     await mapReady;
     map.getSource('route').setData(empty);
     map.getSource('wpts').setData(empty);
     $('btn-fit').hidden = true;
     $('status').hidden = true;
+    $('routeinfo').hidden = true;
+    applyLayers();
+    await db.del('active');
     await db.del('gpx');
   }
+
+  // ---------- נתוני מסלול: אורך, עלייה/ירידה, זמן וגרף גובה ----------
+  const fmtTime = (min) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h}:${String(m).padStart(2, '0')} ש'` : `${m} דק'`; };
+  const estTime = (lenM, gain, bike) => (bike ? (lenM / 1000) * 5 + (gain / 100) * 6 : (lenM / 1000) * 15 + (gain / 100) * 10);
+
+  function profileStats(p, from = 0) {
+    if (!p) return null;
+    let gain = 0, loss = 0, ref = null;
+    for (let i = 0; i < p.dist.length; i++) {
+      if (p.dist[i] < from) continue;
+      const v = p.ele[i];
+      if (ref == null) { ref = v; continue; }
+      if (v - ref >= 2) { gain += v - ref; ref = v; } else if (ref - v >= 2) { loss += ref - v; ref = v; }
+    }
+    return { gain, loss };
+  }
+
+  function drawProfile(canvas, p, marks = {}) {
+    const dpr = devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    if (!W || !H) return;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    const g = canvas.getContext('2d');
+    g.scale(dpr, dpr);
+    g.clearRect(0, 0, W, H);
+    const night = document.body.classList.contains('night');
+    if (!p) {
+      g.fillStyle = night ? '#999' : '#888'; g.font = '13px sans-serif'; g.textAlign = 'center';
+      g.fillText(prof === null && active ? 'מחשב גובה…' : 'אין נתוני גובה (נדרש אינטרנט פעם אחת)', W / 2, H / 2);
+      return;
+    }
+    const pad = { l: 34, r: 6, t: 6, b: 16 };
+    const lo = Math.floor(p.min / 10) * 10 - 5, hi = Math.ceil(p.max / 10) * 10 + 5;
+    const X = (d) => pad.l + (d / p.total) * (W - pad.l - pad.r);
+    const Y = (e) => pad.t + (1 - (e - lo) / (hi - lo)) * (H - pad.t - pad.b);
+    g.beginPath(); g.moveTo(X(0), Y(lo));
+    p.dist.forEach((d, i) => g.lineTo(X(d), Y(p.ele[i])));
+    g.lineTo(X(p.total), Y(lo)); g.closePath();
+    g.fillStyle = night ? 'rgba(76,175,80,.35)' : 'rgba(46,125,79,.25)'; g.fill();
+    g.beginPath(); p.dist.forEach((d, i) => (i ? g.lineTo : g.moveTo).call(g, X(d), Y(p.ele[i])));
+    g.strokeStyle = night ? '#81c784' : '#2e7d4f'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = night ? '#aaa' : '#666'; g.font = '10px sans-serif'; g.textAlign = 'right';
+    g.fillText(Math.round(p.max) + 'מ', pad.l - 3, Y(p.max) + 4);
+    g.fillText(Math.round(p.min) + 'מ', pad.l - 3, Y(p.min));
+    g.textAlign = 'left'; g.fillText('0', pad.l, H - 3);
+    g.textAlign = 'right'; g.fillText(Geo.fmtDist(p.total), W - pad.r, H - 3);
+    if (marks.at != null) {
+      const x = X(Math.min(marks.at, p.total));
+      g.strokeStyle = '#1e88e5'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, pad.t); g.lineTo(x, H - pad.b); g.stroke();
+      let i = p.dist.findIndex((d) => d >= marks.at); if (i < 0) i = p.dist.length - 1;
+      g.fillStyle = '#1e88e5'; g.beginPath(); g.arc(x, Y(p.ele[i]), 4.5, 0, 7); g.fill();
+    }
+  }
+
+  function renderRouteInfo() {
+    if ($('routeinfo').hidden || !active) return;
+    const total = route.total;
+    const bike = !!active.opts?.bike;
+    $('ri-name').textContent = active.name || (active.kind === 'plan' ? 'מסלול מתוכנן' : 'מסלול');
+    $('ri-len').textContent = Geo.fmtDist(total);
+    $('ri-up').textContent = prof ? Math.round(prof.gain) + " מ'" : '…';
+    $('ri-down').textContent = prof ? Math.round(prof.loss) + " מ'" : '…';
+    $('ri-time').textContent = prof ? fmtTime(estTime(total, prof.gain, bike)) : '…';
+    const rem = prevAlong != null && prof ? profileStats(prof, prevAlong) : null;
+    $('ri-remain').textContent = rem ? `נותרו ${Geo.fmtDist(total - prevAlong)} · ↑ ${Math.round(rem.gain)} מ' · ↓ ${Math.round(rem.loss)} מ'` : '';
+    $('ri-edit').hidden = active.kind !== 'plan';
+    $('ri-focus').checked = layerPrefs.focus;
+    drawProfile($('ri-profile'), prof, { at: prevAlong });
+  }
+  $('status').addEventListener('click', () => { $('routeinfo').hidden = !$('routeinfo').hidden; renderRouteInfo(); });
+  $('ri-close').addEventListener('click', () => ($('routeinfo').hidden = true));
+  $('ri-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
+  $('ri-clear').addEventListener('click', () => clearRoute());
+  $('ri-gpx').addEventListener('click', () => exportGpx());
+  $('ri-edit').addEventListener('click', () => { $('routeinfo').hidden = true; startPlan(active); });
+  $('ri-focus').addEventListener('change', (e) => { layerPrefs.focus = e.target.checked; applyLayers(); });
+
+  async function exportGpx() {
+    if (!active) return;
+    const name = active.name || 'מסלול';
+    const x = (t) => esc(t);
+    const pts = segsToLines(active.segs).map((l) => '<trkseg>' + l.map((p) => `<trkpt lat="${p[1].toFixed(6)}" lon="${p[0].toFixed(6)}"/>`).join('') + '</trkseg>').join('');
+    const wpts = (active.waypoints || []).map((w) => `<wpt lat="${w.coord[1]}" lon="${w.coord[0]}"><name>${x(w.name || '')}</name></wpt>`).join('');
+    const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="שבילים" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>${x(name)}</name></metadata>${wpts}<trk><name>${x(name)}</name>${pts}</trk></gpx>`;
+    const file = new File([gpx], name.replace(/[\\/:*?"<>|]/g, '_') + '.gpx', { type: 'application/gpx+xml' });
+    if (navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: name }); return; } catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
+  // ---------- תכנון מסלול ----------
+  let plan = null;       // { wps:[[lon,lat]], opts:{snap,bike}, name, markers:[] }
+  let graph = null, graphKey = '';
+  const legCache = new Map();
+
+  function getGraph(bike) {
+    const key = (mapFC?.features.length || 0) + '|' + (mapFC?.bbox || '') + '|' + bike;
+    if (graphKey !== key) { graph = mapFC ? Router.buildGraph(mapFC, { bike }) : null; graphKey = key; legCache.clear(); }
+    return graph;
+  }
+
+  function computeLeg(a, b, opts) {
+    const k = a.join() + '|' + b.join() + '|' + opts.snap + opts.bike;
+    if (legCache.has(k)) return legCache.get(k);
+    let leg = null;
+    if (opts.snap) {
+      const g = getGraph(opts.bike);
+      const s = g && Router.snap(g, a), t = g && Router.snap(g, b);
+      const r = s && t ? Router.route(g, s, t) : null;
+      if (r) {
+        leg = { segs: r.segs };
+        // קטעי "השלמה" ישרים מהנקודה שסומנה אל השביל (אם רחוקה ממנו)
+        if (s.d > 3) leg.segs.unshift({ coords: [a, s.p], c: null, h: 'free' });
+        if (t.d > 3) leg.segs.push({ coords: [t.p, b], c: null, h: 'free' });
+      }
+    }
+    if (!leg) leg = { segs: [{ coords: [a, b], c: null, h: 'free' }], free: opts.snap };
+    legCache.set(k, leg);
+    return leg;
+  }
+
+  function planSegs() {
+    const segs = [];
+    let free = false;
+    for (let i = 1; i < plan.wps.length; i++) {
+      const leg = computeLeg(plan.wps[i - 1], plan.wps[i], plan.opts);
+      free ||= leg.free;
+      segs.push(...leg.segs.map((sg) => ({ ...sg, coords: sg.coords })));
+    }
+    // צבע לקטעי שביל לא מסומן / דרך
+    for (const sg of segs) if (!sg.c && sg.h !== 'free') sg.c = ['path', 'footway', 'track', 'steps', 'bridleway', 'cycleway'].includes(sg.h) ? '#7a6a58' : '#9e9e9e';
+    return { segs, free };
+  }
+
+  let profTimer = 0;
+  function renderPlan() {
+    const { segs, free } = planSegs();
+    const display = layerPrefs.smooth && smoother ? segs.map((sg) => (sg.h === 'free' ? sg : { ...sg, coords: smoother(sg.coords) })) : segs;
+    map.getSource('route').setData(plan.wps.length > 1 ? routeFeatures(display) : empty);
+    plan.segs = display;
+    // סמנים
+    plan.markers.forEach((m) => m.remove());
+    plan.markers = plan.wps.map((p, i) => {
+      const el = document.createElement('div');
+      el.className = 'wp' + (i === 0 ? ' first' : i === plan.wps.length - 1 ? ' last' : '');
+      el.textContent = i + 1;
+      const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(p).addTo(map);
+      m.on('dragend', () => { const ll = m.getLngLat(); plan.wps[i] = [+ll.lng.toFixed(6), +ll.lat.toFixed(6)]; plan.lastDrag = Date.now(); renderPlan(); });
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        if (Date.now() - (plan.lastDrag || 0) < 400) return;
+        plan.wps.splice(i, 1); renderPlan();
+      });
+      return m;
+    });
+    const len = segs.reduce((s2, sg) => s2 + sg.coords.reduce((acc, p, j) => (j ? acc + Geo.haversine(sg.coords[j - 1], p) : 0), 0), 0);
+    $('pl-len').textContent = plan.wps.length > 1 ? Geo.fmtDist(len) : '–';
+    $('pl-hint').textContent = plan.wps.length === 0 ? 'הקישו על המפה כדי לסמן נקודת התחלה'
+      : plan.wps.length === 1 ? 'הקישו על נקודה נוספת – המסלול יימשך לאורך השבילים'
+      : free && plan.opts.snap ? 'חלק מהקטעים לא נמצאו על שבילים – מוצגים כקו מקווקו' : 'גררו נקודה להזזה · הקשה על נקודה מוחקת אותה';
+    $('pl-done').disabled = plan.wps.length < 2;
+    $('pl-undo').disabled = !plan.wps.length;
+    clearTimeout(profTimer);
+    $('pl-up').textContent = $('pl-down').textContent = $('pl-time').textContent = '–';
+    if (plan.wps.length > 1) {
+      profTimer = setTimeout(async () => {
+        const mine = plan;
+        const p = await Elev.profile(segsToLines(segs).flat());
+        if (plan !== mine) return;
+        plan.prof = p;
+        $('pl-up').textContent = p ? Math.round(p.gain) + " מ'" : '?';
+        $('pl-down').textContent = p ? Math.round(p.loss) + " מ'" : '?';
+        $('pl-time').textContent = p ? fmtTime(estTime(len, p.gain, plan.opts.bike)) : '?';
+        drawProfile($('pl-profile'), p);
+      }, 350);
+    } else drawProfile($('pl-profile'), null);
+  }
+
+  function startPlan(from) {
+    if (!mapFC) return toast('צריך להוריד מפה קודם');
+    closeSearch();
+    setFollow(false);
+    plan = { wps: from?.wps ? from.wps.map((p) => [...p]) : [], opts: { snap: true, bike: false, ...(from?.opts || {}) },
+      name: from?.name || '', markers: [] };
+    $('pl-snap').checked = plan.opts.snap;
+    $('pl-bike').checked = plan.opts.bike;
+    $('planbar').hidden = false;
+    $('status').hidden = true;
+    $('routeinfo').hidden = true;
+    document.body.classList.add('planning');
+    if (!plan.wps.length) map.getSource('route').setData(empty);
+    if (plan.opts.snap) { toast('מכין את רשת השבילים…', 1500); setTimeout(() => { getGraph(plan.opts.bike); renderPlan(); }, 30); }
+    else renderPlan();
+    applyLayers();
+  }
+
+  function endPlan() {
+    plan?.markers.forEach((m) => m.remove());
+    plan = null;
+    $('planbar').hidden = true;
+    document.body.classList.remove('planning');
+    if (active) { map.getSource('route').setData(routeFeatures(active.segs)); $('status').hidden = false; }
+    else map.getSource('route').setData(empty);
+    applyLayers();
+  }
+
+  map.on('click', (e) => {
+    if (!plan) return;
+    plan.wps.push([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]);
+    renderPlan();
+  });
+  $('pl-undo').addEventListener('click', () => { plan.wps.pop(); renderPlan(); });
+  $('pl-clear').addEventListener('click', () => { plan.wps = []; renderPlan(); });
+  $('pl-cancel').addEventListener('click', endPlan);
+  $('pl-snap').addEventListener('change', (e) => { plan.opts.snap = e.target.checked; renderPlan(); });
+  $('pl-bike').addEventListener('change', (e) => { plan.opts.bike = e.target.checked; toast('מעדכן…', 800); setTimeout(renderPlan, 30); });
+  $('pl-done').addEventListener('click', () => { $('plan-name').value = plan.name || ''; $('plan-dlg').showModal(); });
+  $('plan-dlg').addEventListener('close', async () => {
+    if ($('plan-dlg').returnValue !== 'ok' || !plan) return;
+    const name = $('plan-name').value.trim() || 'מסלול מתוכנן';
+    const a = { kind: 'plan', name, wps: plan.wps, opts: plan.opts, segs: plan.segs,
+      waypoints: [] };
+    endPlan();
+    await setActive(a, { fit: true });
+    toast(`"${name}" פעיל · ${Geo.fmtDist(route.total)} · הקישו על שורת המצב לפרטים`, 5000);
+  });
 
   // ---------- GPS ----------
   let watchId = null;
@@ -485,6 +774,7 @@
     offEl.className = 'val ' + (r.off <= Math.max(25, lastPos.accuracy) ? 'ok' : r.off <= 100 ? 'warn' : 'bad');
     $('s-done').textContent = Geo.fmtDist(r.along);
     $('s-left').textContent = Geo.fmtDist(route.total - r.along);
+    renderRouteInfo();
   }
 
   // ---------- כפתורים ותפריט ----------
@@ -501,6 +791,7 @@
   $('m-clear').addEventListener('click', () => { menu.close(); clearRoute(); });
   $('m-area').addEventListener('click', () => { menu.close(); downloadVisible(); });
   $('m-draw').addEventListener('click', () => { menu.close(); startDraw(); });
+  $('m-plan').addEventListener('click', () => { menu.close(); startPlan(); });
   $('m-areas').addEventListener('click', () => { menu.close(); renderAreas(); $('areas-dlg').showModal(); });
   $('areas-close').addEventListener('click', () => $('areas-dlg').close());
   $('m-carmel').addEventListener('click', () => { menu.close(); downloadArea(CARMEL); });
@@ -603,14 +894,15 @@
     tracks: ['track'],
     roads: ['major-casing', 'major', 'medium-casing', 'medium', 'minor-casing', 'minor', 'road-label'],
     water: ['water', 'water-label'],
-    poi: ['poi-dot', 'parking-p', 'poi-label', 'peak'],
+    poi: ['poi-icon', 'poi-label', 'peak'],
+    bike: ['bike'],
     places: ['place-minor', 'place-major'],
     areas: ['area-fill', 'area-line', 'area-label'],
-    route: ['route-halo', 'route-line', 'route-arrows', 'route-ends', 'wpts'],
+    route: ['route-outer', 'route-casing', 'route-line', 'route-arrows', 'route-ends', 'wpts'],
   };
   const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major', 'area-label']);
   const layerPrefs = Object.assign(
-    { base: 'vector', labels: true, smooth: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
+ { base: 'vector', labels: true, smooth: true, focus: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
 
   function applyLayers() {
@@ -619,6 +911,7 @@
     for (const [g, ids] of Object.entries(GROUPS)) {
       for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
     }
+    map.setLayoutProperty('dim', 'visibility', vis(layerPrefs.focus && layerPrefs.route && (!!active || !!plan)));
     try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
   }
   function syncLayerForm() {
@@ -635,12 +928,14 @@
     } else layerPrefs[el.name] = el.checked;
     applyLayers();
     if (el.name === 'smooth' && mapFC) setMapData(mapFC);
+    if (el.name === 'focus') $('ri-focus').checked = el.checked;
   });
   $('btn-layers').addEventListener('click', () => { syncLayerForm(); $('layers-dlg').showModal(); });
   $('layers-close').addEventListener('click', () => $('layers-dlg').close());
   mapReady.then(applyLayers);
 
   // ---------- מצב לילה ----------
+  const DARK = ['#222222', '#000000', '#000', '#111111', '#111', '#1a1a1a', '#333333', '#333'];
   const THEME = [ // [שכבה, מאפיין, יום, לילה]
     ['bg', 'background-color', '#e6e1d1', '#15191e'],
     ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
@@ -652,9 +947,11 @@
     ['minor', 'line-color', '#ffffff', '#5a5e63'],
     ['track', 'line-color', '#8b6b3e', '#a98b5e'],
     ['path', 'line-color', '#4a3d30', '#b3a596'],
+    // בלילה: שביל שחור נשאר שחור אבל מקבל מסגרת בהירה בולטת
     ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
-      ['case', ['==', ['get', 'c'], '#ffffff'], '#888', '#0d0f12']],
-    ['trail', 'line-color', ['get', 'c'], ['case', ['==', ['get', 'c'], '#222222'], '#d8d8d8', ['get', 'c']]],
+      ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
+    ['trail-casing', 'line-opacity', 0.85, 1],
+    ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
     ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'area-label']
       .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
     ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
@@ -665,7 +962,8 @@
     ['place-minor', 'text-color', '#444444', '#cccccc'],
     ['place-major', 'text-color', '#222222', '#f2f2f2'],
     ['area-label', 'text-color', '#e06000', '#ffa040'],
-    ['poi-dot', 'circle-stroke-color', '#ffffff', '#101317'],
+    ['dim', 'fill-color', '#ffffff', '#000000'],
+    ['dim', 'fill-opacity', 0.55, 0.5],
   ];
   function applyTheme(night) {
     document.body.classList.toggle('night', night);
@@ -866,7 +1164,11 @@
   $('search-form').addEventListener('submit', (e) => { e.preventDefault(); if ($('search-input').value.trim()) onlineSearch($('search-input').value.trim()); });
 
   // ---------- הפעלה ----------
-  db.get('gpx').then((t) => t && showGpx(t, false)).catch(console.error);
+  // שחזור המסלול הפעיל (וגם מסלול GPX מגרסה קודמת)
+  Promise.all([db.get('active').catch(() => null), db.get('gpx').catch(() => null)]).then(([a, t]) => {
+    if (a) setActive(a, { save: false });
+    else if (t) showGpx(t, false);
+  }).catch(console.error);
   if (navigator.storage?.persist) navigator.storage.persist();
   navigator.permissions?.query({ name: 'geolocation' }).then((s) => {
     if (s.state === 'granted') startGps();

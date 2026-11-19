@@ -134,10 +134,11 @@
     return pts;
   }
   /**
-   * מחליק את כל הקווים במפה. נקודות שבהן קו אחר מתחיל/נגמר (צמתים) נשארות במקומן,
+   * מחליק קווים. נקודות שבהן קו אחר מתחיל/נגמר (צמתים) נשארות במקומן,
    * כדי ששביל שמתחבר לאמצע דרך לא "יתנתק" ממנה אחרי ההחלקה.
+   * makeSmoother מחזיר פונקציה שמחליקה כל קו באותה צורה (גם את המסלול המתוכנן, כדי שיתאים לשבילים במפה).
    */
-  function smoothFC(fc, iters = 2) {
+  function makeSmoother(fc, iters = 2) {
     const key = (p) => p[0] + ',' + p[1];
     const ends = new Set();
     for (const f of fc.features) {
@@ -145,7 +146,7 @@
       const c = f.geometry.coordinates;
       ends.add(key(c[0])); ends.add(key(c[c.length - 1]));
     }
-    const smoothLine = (pts) => {
+    return (pts) => {
       const out = [];
       let start = 0;
       for (let i = 1; i < pts.length; i++) {
@@ -155,13 +156,16 @@
           start = i;
         }
       }
-      return out;
+      return out.length ? out : pts;
     };
+  }
+  function smoothFC(fc, iters = 2) {
+    const sm = makeSmoother(fc, iters);
     return { type: 'FeatureCollection', features: fc.features.map((f) => f.geometry.type !== 'LineString' ? f
-      : { ...f, geometry: { type: 'LineString', coordinates: smoothLine(f.geometry.coordinates) } }) };
+      : { ...f, geometry: { type: 'LineString', coordinates: sm(f.geometry.coordinates) } }) };
   }
 
-  const Geo = { chaikin, smoothFC, haversine, parseGpx, buildRoute, locate, circle, fmtDist, bounds };
+  const Geo = { chaikin, smoothFC, makeSmoother, haversine, parseGpx, buildRoute, locate, circle, fmtDist, bounds };
   if (typeof module !== 'undefined' && module.exports) module.exports = Geo;
   root.Geo = Geo;
 })(typeof self !== 'undefined' ? self : globalThis);
