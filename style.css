@@ -211,8 +211,9 @@ body.night .new-folder input { background: #1d2227; color: #eee; border-color: #
 .navrow .sub { display: block; font-size: 11px; color: #777; }
 .navrow .sub:empty { display: none; }
 .navrow .val.ok { color: #1a9b3c; } .navrow .val.warn { color: #e67e00; } .navrow .val.bad { color: #c62828; }
-.r-more { display: none; }
-#dock.open .r-more { display: block; }
+.r-more { height: 0; overflow: hidden; }
+#dock.open .r-more { height: auto; }
+#dock .navrow { touch-action: none; }
 .r-more .profile { margin-top: 6px; }
 .dimrow { display: flex; align-items: center; gap: 10px; margin: 8px 2px 4px; font-size: 14px; }
 .dimrow input { flex: 1; accent-color: var(--green); }

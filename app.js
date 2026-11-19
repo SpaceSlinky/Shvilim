@@ -599,7 +599,7 @@
     $('ri-folder').textContent = '📁 ' + (active.folder || 'כללי');
     $('ri-dim').value = dimValue();
     $('ri-move').hidden = !ri.move;
-    if (dock.open) drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
+    drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
   }
   attachScrub($('ri-profile'), () => prof, (d) => {
     scrubAt = d;
@@ -1371,31 +1371,63 @@
     if (m === 'route') renderRouteInfo();
     if (m === 'lib') renderLibrary();
   }
+  // פתיחה וסגירה של פרטי המסלול: הגובה עובר בהנפשה מהמקום שבו הוא עומד (גם באמצע גרירה) אל היעד
+  const more = document.querySelector('#dock .r-more');
+  const EASE = 'height .28s cubic-bezier(.22,1,.36,1)';
   function setDockOpen(on) {
+    const from = more.offsetHeight;
     dock.open = on;
     if (!on) { clearScrub(); ri.move = false; }
-    renderDock();
+    renderDock(); // התוכן מצויר גם כשהוא סגור, כדי שאפשר יהיה למדוד אותו
+    const to = on ? more.scrollHeight : 0;
+    more.style.transition = 'none';
+    more.style.height = from + 'px';
+    void more.offsetHeight;
+    more.style.transition = EASE;
+    more.style.height = to + 'px';
+    // בסוף: פתוח = גובה חופשי (כדי שתוכן שנוסף, כמו בחירת תיקייה, ייכנס); סגור = 0 מה-CSS
+    const done = () => { more.removeEventListener('transitionend', done); if (dock.open === on) { more.style.transition = ''; more.style.height = on ? 'auto' : ''; } };
+    more.addEventListener('transitionend', done);
+    setTimeout(done, 400);
   }
   $('d-lib').addEventListener('click', () => { dock.panel = 'lib'; renderDock(); });
   $('d-new').addEventListener('click', () => startPlan());
 
-  // פרטי המסלול: הקשה על הידית או על השם פותחת/סוגרת; משיכה למעלה פותחת, למטה סוגרת
+  // גרירה: הפרטים נפתחים ונסגרים צמוד לאצבע. בעזיבה – לפתוח או לסגור לפי המקום,
+  // ותנועה מהירה (הַטָּלָה) ממשיכה לכיוון שלה. הקשה בלי תזוזה מחליפה מצב.
   function attachDockDrag(el) {
-    let y0 = null, moved = false;
+    let y0 = null, h0 = 0, full = 0, moved = false, track = [];
     el.addEventListener('pointerdown', (e) => {
       if (e.target.closest('input, #ri-clear')) return;
-      y0 = e.clientY; moved = false;
+      y0 = e.clientY; moved = false; track = [[e.clientY, e.timeStamp]];
+      h0 = more.offsetHeight;
+      full = more.scrollHeight;
+      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     });
     el.addEventListener('pointermove', (e) => {
-      if (y0 == null || moved || Math.abs(e.clientY - y0) < 12) return;
+      if (y0 == null) return;
+      const dy = e.clientY - y0;
+      if (!moved && Math.abs(dy) < 6) return;
       moved = true;
-      setDockOpen(e.clientY < y0);
+      track.push([e.clientY, e.timeStamp]);
+      if (track.length > 6) track.shift();
+      more.style.transition = 'none';
+      more.style.height = Math.max(0, Math.min(full, h0 - dy)) + 'px';
     });
-    el.addEventListener('pointerup', () => { if (y0 != null && !moved) setDockOpen(!dock.open); y0 = null; });
-    el.addEventListener('pointercancel', () => (y0 = null));
+    const end = () => {
+      if (y0 == null) return;
+      y0 = null;
+      if (!moved) return setDockOpen(!dock.open);
+      const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
+      const v = (yb - ya) / Math.max(1, tb - ta); // פיקסלים למילישנייה; שלילי = למעלה
+      setDockOpen(Math.abs(v) > 0.3 ? v < 0 : more.offsetHeight > full / 2);
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   }
   attachDockDrag($('r-grip'));
   attachDockDrag(document.querySelector('#dock .r-title'));
+  attachDockDrag($('status'));
 
   // גובה הדוק -> משתנה CSS, כדי שקנה המידה וזכויות היוצרים יישבו מעליו
   new ResizeObserver(() => document.documentElement.style.setProperty('--dock-h', dockEl.offsetHeight + 'px')).observe(dockEl);
