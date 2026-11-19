@@ -1,0 +1,66 @@
+:root {
+  --green: #1f5f3a;
+  --blue: #1e88e5;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+[hidden] { display: none !important; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none;
+  font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+#map { position: fixed; inset: 0; }
+
+/* כפתורים צפים */
+#controls { position: fixed; top: calc(12px + var(--safe-t)); right: 12px; display: flex; flex-direction: column; gap: 10px; z-index: 5; }
+#controls button { width: 52px; height: 52px; border-radius: 50%; border: none; background: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.28); display: grid; place-items: center; padding: 0; }
+#controls button:active { transform: scale(.94); }
+#controls svg { width: 26px; height: 26px; stroke: #333; stroke-width: 2; fill: #333; stroke-linecap: round; stroke-linejoin: round; }
+#controls svg path, #controls svg circle[fill="none"] { fill: none; }
+#btn-locate.gps-on svg { stroke: var(--blue); fill: var(--blue); }
+#btn-locate.active { background: var(--blue); }
+#btn-locate.active svg { stroke: #fff; fill: #fff; }
+
+/* שורת סטטוס */
+#status { position: fixed; left: 10px; right: 10px; bottom: calc(26px + var(--safe-b)); z-index: 5;
+  display: flex; background: rgba(255,255,255,.95); border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#status .cell { flex: 1; text-align: center; padding: 8px 4px; }
+#status .cell + .cell { border-right: 1px solid #e3e3e3; }
+#status .lbl { display: block; font-size: 12px; color: #777; }
+#status .val { display: block; font-size: 20px; font-weight: 700; color: #222; direction: rtl; }
+#status .val.ok { color: #1a9b3c; }
+#status .val.warn { color: #e67e00; }
+#status .val.bad { color: #c62828; }
+
+/* מיקום המשתמש */
+.me { width: 22px; height: 22px; position: relative; }
+.me-dot { position: absolute; inset: 0; border-radius: 50%; background: var(--blue); border: 3px solid #fff; box-shadow: 0 0 6px rgba(0,0,0,.4); }
+.me.poor .me-dot { background: #90a4ae; }
+.me-heading { display: none; position: absolute; left: 50%; top: -14px; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-bottom: 14px solid var(--blue); }
+.me.has-heading .me-heading { display: block; }
+
+/* הודעה קופצת */
+#toast { position: fixed; top: calc(14px + var(--safe-t)); left: 14px; right: 80px; z-index: 10;
+  background: rgba(30,30,30,.9); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 15px; }
+
+/* תפריט ומסך פתיחה */
+dialog { border: none; border-radius: 16px; padding: 18px; width: min(92vw, 380px); }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+dialog h2, .card h2 { margin: 0 0 8px; font-size: 20px; color: var(--green); }
+dialog button, .card button { display: block; width: 100%; margin: 8px 0; padding: 12px; font-size: 16px;
+  border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; }
+button.primary { background: var(--green); color: #fff; border-color: var(--green); }
+.row { display: flex; align-items: center; gap: 8px; margin: 12px 0; font-size: 15px; }
+.row input { width: 20px; height: 20px; }
+.muted { color: #666; font-size: 14px; }
+.small { font-size: 12px; }
+#nodata { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; background: rgba(0,0,0,.35); }
+#nodata[hidden] { display: none; }
+.card { background: #fff; border-radius: 16px; padding: 20px; width: min(92vw, 380px); line-height: 1.5; }
+
+/* MapLibre */
+.maplibregl-ctrl-bottom-left { bottom: calc(var(--safe-b)); }
+.maplibregl-popup-content { font-size: 15px; padding: 8px 12px; }
+body:has(#status:not([hidden])) .maplibregl-ctrl-bottom-left,
+body:has(#status:not([hidden])) .maplibregl-ctrl-bottom-right { bottom: calc(92px + var(--safe-b)); }
