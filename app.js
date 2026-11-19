@@ -592,17 +592,14 @@
     const total = route.total;
     const bike = !!active.opts?.bike;
     $('ri-name').textContent = active.name || (active.kind === 'plan' ? 'מסלול מתוכנן' : 'מסלול');
-    // שורת משנה: אורך • עלייה • זמן
+    // שורת משנה אחת: אורך • עלייה וירידה • זמן
     const dot = '<span class="dot"> • </span>';
-    $('ri-line').innerHTML = [Geo.fmtDist(total), prof ? `↑ ${Math.round(prof.gain)} מ'` : '', prof ? `<span class="acc">${fmtTime(estTime(total, prof.gain, bike))}</span>` : '',
-      active.libId ? esc(active.folder || 'כללי') : ''].filter(Boolean).join(dot);
-    $('ri-len').textContent = Geo.fmtDist(total);
-    $('ri-up').textContent = prof ? Math.round(prof.gain) + " מ'" : '…';
-    $('ri-down').textContent = prof ? Math.round(prof.loss) + " מ'" : '…';
-    $('ri-time').textContent = prof ? fmtTime(estTime(total, prof.gain, bike)) : '…';
-    const rem = prevAlong != null && prof ? profileStats(prof, prevAlong) : null;
-    $('ri-remain').textContent = rem ? `נותרו ${Geo.fmtDist(total - prevAlong)} · ↑ ${Math.round(rem.gain)} מ' · ↓ ${Math.round(rem.loss)} מ'`
-      : prof ? '👆 געו בגרף כדי לראות מרחק וגובה עד כל נקודה' : '';
+    $('ri-line').innerHTML = [Geo.fmtDist(total), prof ? `<bdi dir="ltr">↑${Math.round(prof.gain)} ↓${Math.round(prof.loss)}</bdi> מ'` : '',
+      prof ? `<span class="acc">${fmtTime(estTime(total, prof.gain, bike))}</span>` : ''].filter(Boolean).join(dot);
+    // בזמן ניווט: מה נשאר לעלות ולרדת, מתחת ל"נותרו"
+    const rem = prevAlong != null && prof ? profileStats(prof, (prevAlong * prof.total) / (total || 1)) : null;
+    $('s-left-ele').textContent = rem ? `↑${Math.round(rem.gain)} ↓${Math.round(rem.loss)}` : '';
+    $('s-left-ele').dir = 'ltr';
     const sc = $('ri-scrub');
     sc.hidden = scrubAt == null || !prof;
     if (!sc.hidden) {
@@ -617,12 +614,10 @@
       $('ri-sc-down').textContent = Math.round(L.loss) + " מ'";
       $('ri-sc-time').textContent = fmtTime(L.time);
     }
-    $('ri-remain').hidden = !sc.hidden;
     $('ri-edit').hidden = active.kind !== 'plan';
     $('ri-save').hidden = !!active.libId;
     $('ri-del').hidden = !active.libId;
     $('ri-edit').parentElement.hidden = $('ri-edit').hidden && $('ri-save').hidden;
-    $('ri-focus').checked = layerPrefs.focus;
     const atP = prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
     drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
   }
@@ -654,7 +649,6 @@
     toast('המסלול נמחק מהספרייה (עדיין מוצג על המפה)');
     renderRouteInfo();
   });
-  $('ri-focus').addEventListener('change', (e) => { layerPrefs.focus = e.target.checked; applyLayers(); });
 
   async function exportGpx() {
     if (!active) return;
@@ -1185,7 +1179,6 @@
     } else layerPrefs[el.name] = el.checked;
     applyLayers();
     if (el.name === 'smooth' && mapFC) setTimeout(() => setMapData(mapFC), 30);
-    if (el.name === 'focus') $('ri-focus').checked = el.checked;
   });
   $('btn-layers').addEventListener('click', () => { syncLayerForm(); $('layers-dlg').showModal(); });
   $('layers-close').addEventListener('click', () => $('layers-dlg').close());
