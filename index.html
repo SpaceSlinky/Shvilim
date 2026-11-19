@@ -10,9 +10,6 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.15.0/dist/maplibre-gl.css" crossorigin="anonymous">
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="dev.css">
-  <!-- כלי הפיתוח: הערכים שכוונו על המכשיר, לפני הציור הראשון -->
-  <script>try { for (const [n, v] of Object.entries(JSON.parse(localStorage.getItem('shvilim-dev-overrides') || '{}'))) document.documentElement.style.setProperty(n, v); } catch { /* אין */ }</script>
   <script src="https://unpkg.com/maplibre-gl@5.15.0/dist/maplibre-gl.js" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -70,11 +67,18 @@
           <div id="status" class="navrow" hidden>
             <div><span class="lbl">מהמסלול</span><span id="s-off" class="val">–</span></div>
             <div><span class="lbl">עברת</span><span id="s-done" class="val">–</span></div>
-            <div><span class="lbl">נותרו</span><span id="s-left" class="val">–</span><span id="s-left-ele" class="sub"></span></div>
+            <div><span class="lbl">נותרו</span><span id="s-left" class="val">–</span></div>
           </div>
         </div>
         <div class="more"><div>
+          <div class="stats">
+            <div><span class="lbl">אורך</span><span id="ri-len" class="v">–</span></div>
+            <div><span class="lbl">↑ עלייה</span><span id="ri-up" class="v">–</span></div>
+            <div><span class="lbl">↓ ירידה</span><span id="ri-down" class="v">–</span></div>
+            <div><span class="lbl">⏱ זמן משוער</span><span id="ri-time" class="v">–</span></div>
+          </div>
           <canvas id="ri-profile" class="profile"></canvas>
+          <p id="ri-remain" class="muted small center"></p>
           <div id="ri-scrub" class="scrub" hidden>
             <div class="scrub-head"><span id="ri-sc-title"></span><button id="ri-sc-x" aria-label="נקה">✕</button></div>
             <div class="stats">
@@ -84,6 +88,9 @@
               <div><span class="lbl">↓ לרדת</span><span id="ri-sc-down" class="v"></span></div>
               <div><span class="lbl">⏱ זמן</span><span id="ri-sc-time" class="v"></span></div>
             </div>
+          </div>
+          <div class="more-foot center">
+            <label class="toggle"><input type="checkbox" id="ri-focus"> הדגש מסלול</label>
           </div>
         </div></div>
         <div class="drawer"><div><div class="drawer-row">
@@ -253,6 +260,5 @@
   <script src="router.js"></script>
   <script src="elev.js"></script>
   <script src="app.js"></script>
-  <script src="dev.js"></script>
 </body>
 </html>
