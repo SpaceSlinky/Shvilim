@@ -188,22 +188,12 @@ body.night .new-folder input { background: #1d2227; color: #eee; border-color: #
 .dock-scroll { max-height: min(58vh, 480px); overflow-y: auto; overscroll-behavior: contain; margin-top: 4px; }
 
 /* רשימת המסלולים */
-#lib-list details { margin: 2px 0 6px; }
-#lib-list summary { font-weight: 700; font-size: 14px; color: #555; padding: 6px 2px; cursor: pointer; }
-.lib-row { display: block; width: 100%; text-align: start; border: 0; border-top: 1px solid #eee; background: none; padding: 9px 6px; font: inherit; color: inherit; }
-.lib-row b { display: block; font-size: 16px; overflow-wrap: anywhere; }
-.lib-row span { display: block; margin-top: 2px; }
-.lib-row.current { background: rgba(46,125,79,.1); border-radius: 8px; }
-.lib-row.current b::after { content: " · על המפה"; font-weight: 400; color: var(--green); }
-.lib-row:active { background: rgba(0,0,0,.05); }
 
 /* המסלול */
 .grip { display: block; width: 44px; height: 14px; margin: -6px auto 0; padding: 0; border: 0; background: none; touch-action: none; position: relative; }
 .grip::before { content: ""; position: absolute; left: 50%; top: 5px; translate: -50% 0; width: 36px; height: 4px; border-radius: 2px; background: #c9c9c9; }
 .r-title { flex: 1; min-width: 0; touch-action: none; cursor: pointer; padding: 2px; }
 .r-title b { display: block; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
-.r-title span { display: block; margin-top: 2px; }
-#ri-name-in { width: 100%; font-size: 16px; font-weight: 700; padding: 6px 8px; border-radius: 8px; border: 1px solid #bbb; }
 .navrow { display: flex; margin-top: 6px; border-radius: 10px; overflow: hidden; gap: 1px; background: #e3e3e3; }
 .navrow > div { flex: 1; text-align: center; background: #f6f7f6; padding: 4px 2px; }
 .navrow .lbl { display: block; font-size: 11px; color: #777; }
@@ -216,25 +206,52 @@ body.night .new-folder input { background: #1d2227; color: #eee; border-color: #
 #dock .navrow { touch-action: none; }
 .r-more .profile { margin-top: 6px; }
 .dimrow { display: flex; align-items: center; gap: 10px; margin: 8px 2px 4px; font-size: 14px; }
-.dimrow input { flex: 1; accent-color: var(--green); }
-.r-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.r-acts button { flex: 1 1 30%; padding: 9px 4px; font-size: 14px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; color: inherit; }
-.r-acts button.danger { color: #c62828; }
-.r-acts button.armed { background: #c62828; color: #fff; border-color: #c62828; }
 #dock[data-mode="plan"] .btns { margin-top: 4px; }
 
 /* לילה */
 body.night #dock { background: #1d2227; color: #e6e6e6; }
 body.night .dock-home button { background: #2a3036; color: #eee; }
-body.night .lib-row { border-color: #333; }
-body.night #lib-list summary { color: #aaa; }
-body.night .lib-row.current { background: rgba(76,175,80,.15); }
-body.night .lib-row.current b::after { color: #81c784; }
 body.night .grip::before { background: #555; }
 body.night .navrow { background: #333; }
 body.night .navrow > div { background: #252b31; }
 body.night .navrow .val { color: #f0f0f0; }
 body.night .navrow .val.ok { color: #4cd06f; } body.night .navrow .val.warn { color: #ffa726; } body.night .navrow .val.bad { color: #ef5350; }
-body.night .r-acts button { background: #2a3036; border-color: #444; }
-body.night .r-acts button.danger { color: #ef5350; }
-body.night #ri-name-in { background: #1d2227; color: #eee; border-color: #555; }
+
+/* מסלול: שורת המספרים "חמה" בזמן שהאצבע על הגרף */
+#ri-stats.hot > div { background: #fff3e6; }
+#ri-stats.hot .val { color: #e65100; }
+.r-title span { display: block; margin-top: 2px; }
+#ri-x.stop { font-size: 14px; font-weight: 700; color: #c62828; border: 1px solid #c62828; border-radius: 10px; padding: 5px 12px; margin-top: 2px; }
+.go { display: block; width: 100%; margin-top: 8px; padding: 12px; font: inherit; font-size: 17px; font-weight: 700; border: 0; border-radius: 12px;
+  background: var(--green); color: #fff; }
+.offroute { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #e67e00; color: #fff; font-weight: 700; text-align: center; }
+.dimrow input { flex: 1; accent-color: var(--green); }
+
+/* רשימת המסלולים: בחירה, ואז כלים */
+.lib-folder { padding: 9px 6px 5px; font-weight: 700; font-size: 14px; color: #555; border-radius: 8px; cursor: pointer; }
+.lib-row { padding: 8px 6px 8px 6px; margin-inline-start: 10px; border-top: 1px solid #eee; cursor: pointer; }
+.lib-row b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.lib-row span { display: block; margin-top: 2px; }
+.lib-folder.sel, .lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
+.edit-in { width: 100%; font: inherit; font-size: 16px; font-weight: 700; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--green); }
+.lib-folder .edit-in { width: calc(100% - 2em); }
+.lib-tools { display: flex; gap: 6px; margin-top: 8px; }
+.lib-tools:empty { display: none; }
+.lib-tools p { flex: 1; margin: 2px 0; }
+.lib-tools button { flex: 1; padding: 10px 4px; font: inherit; font-size: 14px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; color: inherit; white-space: nowrap; }
+.lib-tools button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+.lib-tools button.on { border-color: var(--green); color: var(--green); }
+.lib-tools button.danger { flex: 0 0 auto; padding-inline: 12px; color: #c62828; }
+.lib-tools button.armed { background: #c62828; color: #fff; border-color: #c62828; }
+#lib-move { margin-top: 8px; }
+
+body.night #ri-stats.hot > div { background: #3a2a1a; }
+body.night #ri-stats.hot .val { color: #ffab40; }
+body.night .lib-folder { color: #aaa; }
+body.night .lib-row { border-color: #333; }
+body.night .lib-folder.sel, body.night .lib-row.sel { background: rgba(76,175,80,.18); }
+body.night .edit-in { background: #1d2227; color: #eee; }
+body.night .lib-tools button { background: #2a3036; border-color: #444; }
+body.night .lib-tools button.primary { background: #2e7d4f; border-color: #2e7d4f; }
+body.night .lib-tools button.danger { color: #ef5350; }
+body.night #ri-x.stop { color: #ef5350; border-color: #ef5350; }
