@@ -57,15 +57,17 @@
   }
 
   /**
-   * פרופיל גובה לאורך קו: דגימה כל step מטרים.
+   * פרופיל גובה לאורך קו: דגימה כל step מטרים. breaks – אינדקסים שבהם מתחיל קטע חדש (בלי מרחק).
    * מחזיר { dist[], ele[], gain, loss, min, max, total } או null אם אין נתוני גובה.
    */
-  async function profile(coords, step = 15) {
+  async function profile(coords, step = 15, breaks = null) {
     if (!coords || coords.length < 2) return null;
     const pts = [coords[0]], dist = [0];
     let total = 0;
     for (let i = 1; i < coords.length; i++) {
       const a = coords[i - 1], b = coords[i];
+      // תחילת קטע חדש (קפיצה בין קטעים של GPX): בלי מרחק, כמו ב-Geo.buildRoute
+      if (breaks && breaks.has(i)) { pts.push(b); dist.push(total); continue; }
       const kx = Math.cos((a[1] * Math.PI) / 180) * 111320;
       const L = Math.hypot((b[0] - a[0]) * kx, (b[1] - a[1]) * 110540);
       const nSteps = Math.max(1, Math.ceil(L / step));

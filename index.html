@@ -58,6 +58,16 @@
     <p id="ri-folder" class="muted small"></p>
     <canvas id="ri-profile" class="profile"></canvas>
     <p id="ri-remain" class="muted small center"></p>
+    <div id="ri-scrub" class="scrub" hidden>
+      <div class="scrub-head"><span id="ri-sc-title"></span><button id="ri-sc-x" aria-label="נקה">✕</button></div>
+      <div class="stats">
+        <div><span class="lbl">מרחק</span><span id="ri-sc-len" class="v"></span></div>
+        <div><span class="lbl">גובה בנקודה</span><span id="ri-sc-ele" class="v"></span></div>
+        <div><span class="lbl">↑ לעלות</span><span id="ri-sc-up" class="v"></span></div>
+        <div><span class="lbl">↓ לרדת</span><span id="ri-sc-down" class="v"></span></div>
+        <div><span class="lbl">⏱ זמן</span><span id="ri-sc-time" class="v"></span></div>
+      </div>
+    </div>
     <label class="row"><input type="checkbox" id="ri-focus"> הדגש את המסלול (המפה מסביב דוהה)</label>
     <div class="btns">
       <button id="ri-save">💾 שמור</button>

@@ -79,6 +79,7 @@
       ihm: { type: 'raster', tileSize: 256, maxzoom: 16, attribution: '© Israel Hiking Map',
         tiles: ['https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png'] },
       draft: { type: 'geojson', data: empty },
+      scrub: { type: 'geojson', data: empty },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#e6e1d1' } },
@@ -170,6 +171,8 @@
           'circle-color': ['match', ['get', 'kind'], 'start', '#1a9b3c', '#c62828'] } },
       { id: 'wpts', type: 'circle', source: 'wpts',
         paint: { 'circle-radius': 6, 'circle-color': '#f39c12', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
+      { id: 'scrub', type: 'circle', source: 'scrub',
+        paint: { 'circle-radius': 8, 'circle-color': '#ff6d00', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
       { id: 'area-label', type: 'symbol', source: 'areas', filter: ['==', '$type', 'Point'],
         layout: { 'text-field': ['get', 'name'], 'text-font': FONT, 'text-size': 15, 'text-max-width': 10 },
         paint: { 'text-color': '#e06000', ...halo, 'text-halo-width': 2 } },
@@ -403,7 +406,8 @@
     if (save) db.set('active', a).catch(console.error);
     updateStatus();
     prof = null;
-    Elev.profile(route.pts).then((p) => {
+    clearScrub();
+    Elev.profile(route.pts, 15, route.breaks).then((p) => {
       if (active !== a) return;
       prof = p; updateStatus(); renderRouteInfo();
       if (p) { a.gain = Math.round(p.gain); a.loss = Math.round(p.loss); if (a.libId) libUpdateStats(a.libId, p); }
@@ -441,7 +445,7 @@
     map.getSource('wpts').setData(empty);
     $('btn-fit').hidden = true;
     $('status').hidden = true;
-    $('routeinfo').hidden = true;
+    closeRouteInfo();
     applyLayers();
     await db.del('active');
     await db.del('gpx');
@@ -451,11 +455,12 @@
   const fmtTime = (min) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h}:${String(m).padStart(2, '0')} ש'` : `${m} דק'`; };
   const estTime = (lenM, gain, bike) => (bike ? (lenM / 1000) * 5 + (gain / 100) * 6 : (lenM / 1000) * 15 + (gain / 100) * 10);
 
-  function profileStats(p, from = 0) {
+  function profileStats(p, from = 0, to = Infinity) {
     if (!p) return null;
     let gain = 0, loss = 0, ref = null;
     for (let i = 0; i < p.dist.length; i++) {
       if (p.dist[i] < from) continue;
+      if (p.dist[i] > to) break;
       const v = p.ele[i];
       if (ref == null) { ref = v; continue; }
       if (v - ref >= 2) { gain += v - ref; ref = v; } else if (ref - v >= 2) { loss += ref - v; ref = v; }
@@ -463,6 +468,29 @@
     return { gain, loss };
   }
 
+  // חיפוש בינארי במערך מרחקים מצטבר: האינדקס האחרון ש-arr[i] <= d
+  function idxAt(arr, d) {
+    let lo = 0, hi = arr.length - 1;
+    if (d <= arr[0]) return 0;
+    if (d >= arr[hi]) return hi;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (arr[m] <= d) lo = m; else hi = m; }
+    return lo;
+  }
+  function eleAt(p, d) {
+    const i = idxAt(p.dist, d), j = Math.min(i + 1, p.dist.length - 1);
+    const t = j > i ? (d - p.dist[i]) / ((p.dist[j] - p.dist[i]) || 1) : 0;
+    return p.ele[i] + (p.ele[j] - p.ele[i]) * Math.max(0, Math.min(1, t));
+  }
+  function pointAt(r, d) {
+    const i = idxAt(r.cum, d), j = Math.min(i + 1, r.pts.length - 1);
+    if (j === i || r.breaks.has(j)) return r.pts[i];
+    const t = Math.max(0, Math.min(1, (d - r.cum[i]) / ((r.cum[j] - r.cum[i]) || 1)));
+    const a = r.pts[i], b = r.pts[j];
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  }
+
+  const PPAD = { l: 34, r: 6, t: 6, b: 16 };
+  // marks.at – ההתקדמות (מה שעברת נצבע בכחול); marks.touch – נקודת הנגיעה (הקטע עד אליה מודגש בכתום)
   function drawProfile(canvas, p, marks = {}) {
     const dpr = devicePixelRatio || 1;
     const W = canvas.clientWidth, H = canvas.clientHeight;
@@ -477,28 +505,88 @@
       g.fillText(prof === null && active ? 'מחשב גובה…' : 'אין נתוני גובה (נדרש אינטרנט פעם אחת)', W / 2, H / 2);
       return;
     }
-    const pad = { l: 34, r: 6, t: 6, b: 16 };
+    const pad = PPAD;
     const lo = Math.floor(p.min / 10) * 10 - 5, hi = Math.ceil(p.max / 10) * 10 + 5;
-    const X = (d) => pad.l + (d / p.total) * (W - pad.l - pad.r);
+    const clampD = (d) => Math.max(0, Math.min(d, p.total));
+    const X = (d) => pad.l + (clampD(d) / (p.total || 1)) * (W - pad.l - pad.r);
     const Y = (e) => pad.t + (1 - (e - lo) / (hi - lo)) * (H - pad.t - pad.b);
-    g.beginPath(); g.moveTo(X(0), Y(lo));
-    p.dist.forEach((d, i) => g.lineTo(X(d), Y(p.ele[i])));
-    g.lineTo(X(p.total), Y(lo)); g.closePath();
-    g.fillStyle = night ? 'rgba(76,175,80,.35)' : 'rgba(46,125,79,.25)'; g.fill();
-    g.beginPath(); p.dist.forEach((d, i) => (i ? g.lineTo : g.moveTo).call(g, X(d), Y(p.ele[i])));
-    g.strokeStyle = night ? '#81c784' : '#2e7d4f'; g.lineWidth = 2; g.stroke();
+    const area = () => {
+      g.beginPath(); g.moveTo(X(0), Y(lo));
+      p.dist.forEach((d, i) => g.lineTo(X(d), Y(p.ele[i])));
+      g.lineTo(X(p.total), Y(lo)); g.closePath();
+    };
+    const line = () => { g.beginPath(); p.dist.forEach((d, i) => (i ? g.lineTo : g.moveTo).call(g, X(d), Y(p.ele[i]))); };
+    const band = (x0, x1, fn) => { g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0, H); g.clip(); fn(); g.restore(); };
+    const xAt = marks.at != null ? X(marks.at) : X(0);
+    g.lineWidth = 2;
+    // מה שנשאר: ירוק
+    band(xAt, W, () => {
+      area(); g.fillStyle = night ? 'rgba(76,175,80,.35)' : 'rgba(46,125,79,.25)'; g.fill();
+      line(); g.strokeStyle = night ? '#81c784' : '#2e7d4f'; g.stroke();
+    });
+    // מה שעברת: כחול
+    if (marks.at != null) band(0, xAt, () => {
+      area(); g.fillStyle = night ? 'rgba(66,165,245,.45)' : 'rgba(30,136,229,.35)'; g.fill();
+      line(); g.strokeStyle = night ? '#64b5f6' : '#1565c0'; g.stroke();
+    });
+    // הקטע עד נקודת הנגיעה: כתום
+    if (marks.touch != null) {
+      const base = marks.at != null && marks.at <= marks.touch ? marks.at : 0;
+      band(X(base), X(marks.touch), () => { area(); g.fillStyle = 'rgba(255,109,0,.38)'; g.fill(); });
+    }
     g.fillStyle = night ? '#aaa' : '#666'; g.font = '10px sans-serif'; g.textAlign = 'right';
     g.fillText(Math.round(p.max) + 'מ', pad.l - 3, Y(p.max) + 4);
     g.fillText(Math.round(p.min) + 'מ', pad.l - 3, Y(p.min));
     g.textAlign = 'left'; g.fillText('0', pad.l, H - 3);
     g.textAlign = 'right'; g.fillText(Geo.fmtDist(p.total), W - pad.r, H - 3);
-    if (marks.at != null) {
-      const x = X(Math.min(marks.at, p.total));
-      g.strokeStyle = '#1e88e5'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, pad.t); g.lineTo(x, H - pad.b); g.stroke();
-      let i = p.dist.findIndex((d) => d >= marks.at); if (i < 0) i = p.dist.length - 1;
-      g.fillStyle = '#1e88e5'; g.beginPath(); g.arc(x, Y(p.ele[i]), 4.5, 0, 7); g.fill();
-    }
+    const pin = (d, color, dash) => {
+      const x = X(d);
+      g.strokeStyle = color; g.lineWidth = 2; g.setLineDash(dash ? [4, 3] : []);
+      g.beginPath(); g.moveTo(x, pad.t); g.lineTo(x, H - pad.b); g.stroke(); g.setLineDash([]);
+      g.fillStyle = color; g.strokeStyle = '#fff'; g.lineWidth = 2;
+      g.beginPath(); g.arc(x, Y(eleAt(p, clampD(d))), 5, 0, 7); g.fill(); g.stroke();
+    };
+    if (marks.at != null) pin(marks.at, '#1e88e5');
+    if (marks.touch != null) pin(marks.touch, '#ff6d00', true);
   }
+
+  // נגיעה בגרף: גרירת האצבע בוחרת נקודה לאורך המסלול
+  function attachScrub(canvas, getProfile, onPick) {
+    canvas.style.touchAction = 'none';
+    let down = false;
+    const toD = (e) => {
+      const p = getProfile();
+      if (!p) return null;
+      const r = canvas.getBoundingClientRect();
+      const f = (e.clientX - r.left - PPAD.l) / (r.width - PPAD.l - PPAD.r);
+      return Math.max(0, Math.min(1, f)) * p.total;
+    };
+    canvas.addEventListener('pointerdown', (e) => {
+      const d = toD(e);
+      if (d == null) return;
+      down = true;
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      onPick(d);
+    });
+    canvas.addEventListener('pointermove', (e) => { if (down) { const d = toD(e); if (d != null) onPick(d); } });
+    for (const t of ['pointerup', 'pointercancel']) canvas.addEventListener(t, () => (down = false));
+  }
+
+  // מה יש בין נקודה אחת לשנייה לאורך המסלול
+  function legInfo(p, from, to, bike) {
+    const st = profileStats(p, from, to);
+    const len = to - from;
+    return { len, ele: eleAt(p, to), gain: st.gain, loss: st.loss, time: estTime(len, st.gain, bike) };
+  }
+
+  let scrubAt = null; // מרחק (בגרף של המסלול הפעיל) של נקודת הנגיעה
+  function setScrubPoint(pt) {
+    map.getSource('scrub')?.setData(pt ? { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: pt } } : empty);
+  }
+  function clearScrub() { scrubAt = null; setScrubPoint(null); }
+  function closeRouteInfo() { $('routeinfo').hidden = true; clearScrub(); }
+  // מרחק בגרף -> מרחק על המסלול (כמעט זהים; מתקן הבדלים קטנים בשיטת החישוב)
+  const profToRoute = (p, r, d) => (p.total ? (d * r.total) / p.total : 0);
 
   function renderRouteInfo() {
     if ($('routeinfo').hidden || !active) return;
@@ -510,20 +598,43 @@
     $('ri-down').textContent = prof ? Math.round(prof.loss) + " מ'" : '…';
     $('ri-time').textContent = prof ? fmtTime(estTime(total, prof.gain, bike)) : '…';
     const rem = prevAlong != null && prof ? profileStats(prof, prevAlong) : null;
-    $('ri-remain').textContent = rem ? `נותרו ${Geo.fmtDist(total - prevAlong)} · ↑ ${Math.round(rem.gain)} מ' · ↓ ${Math.round(rem.loss)} מ'` : '';
+    $('ri-remain').textContent = rem ? `נותרו ${Geo.fmtDist(total - prevAlong)} · ↑ ${Math.round(rem.gain)} מ' · ↓ ${Math.round(rem.loss)} מ'`
+      : prof ? '👆 געו בגרף כדי לראות מרחק וגובה עד כל נקודה' : '';
+    const sc = $('ri-scrub');
+    sc.hidden = scrubAt == null || !prof;
+    if (!sc.hidden) {
+      // מהמיקום שלך קדימה; נקודה שכבר עברת – מתחילת המסלול
+      const here = prevAlong != null ? (prevAlong * prof.total) / (total || 1) : null;
+      const from = here != null && here <= scrubAt ? here : 0;
+      const L = legInfo(prof, from, scrubAt, bike);
+      $('ri-sc-title').textContent = from > 0 ? 'ממך עד הנקודה' : here != null ? 'מההתחלה עד הנקודה (כבר עברת)' : 'מההתחלה עד הנקודה';
+      $('ri-sc-len').textContent = Geo.fmtDist(L.len);
+      $('ri-sc-ele').textContent = Math.round(L.ele) + " מ'";
+      $('ri-sc-up').textContent = Math.round(L.gain) + " מ'";
+      $('ri-sc-down').textContent = Math.round(L.loss) + " מ'";
+      $('ri-sc-time').textContent = fmtTime(L.time);
+    }
+    $('ri-remain').hidden = !sc.hidden;
     $('ri-edit').hidden = active.kind !== 'plan';
     $('ri-save').hidden = !!active.libId;
     $('ri-folder').textContent = active.libId ? '📁 ' + (active.folder || 'כללי') : '';
     $('ri-focus').checked = layerPrefs.focus;
-    drawProfile($('ri-profile'), prof, { at: prevAlong });
+    const atP = prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
+    drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
   }
+  attachScrub($('ri-profile'), () => prof, (d) => {
+    scrubAt = d;
+    setScrubPoint(pointAt(route, profToRoute(prof, route, d)));
+    renderRouteInfo();
+  });
+  $('ri-sc-x').addEventListener('click', () => { clearScrub(); renderRouteInfo(); });
   $('status').addEventListener('click', () => { $('routeinfo').hidden = !$('routeinfo').hidden; renderRouteInfo(); });
-  $('ri-close').addEventListener('click', () => ($('routeinfo').hidden = true));
+  $('ri-close').addEventListener('click', closeRouteInfo);
   $('ri-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
   $('ri-clear').addEventListener('click', () => clearRoute());
   $('ri-gpx').addEventListener('click', () => exportGpx());
   $('ri-save').addEventListener('click', () => openSaveDlg('active', { name: active.name, coords: route.pts }));
-  $('ri-edit').addEventListener('click', () => { $('routeinfo').hidden = true; startPlan(active); });
+  $('ri-edit').addEventListener('click', () => { closeRouteInfo(); startPlan(active); });
   $('ri-focus').addEventListener('change', (e) => { layerPrefs.focus = e.target.checked; applyLayers(); });
 
   async function exportGpx() {
@@ -615,13 +726,15 @@
     $('pl-done').disabled = plan.wps.length < 2;
     $('pl-undo').disabled = !plan.wps.length;
     clearTimeout(profTimer);
+    plan.prof = null; plan.scrubAt = null; setScrubPoint(null);
     $('pl-up').textContent = $('pl-down').textContent = $('pl-time').textContent = '–';
     if (plan.wps.length > 1) {
       profTimer = setTimeout(async () => {
         const mine = plan;
-        const p = await Elev.profile(segsToLines(segs).flat());
+        const r = Geo.buildRoute(segsToLines(segs));
+        const p = await Elev.profile(r.pts, 15, r.breaks);
         if (plan !== mine) return;
-        plan.prof = p;
+        plan.prof = p; plan.route = r;
         $('pl-up').textContent = p ? Math.round(p.gain) + " מ'" : '?';
         $('pl-down').textContent = p ? Math.round(p.loss) + " מ'" : '?';
         $('pl-time').textContent = p ? fmtTime(estTime(len, p.gain, plan.opts.bike)) : '?';
@@ -629,6 +742,14 @@
       }, 350);
     } else drawProfile($('pl-profile'), null);
   }
+
+  attachScrub($('pl-profile'), () => plan?.prof, (d) => {
+    plan.scrubAt = d;
+    setScrubPoint(pointAt(plan.route, profToRoute(plan.prof, plan.route, d)));
+    const L = legInfo(plan.prof, 0, d, plan.opts.bike);
+    $('pl-hint').textContent = `עד הנקודה: ${Geo.fmtDist(L.len)} · ⏱ ${fmtTime(L.time)} · גובה ${Math.round(L.ele)} מ' · ↑ ${Math.round(L.gain)} · ↓ ${Math.round(L.loss)}`;
+    drawProfile($('pl-profile'), plan.prof, { touch: d });
+  });
 
   function startPlan(from) {
     if (!mapFC) return toast('צריך להוריד מפה קודם');
@@ -640,7 +761,7 @@
     $('pl-bike').checked = plan.opts.bike;
     $('planbar').hidden = false;
     $('status').hidden = true;
-    $('routeinfo').hidden = true;
+    closeRouteInfo();
     document.body.classList.add('planning');
     if (!plan.wps.length) map.getSource('route').setData(empty);
     if (plan.opts.snap) { toast('מכין את רשת השבילים…', 1500); setTimeout(() => { getGraph(plan.opts.bike); renderPlan(); }, 30); }
@@ -650,6 +771,7 @@
 
   function endPlan() {
     plan?.markers.forEach((m) => m.remove());
+    setScrubPoint(null);
     plan = null;
     $('planbar').hidden = true;
     document.body.classList.remove('planning');
