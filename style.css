@@ -128,7 +128,9 @@ body.night .fld input { background: #1d2227; color: #eee; border-color: #444; }
   --danger: hsl(350, 75%, 50%);
   --text: #17202a;
   --text-muted: #5f6b76;
-  --glass: rgba(248, 251, 250, .80);
+  --glass: rgba(236, 246, 244, .42);
+  --glass-light: linear-gradient(to bottom, rgba(120, 170, 220, .08), transparent 80%);
+  --glass-filter: blur(20px) saturate(1.7);
   --glass-edge: rgba(0, 0, 0, .08);
   --cell-bg: rgba(0, 0, 0, .06);
   --cell-rim: transparent;
@@ -143,7 +145,8 @@ body.night {
   --danger: hsl(344, 89%, 66%);
   --text: #eef2f4;
   --text-muted: #a3afb9;
-  --glass: rgba(22, 28, 34, .82);
+  --glass: rgba(18, 26, 34, .48);
+  --glass-filter: blur(24px) saturate(1.2);
   --glass-edge: rgba(255, 255, 255, .18);
   --cell-bg: rgba(90, 120, 140, .30);
   --cell-rim: rgba(255, 255, 255, .07);
@@ -156,7 +159,7 @@ body.night {
   display: flex; flex-direction: column; justify-content: flex-end; color: var(--text);
   border-radius: 20px 20px 0 0; box-shadow: var(--dock-lift); }
 .dock-skin { position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
-  background: var(--glass); backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  background: var(--glass-light), var(--glass); backdrop-filter: var(--glass-filter); -webkit-backdrop-filter: var(--glass-filter);
   border-top: 1px solid var(--glass-edge); }
 
 /* ידית: לשונית קטנה מעל הזכוכית */
@@ -165,7 +168,7 @@ body.night {
   border: 0; background: transparent; cursor: grab; touch-action: none; }
 .bump-shape { position: relative; width: 76px; height: 12px; }
 .bump-shape::before { content: ""; position: absolute; inset: 0 5px -1px; border-radius: 6px 6px 0 0; background: var(--glass);
-  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  backdrop-filter: var(--glass-filter); -webkit-backdrop-filter: var(--glass-filter); }
 .bump-rim { position: absolute; inset: 0; overflow: visible; fill: none; stroke: var(--glass-edge); stroke-width: 1px; }
 .bump-groove { position: absolute; left: 50%; width: 28px; height: 2px; transform: translateX(-50%); border-radius: 1px;
   background: color-mix(in oklab, var(--text) 35%, transparent); }
