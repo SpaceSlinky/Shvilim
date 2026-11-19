@@ -126,8 +126,6 @@
       const out = [pts[0]];
       for (let i = 0; i < pts.length - 1; i++) {
         const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
-        // קטעים קצרים (~4 מ') לא מחולקים – כדי שמספר הנקודות לא יתפוצץ ברמות עיגול גבוהות
-        if (Math.abs(x1 - x0) + Math.abs(y1 - y0) < 4e-5) { if (i > 0) out.push(pts[i]); continue; }
         out.push([0.75 * x0 + 0.25 * x1, 0.75 * y0 + 0.25 * y1], [0.25 * x0 + 0.75 * x1, 0.25 * y0 + 0.75 * y1]);
       }
       out.push(pts[pts.length - 1]);

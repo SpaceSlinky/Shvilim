@@ -283,22 +283,23 @@
   let mapFC = null;
   let searchIndex = null;
   // הגרסה המוחלקת מחושבת פעם אחת ונשמרת, כדי שהפתיחה תהיה מהירה
+  // העיגול מחושב בזיכרון בכל פתיחה ולא נשמר – כך הוא לא תופס נפח בטלפון.
+  // המפה מוצגת מיד בקווים המקוריים, והגרסה המעוגלת מחליפה אותה כשהחישוב מסתיים.
   let smoothCache = null;
   let smoother = null;
+  db.del('mapsmooth').catch(() => {}); // ניקוי העותק השמור מגרסאות קודמות
   async function setMapData(fc) {
     mapFC = fc;
     searchIndex = null;
     const lvl = smoothLevel();
     smoother = lvl ? Geo.makeSmoother(fc, lvl) : null;
     if (!lvl) return map.getSource('osm').setData(fc);
-    const stamp = fc.features.length + '|' + (fc.bbox || []).join(',') + '|' + lvl;
-    if (smoothCache?.stamp !== stamp) {
-      const saved = await db.get('mapsmooth').catch(() => null);
-      if (saved?.stamp !== stamp) toast('מעגל קווים…', 2500);
-      smoothCache = saved?.stamp === stamp ? saved : { stamp, fc: Geo.smoothFC(fc, lvl) };
-      if (saved?.stamp !== stamp) db.set('mapsmooth', smoothCache).catch(console.error);
+    if (smoothCache?.src !== fc) {
+      map.getSource('osm').setData(fc);
+      await new Promise((r) => setTimeout(r, 50)); // לתת למפה להופיע קודם
+      smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl) };
     }
-    if (mapFC === fc) map.getSource('osm').setData(smoothCache.fc);
+    if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
   }
   Promise.all([db.get('mapdata').catch(() => null), mapReady]).then(([fc]) => {
     if (fc) setMapData(fc);
@@ -1043,7 +1044,7 @@
   };
   const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major', 'area-label']);
   const layerPrefs = Object.assign(
- { base: 'vector', labels: true, smooth: 3, focus: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
+ { base: 'vector', labels: true, smooth: true, focus: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
 
   function applyLayers() {
@@ -1055,9 +1056,9 @@
     map.setLayoutProperty('dim', 'visibility', vis(layerPrefs.focus && layerPrefs.route && (!!active || !!plan)));
     try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
   }
-  function smoothLevel() { return layerPrefs.smooth === true ? 3 : +layerPrefs.smooth || 0; }
+  if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
+  function smoothLevel() { return layerPrefs.smooth ? 2 : 0; }
   function syncLayerForm() {
-    $('smooth-level').value = String(smoothLevel());
     for (const el of document.querySelectorAll('#layers-dlg input')) {
       if (el.type === 'radio') el.checked = el.value === layerPrefs.base;
       else el.checked = !!layerPrefs[el.name];
@@ -1065,18 +1066,12 @@
   }
   $('layers-dlg').addEventListener('change', (e) => {
     const el = e.target;
-    if (el.id === 'smooth-level') {
-      layerPrefs.smooth = +el.value;
-      applyLayers();
-      if (mapFC) setTimeout(() => setMapData(mapFC), 30);
-      return;
-    }
     if (el.type === 'radio') {
       layerPrefs.base = el.value;
       if (el.value !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);
     } else layerPrefs[el.name] = el.checked;
     applyLayers();
-    if (el.name === 'smooth' && mapFC) setMapData(mapFC);
+    if (el.name === 'smooth' && mapFC) setTimeout(() => setMapData(mapFC), 30);
     if (el.name === 'focus') $('ri-focus').checked = el.checked;
   });
   $('btn-layers').addEventListener('click', () => { syncLayerForm(); $('layers-dlg').showModal(); });

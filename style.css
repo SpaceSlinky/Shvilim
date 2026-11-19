@@ -183,8 +183,7 @@ dialog.tall { max-height: 85vh; }
 .lib-btns button.armed { background: #c62828; color: #fff; border-color: #c62828; }
 .fld { display: block; font-size: 13px; color: #666; margin: 6px 0; }
 .fld input { display: block; width: 100%; font-size: 16px; padding: 9px; border-radius: 10px; border: 1px solid #ccc; margin-top: 3px; color: #222; }
-#smooth-level { font-size: 14px; margin-right: 6px; padding: 3px; }
 #ri-folder { margin: 0; }
 body.night #lib-list details, body.night .lib-row { border-color: #333; }
 body.night .fld { color: #aaa; }
-body.night .fld input, body.night #smooth-level { background: #1d2227; color: #eee; border-color: #444; }
+body.night .fld input { background: #1d2227; color: #eee; border-color: #444; }
