@@ -28,8 +28,8 @@
     <button id="btn-search" title="חיפוש מקום" aria-label="חיפוש">
       <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none"/><path d="M15.5 15.5L21 21"/></svg>
     </button>
-    <button id="btn-gpx" title="טען מסלול GPX" aria-label="טען מסלול">
-      <svg viewBox="0 0 24 24"><path d="M4 19c3-1 4-5 7-6s5 2 9-6" fill="none"/><circle cx="4" cy="19" r="2"/><circle cx="20" cy="7" r="2"/></svg>
+    <button id="btn-lib" title="מסלולים" aria-label="מסלולים">
+      <svg viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.5" fill="none"/><path d="M8.5 19h8a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7h8" fill="none"/><circle cx="18" cy="5" r="2.5" fill="none"/></svg>
     </button>
     <button id="btn-fit" title="הצג את כל המסלול" aria-label="הצג את כל המסלול" hidden>
       <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none"/></svg>
@@ -118,24 +118,6 @@
     <ul id="search-results"></ul>
   </div>
 
-  <div id="drawbar" hidden>
-    <p id="draw-hint"></p>
-    <div class="draw-btns">
-      <button id="draw-done" class="primary">סיום ושמירה</button>
-      <button id="draw-undo">בטל נקודה</button>
-      <button id="draw-cancel">ביטול</button>
-    </div>
-  </div>
-
-  <dialog id="name-dlg">
-    <form method="dialog">
-      <h2>שם לאזור</h2>
-      <input id="area-name" placeholder="למשל: שוויצריה הקטנה" maxlength="40">
-      <button value="ok" class="primary">שמור</button>
-      <button value="cancel" formnovalidate>חזרה לציור</button>
-    </form>
-  </dialog>
-
   <dialog id="layers-dlg">
     <h2>שכבות</h2>
     <h3>רקע</h3>
@@ -153,8 +135,7 @@
       <label class="row"><input type="checkbox" name="water"> נחלים</label>
       <label class="row"><input type="checkbox" name="poi"> פסגות, מעיינות, אתרים</label>
       <label class="row"><input type="checkbox" name="places"> יישובים</label>
-      <label class="row"><input type="checkbox" name="areas"> האזורים שלי</label>
-      <label class="row"><input type="checkbox" name="route"> מסלול GPX</label>
+      <label class="row"><input type="checkbox" name="route"> המסלול על המפה</label>
       <label class="row"><input type="checkbox" name="labels"> שמות על המפה</label>
       <label class="row"><input type="checkbox" name="bike"> שבילי אופניים</label>
       <label class="row"><input type="checkbox" name="smooth"> קווים מעוגלים</label>
@@ -164,27 +145,16 @@
   </dialog>
 
   <dialog id="lib-dlg" class="tall">
-    <h2>📚 המסלולים שלי</h2>
+    <h2>מסלולים</h2>
+    <div id="lib-top"></div>
     <div id="lib-list"></div>
-    <button id="lib-close" class="primary">סגור</button>
-  </dialog>
-
-  <dialog id="areas-dlg">
-    <h2>האזורים שלי</h2>
-    <div id="areas-list"></div>
-    <button id="areas-close" class="primary">סגור</button>
+    <button id="lib-close">סגור</button>
   </dialog>
 
   <dialog id="menu">
     <h2>שבילים</h2>
     <p id="offline-info" class="muted"></p>
     <p id="storage-info" class="muted small"></p>
-    <button id="m-gpx">טען מסלול GPX</button>
-    <button id="m-clear">הסר מסלול</button>
-    <button id="m-plan" class="primary">✏️ תכנן מסלול</button>
-    <button id="m-lib">📚 המסלולים שלי</button>
-    <button id="m-draw">סמן אזור חדש על המפה</button>
-    <button id="m-areas">האזורים שלי</button>
     <button id="m-area">הוסף למפה השמורה את האזור שבמסך</button>
     <button id="m-carmel">עדכן את מפת הכרמל</button>
     <label class="row"><input type="checkbox" id="m-night"> מצב לילה 🌙</label>
@@ -202,7 +172,6 @@
     </div>
   </div>
 
-  <input type="file" id="file-gpx" accept=".gpx,application/gpx+xml,application/octet-stream,text/xml" hidden>
 
   <script src="geo.js"></script>
   <script src="osm.js"></script>

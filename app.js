@@ -70,7 +70,6 @@
         geometry: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]] } } },
       wpts: { type: 'geojson', data: empty },
       acc: { type: 'geojson', data: empty },
-      areas: { type: 'geojson', data: empty },
       // רקעים אונליין (דורשים אינטרנט)
       sat: { type: 'raster', tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri',
         tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'] },
@@ -78,7 +77,6 @@
         tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png'] },
       ihm: { type: 'raster', tileSize: 256, maxzoom: 16, attribution: '© Israel Hiking Map',
         tiles: ['https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png'] },
-      draft: { type: 'geojson', data: empty },
       scrub: { type: 'geojson', data: empty },
     },
     layers: [
@@ -104,11 +102,6 @@
         paint: { 'line-color': '#8b6b3e', 'line-width': zw(0.8, 2.4), 'line-dasharray': [3, 1.5] } },
       { id: 'path', type: 'line', source: 'osm', filter: road('path'), minzoom: 12,
         paint: { 'line-color': '#4a3d30', 'line-width': zw(0.6, 1.8), 'line-dasharray': [2, 1.5] } },
-      // אזורים שסימנתם
-      { id: 'area-fill', type: 'fill', source: 'areas', filter: ['==', '$type', 'Polygon'],
-        paint: { 'fill-color': '#ff7a00', 'fill-opacity': 0.07 } },
-      { id: 'area-line', type: 'line', source: 'areas', filter: ['==', '$type', 'Polygon'],
-        paint: { 'line-color': '#ff7a00', 'line-width': 2.5, 'line-dasharray': [3, 2] } },
       // שבילי אופניים (מסלולי MTB)
       { id: 'bike', type: 'line', source: 'osm', filter: k('bike'), minzoom: 11, layout: { 'line-join': 'round', visibility: 'none' },
         paint: { 'line-color': '#ff6d00', 'line-width': zw(1, 3), 'line-dasharray': [2, 1.2], 'line-opacity': 0.9 } },
@@ -173,13 +166,6 @@
         paint: { 'circle-radius': 6, 'circle-color': '#f39c12', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
       { id: 'scrub', type: 'circle', source: 'scrub',
         paint: { 'circle-radius': 8, 'circle-color': '#ff6d00', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
-      { id: 'area-label', type: 'symbol', source: 'areas', filter: ['==', '$type', 'Point'],
-        layout: { 'text-field': ['get', 'name'], 'text-font': FONT, 'text-size': 15, 'text-max-width': 10 },
-        paint: { 'text-color': '#e06000', ...halo, 'text-halo-width': 2 } },
-      { id: 'draft-line', type: 'line', source: 'draft',
-        paint: { 'line-color': '#ff7a00', 'line-width': 3 } },
-      { id: 'draft-pts', type: 'circle', source: 'draft', filter: ['==', '$type', 'Point'],
-        paint: { 'circle-radius': 6, 'circle-color': '#ff7a00', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
       { id: 'acc', type: 'fill', source: 'acc',
         paint: { 'fill-color': '#1e88e5', 'fill-opacity': 0.12, 'fill-outline-color': '#1e88e5' } },
     ],
@@ -336,7 +322,7 @@
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
   const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
   map.on('click', (e) => {
-    if (draft || plan) return;
+    if (plan) return;
     const { x, y } = e.point;
     const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
     if (!feats.length) return;
@@ -428,15 +414,6 @@
     return g;
   }
 
-  async function loadGpxFile(file) {
-    try {
-      const g = await showGpx(await file.text(), true);
-      toast(`${g.name || 'מסלול'} · ${Geo.fmtDist(route.total)}`);
-    } catch (e) {
-      console.error(e);
-      toast(e.message || 'שגיאה בטעינת הקובץ');
-    }
-  }
 
   async function clearRoute() {
     route = active = prof = null;
@@ -778,7 +755,7 @@
   async function openSaveDlg(mode, { name = '', folder = '', coords = [] } = {}) {
     saveMode = mode;
     const lib = await libLoad();
-    $('folders').replaceChildren(...[...new Set([...lib.map((r) => r.folder), ...areas.map((a) => a.name)])]
+    $('folders').replaceChildren(...[...new Set(lib.map((r) => r.folder))]
       .filter(Boolean).map((f) => Object.assign(document.createElement('option'), { value: f })));
     $('plan-name').value = name;
     $('plan-folder').value = folder || suggestFolder(coords);
@@ -828,20 +805,10 @@
     if (r && p) { r.gain = Math.round(p.gain); r.loss = Math.round(p.loss); await db.set('library', lib); }
   }
 
-  // הצעת אזור: אזור שסימנתם שמכיל את תחילת המסלול, אחרת היישוב/המקום הקרוב
+  // הצעת תיקייה: אזור מוכר שמכיל את תחילת המסלול, אחרת היישוב/המקום הקרוב
   function suggestFolder(coords) {
     const p = coords?.[0];
     if (!p) return 'כללי';
-    const inPoly = (pt, ring) => {
-      let inside = false;
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [xi, yi] = ring[i], [xj, yj] = ring[j];
-        if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
-      }
-      return inside;
-    };
-    const area = areas.find((a) => inPoly(p, a.ring));
-    if (area) return area.name;
     const preset = PRESETS.find((a) => p[0] >= a.bbox[0] && p[0] <= a.bbox[2] && p[1] >= a.bbox[1] && p[1] <= a.bbox[3]);
     if (preset) return preset.name;
     let best = null, bd = 6000;
@@ -853,36 +820,72 @@
     return best || 'כללי';
   }
 
+  // ---------- מסלולים: תכנון, המסלול הפעיל, ותיקיות ----------
+  let libSel = null;    // המסלול שנבחר ברשימה (הפעולות שלו פתוחות)
+  let libMoving = false; // בחירת תיקייה למסלול שנבחר
   async function openLibrary() {
     const lib = await libLoad();
+    // למעלה: מסלול חדש, והמסלול שמוצג עכשיו על המפה
+    const top = $('lib-top');
+    top.replaceChildren();
+    const planBtn = Object.assign(document.createElement('button'), { className: 'primary', textContent: '✏️ תכנון מסלול חדש' });
+    planBtn.addEventListener('click', () => { $('lib-dlg').close(); startPlan(); });
+    top.appendChild(planBtn);
+    if (active) {
+      const cur = document.createElement('div');
+      cur.className = 'lib-active';
+      cur.innerHTML = '<span><small class="muted">על המפה עכשיו</small><b></b></span><button>הסר מהמפה</button>';
+      cur.querySelector('b').textContent = active.name || 'מסלול';
+      cur.querySelector('button').addEventListener('click', async () => { await clearRoute(); openLibrary(); });
+      top.appendChild(cur);
+    }
+
     const box = $('lib-list');
     box.replaceChildren();
-    if (!lib.length) box.innerHTML = '<p class="muted">עדיין אין מסלולים שמורים. מסלול שתתכננו ותשמרו יופיע כאן, מסודר לפי אזורים.</p>';
+    if (!lib.some((r) => r.id === libSel)) { libSel = null; libMoving = false; }
+    if (!lib.length) box.innerHTML = '<p class="muted">עדיין אין מסלולים שמורים. מסלול שתתכננו ותשמרו יופיע כאן, בתיקייה לפי האזור.</p>';
     const groups = {};
     for (const r of lib) (groups[r.folder || 'כללי'] ||= []).push(r);
-    for (const folder of Object.keys(groups).sort((a, b) => a.localeCompare(b, 'he'))) {
+    const folders = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'he'));
+    for (const folder of folders) {
       const det = document.createElement('details');
       det.open = true;
       det.innerHTML = '<summary></summary>';
       det.querySelector('summary').textContent = `📁 ${folder} (${groups[folder].length})`;
       for (const r of groups[folder].sort((a, b) => (b.updated || 0) - (a.updated || 0))) {
         const row = document.createElement('div');
-        row.className = 'lib-row' + (active?.libId === r.id ? ' current' : '');
+        const sel = r.id === libSel;
+        row.className = 'lib-row' + (active?.libId === r.id ? ' current' : '') + (sel ? ' open' : '');
         row.innerHTML = `<div class="lib-main"><b></b><span class="muted small"></span></div>
-          <div class="lib-btns"><button data-a="open" class="primary">${active?.libId === r.id ? 'הצג על המפה' : 'הפעל'}</button>${r.kind === 'plan' ? '<button data-a="edit">✏️ עריכה</button>' : ''}<button data-a="del">🗑 מחיקה</button></div>`;
+          <div class="lib-btns"><button data-a="open" class="primary">${active?.libId === r.id ? 'הצג' : 'הפעל'}</button>${r.kind === 'plan' ? '<button data-a="edit">✏️ ערוך</button>' : ''}<button data-a="move">📁 העבר</button><button data-a="del">🗑 מחק</button></div>`;
         row.querySelector('b').textContent = r.name;
         row.querySelector('.muted').textContent = [Geo.fmtDist(r.len), r.gain != null ? `↑ ${r.gain} מ'` : '', r.loss != null ? `↓ ${r.loss} מ'` : '']
           .filter(Boolean).join(' · ');
+        // בחירת תיקייה: התיקיות הקיימות, או שם חדש
+        if (sel && libMoving) {
+          const mv = document.createElement('div');
+          mv.className = 'lib-move';
+          mv.innerHTML = '<p class="muted small">להעביר לתיקייה:</p><div class="chips"></div><form class="new-folder"><input placeholder="תיקייה חדשה" maxlength="40"><button>העבר</button></form>';
+          for (const f of folders.filter((f) => f !== folder)) {
+            const c = Object.assign(document.createElement('button'), { type: 'button', textContent: '📁 ' + f });
+            c.addEventListener('click', () => moveTo(r.id, f));
+            mv.querySelector('.chips').appendChild(c);
+          }
+          if (folders.length < 2) mv.querySelector('.chips').remove();
+          mv.querySelector('form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const f = mv.querySelector('input').value.trim();
+            if (f) moveTo(r.id, f);
+          });
+          row.appendChild(mv);
+        }
         row.addEventListener('click', async (ev) => {
+          if (ev.target.closest('.lib-move')) return;
           const act = ev.target.closest('[data-a]')?.dataset.a;
           // הקשה על השורה: בוחרת אותה (ומבטלת בחירה קודמת)
-          if (!act) {
-            const was = row.classList.contains('open');
-            box.querySelectorAll('.lib-row.open').forEach((x) => x.classList.remove('open'));
-            row.classList.toggle('open', !was);
-            return;
-          }
+          if (!act) { libSel = sel ? null : r.id; libMoving = false; return openLibrary(); }
           const a = { ...r, libId: r.id };
+          if (act === 'move') { libMoving = !libMoving; return openLibrary(); }
           if (act === 'del') {
             if (!confirmDel(row)) return;
             await db.set('library', (await libLoad()).filter((x) => x.id !== r.id));
@@ -890,7 +893,7 @@
             return openLibrary();
           }
           $('lib-dlg').close();
-          if (act === 'open') { await setActive(a, { fit: true }); toast(`"${r.name}" פעיל`); }
+          if (act === 'open') { await setActive(a, { fit: true }); toast(`"${r.name}" על המפה`); }
           if (act === 'edit') { startPlan(a); plan.libId = r.id; plan.folder = r.folder; }
         });
         det.appendChild(row);
@@ -899,15 +902,27 @@
     }
     if (!$('lib-dlg').open) $('lib-dlg').showModal();
   }
+  async function moveTo(id, folder) {
+    const lib = await libLoad();
+    const r = lib.find((x) => x.id === id);
+    if (!r) return;
+    r.folder = folder;
+    await db.set('library', lib);
+    if (active?.libId === id) { active.folder = folder; db.set('active', active); renderRouteInfo(); }
+    libMoving = false;
+    toast(`הועבר ל"${folder}"`);
+    openLibrary();
+  }
   // מחיקה בשתי הקשות (בלי חלונות אישור של הדפדפן)
   function confirmDel(row) {
     const btn = row.querySelector('[data-a=del]');
     if (btn.classList.contains('armed')) return true;
-    btn.classList.add('armed'); btn.textContent = 'למחוק? הקישו שוב';
-    setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '🗑 מחיקה'; }, 3000);
+    btn.classList.add('armed'); btn.textContent = 'בטוח?';
+    setTimeout(() => { btn.classList.remove('armed'); btn.textContent = '🗑 מחק'; }, 3000);
     return false;
   }
   $('lib-close').addEventListener('click', () => $('lib-dlg').close());
+  $('lib-dlg').addEventListener('close', () => { libSel = null; libMoving = false; });
 
   // ---------- GPS ----------
   let watchId = null;
@@ -1018,8 +1033,8 @@
   }
 
   // ---------- כפתורים ותפריט ----------
-  const gpxInput = $('file-gpx'), menu = $('menu');
-  $('btn-gpx').addEventListener('click', () => gpxInput.click());
+  const menu = $('menu');
+  $('btn-lib').addEventListener('click', () => openLibrary());
   $('btn-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
   $('btn-menu').addEventListener('click', async () => {
     const ready = navigator.serviceWorker?.controller ? 'האפליקציה והמפה שמורות לשימוש אופליין ✓' : 'טוען לשימוש אופליין…';
@@ -1028,17 +1043,9 @@
     menu.showModal();
   });
   $('m-close').addEventListener('click', () => menu.close());
-  $('m-gpx').addEventListener('click', () => { menu.close(); gpxInput.click(); });
-  $('m-clear').addEventListener('click', () => { menu.close(); clearRoute(); });
   $('m-area').addEventListener('click', () => { menu.close(); downloadVisible(); });
-  $('m-draw').addEventListener('click', () => { menu.close(); startDraw(); });
-  $('m-plan').addEventListener('click', () => { menu.close(); startPlan(); });
-  $('m-lib').addEventListener('click', () => { menu.close(); openLibrary(); });
-  $('m-areas').addEventListener('click', () => { menu.close(); renderAreas(); $('areas-dlg').showModal(); });
-  $('areas-close').addEventListener('click', () => $('areas-dlg').close());
   $('m-carmel').addEventListener('click', () => { menu.close(); downloadArea(CARMEL); });
   $('w-carmel').addEventListener('click', () => downloadArea(CARMEL));
-  gpxInput.addEventListener('change', () => { if (gpxInput.files[0]) loadGpxFile(gpxInput.files[0]); gpxInput.value = ''; });
 
   async function storageInfo() {
     try {
@@ -1149,10 +1156,9 @@
     poi: ['poi-icon', 'poi-label', 'peak'],
     bike: ['bike'],
     places: ['place-minor', 'place-major'],
-    areas: ['area-fill', 'area-line', 'area-label'],
     route: ['route-outer', 'route-casing', 'route-line', 'route-arrows', 'route-ends', 'wpts'],
   };
-  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major', 'area-label']);
+  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major']);
   const layerPrefs = Object.assign(
  { base: 'vector', labels: true, smooth: true, focus: true, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
@@ -1234,81 +1240,14 @@
     applyTheme(e.target.checked);
   });
 
-  // ---------- אזורים מסומנים ----------
+  // אזורים מוכרים (לחיפוש ולהצעת תיקייה)
   const PRESETS = [{ name: 'שוויצריה הקטנה', bbox: [35.0, 32.735, 35.05, 32.765] }];
-  let areas = [];
-  const polyBbox = (ring) => Geo.bounds(ring).flat();
-
-  function renderAreas() {
-    const features = [];
-    for (const a of areas) {
-      features.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [a.ring] }, properties: { name: a.name } });
-      const [w, s, e, n] = polyBbox(a.ring);
-      features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [(w + e) / 2, (s + n) / 2] }, properties: { name: a.name } });
-    }
-    map.getSource('areas')?.setData({ type: 'FeatureCollection', features });
-    const list = $('areas-list');
-    list.replaceChildren();
-    if (!areas.length) list.innerHTML = '<p class="muted">עדיין לא סימנתם אזורים.</p>';
-    for (const a of areas) {
-      const row = document.createElement('div');
-      row.className = 'area-row';
-      row.innerHTML = '<b></b><span><button data-a="go">הצג</button><button data-a="dl">הורד מפה</button><button data-a="del">מחק</button></span>';
-      row.querySelector('b').textContent = a.name;
-      row.addEventListener('click', async (ev) => {
-        const act = ev.target.dataset?.a;
-        if (!act) return;
-        $('areas-dlg').close();
-        if (act === 'go') flyToBbox(polyBbox(a.ring));
-        if (act === 'dl') { const [w, s, e, n] = polyBbox(a.ring); downloadBbox([w - 0.003, s - 0.003, e + 0.003, n + 0.003]); }
-        if (act === 'del') { areas = areas.filter((x) => x !== a); await db.set('areas', areas); renderAreas(); toast('האזור נמחק'); }
-      });
-      list.appendChild(row);
-    }
-  }
-  Promise.all([db.get('areas').catch(() => null), mapReady]).then(([a]) => { areas = a || []; renderAreas(); });
 
   function flyToBbox(b) {
     setFollow(false);
     if (b[0] === b[2] && b[1] === b[3]) map.flyTo({ center: [b[0], b[1]], zoom: 15.5 });
     else map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 50, maxZoom: 16 });
   }
-
-  // מצב ציור: הקשה על המפה מוסיפה נקודה
-  let draft = null;
-  function renderDraft() {
-    const f = draft.map((p) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: p }, properties: {} }));
-    if (draft.length > 1) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: draft.length > 2 ? [...draft, draft[0]] : draft }, properties: {} });
-    map.getSource('draft').setData({ type: 'FeatureCollection', features: f });
-    $('draw-hint').textContent = draft.length < 3 ? `הקישו על המפה כדי לסמן את גבולות האזור (${draft.length}/3 לפחות)` : `${draft.length} נקודות · אפשר להמשיך או לסיים`;
-    $('draw-done').disabled = draft.length < 3;
-  }
-  function startDraw() {
-    draft = [];
-    setFollow(false);
-    $('drawbar').hidden = false;
-    document.body.classList.add('drawing');
-    renderDraft();
-  }
-  function endDraw() {
-    draft = null;
-    map.getSource('draft').setData(empty);
-    $('drawbar').hidden = true;
-    document.body.classList.remove('drawing');
-  }
-  map.on('click', (e) => { if (draft) { draft.push([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]); renderDraft(); } });
-  $('draw-undo').addEventListener('click', () => { draft.pop(); renderDraft(); });
-  $('draw-cancel').addEventListener('click', endDraw);
-  $('draw-done').addEventListener('click', () => { $('area-name').value = ''; $('name-dlg').showModal(); $('area-name').focus(); });
-  $('name-dlg').addEventListener('close', async () => {
-    if ($('name-dlg').returnValue !== 'ok' || !draft) return;
-    const name = $('area-name').value.trim() || `אזור ${areas.length + 1}`;
-    areas.push({ id: Date.now(), name, ring: [...draft, draft[0]] });
-    await db.set('areas', areas);
-    endDraw();
-    renderAreas();
-    toast(`"${name}" נשמר ✓ אפשר להוריד לו מפה מ"האזורים שלי"`, 5000);
-  });
 
   // ---------- חיפוש ----------
   const KIND = { trail: 'שביל', road: 'דרך', water: 'נחל', place: 'יישוב / מקום', area: 'האזור שלי', preset: 'אזור',
@@ -1350,7 +1289,7 @@
     const nq = norm(q);
     if (!nq) return [];
     searchIndex ||= buildIndex();
-    const extra = [...PRESETS.map((p) => ({ ...p, kind: 'preset' })), ...areas.map((a) => ({ name: a.name, kind: 'area', bbox: polyBbox(a.ring) }))]
+    const extra = PRESETS.map((p) => ({ ...p, kind: 'preset' }))
       .map((x) => ({ ...x, key: norm(x.name) }));
     const tokens = nq.split(' ').filter(Boolean);
     const rank = { area: 0, preset: 0, place: 1, peak: 2, spring: 2, viewpoint: 2, picnic_site: 2, camp_site: 2, trail: 3 };
