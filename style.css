@@ -266,13 +266,13 @@ body.night .edit-in { border-color: #4caf50; }
 
 /* ===== מסלולים: טבלה לפי קטגוריות ===== */
 #lib-list { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-.lib-cols, .lib-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 64px 78px; align-items: center; gap: 6px; }
-.lib-cols { font-size: 12px; color: #888; padding: 4px 4px 6px; border-bottom: 1px solid #e3e3e3; }
-.c-len, .c-ele { text-align: end; font-size: 14px; color: #555; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.lib-cols .c-len, .lib-cols .c-ele { color: #888; font-size: 12px; }
-.c-ele { unicode-bidi: isolate; }
-.lib-row { padding: 9px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
-.lib-row .c-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 6px; padding: 8px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+.c-main { min-width: 0; }
+.c-name { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-meta { margin-top: 2px; font-size: 13px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c-meta b { color: #333; font-weight: 700; }
+.c-meta .dot { color: #aaa; }
+.c-meta .ud { unicode-bidi: isolate; }
 .lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
 .dh { display: grid; place-items: center; width: 34px; height: 40px; margin: -10px -6px; touch-action: none; cursor: grab; color: #aaa; }
 .dh svg { width: 10px; height: 16px; fill: currentColor; }
@@ -312,9 +312,7 @@ body.night .edit-in { border-color: #4caf50; }
 .tgrp button.armed { background: #c62828; color: #fff; }
 .tgrp button:active:not(:disabled) { background: #e7efe9; }
 
-body.night .lib-cols { border-color: #333; }
 body.night .lib-row { border-color: #2c3136; }
-body.night .c-len, body.night .c-ele { color: #aaa; }
 body.night .lib-row.sel, body.night .cat.sel .cat-head { background: rgba(76,175,80,.18); }
 body.night .cat.open .cat-name { color: #81c784; }
 body.night .ghost { background: #252b31; }
@@ -322,3 +320,22 @@ body.night .tgrp { border-color: #3a3f45; background: #3a3f45; }
 body.night .tgrp button { background: #2a3036; color: #81c784; }
 body.night .tgrp button:disabled { color: #555; }
 body.night .tgrp button.danger:not(:disabled) { color: #ef5350; }
+
+/* משיכת הדוק למטה = חזרה */
+.pull { touch-action: none; }
+#dock::before { content: "↓ שחררו לחזרה"; position: absolute; top: 4px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--green);
+  opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 2; }
+#dock.pull-ready::before { opacity: 1; }
+#dock-in > div.grip { margin-bottom: 0; }
+section > .grip.pull { display: block; width: 44px; height: 14px; margin: -6px auto 0; position: relative; }
+/* שאלה קצרה בראש הדוק */
+.dock-ask { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; background: #fff8e1; }
+.dock-ask span { flex: 1; font-weight: 700; font-size: 15px; }
+.dock-ask button { border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px; }
+.dock-ask .yes { background: #c62828; color: #fff; font-weight: 700; }
+.dock-ask .no { background: #eee; color: #222; }
+body.night .c-meta { color: #aaa; }
+body.night .c-meta b { color: #eee; }
+body.night .dock-ask { background: #3a3220; border-color: #333; }
+body.night .dock-ask .no { background: #2a3036; color: #eee; }
+body.night #dock::before { color: #81c784; }

@@ -919,10 +919,17 @@
     const row = el('div', 'lib-row' + (sel ? ' sel' : ''));
     row.dataset.id = r.id;
     const g = gripEl();
-    const name = sel && lsel.editing ? editField(r.name, (v) => renameRoute(r.id, v)) : el('span', 'c-name', r.name);
-    const ele = el('span', 'c-ele', r.gain != null ? `˄${r.gain} ˅${r.loss ?? 0}` : '');
-    ele.dir = 'ltr';
-    row.append(g, name, el('span', 'c-len', Geo.fmtDist(r.len)), ele);
+    // שתי שורות: השם, ומתחתיו הנתונים באותו סדר כמו בכרטיס המסלול – אורך · ↑עלייה ↓ירידה · זמן
+    const name = sel && lsel.editing ? editField(r.name, (v) => renameRoute(r.id, v)) : el('div', 'c-name', r.name);
+    const meta = el('div', 'c-meta');
+    meta.appendChild(el('b', null, Geo.fmtDist(r.len)));
+    if (r.gain != null) {
+      const ud = el('span', 'ud', `↑${r.gain} ↓${r.loss ?? 0}`); ud.dir = 'ltr';
+      meta.append(el('span', 'dot', ' · '), ud, ' מ\'', el('span', 'dot', ' · '), fmtTime(estTime(r.len, r.gain, !!r.opts?.bike)));
+    }
+    const main = el('div', 'c-main');
+    main.append(name, meta);
+    row.append(g, main);
     row.addEventListener('click', () => { if (dragJustEnded) return; if (!(sel && lsel.editing)) libSelect(r.id); });
     g.addEventListener('pointerdown', (e) => startDrag(e, row, 'route', r.id, true));
     // לחיצה ארוכה בכל מקום בשורה – גם מתחילה גרירה
@@ -940,9 +947,6 @@
     if (!lib.length && !cats.length) {
       box.innerHTML = '<p class="muted center">עדיין אין מסלולים שמורים. מסלול שתתכננו יישמר כאן.</p>';
     } else {
-      const cols = el('div', 'lib-cols');
-      cols.append(el('span'), el('span', 'c-name', 'מסלול'), el('span', 'c-len', 'אורך'), el('span', 'c-ele', '˄ ˅'));
-      box.appendChild(cols);
       // בלי קטגוריה – בחוץ, בלי כותרת (בזמן גרירה יש כאן מקום להוציא מקטגוריה)
       const loose = el('div', 'lib-loose');
       for (const r of lib.filter((x) => !x.folder).sort(byOrder)) loose.appendChild(rowEl(r));
@@ -1177,7 +1181,7 @@
   }
   // נגיעה ברקע הרשימה – מבטלת את הבחירה
   $('lib-list').addEventListener('click', (e) => {
-    if ((e.target === $('lib-list') || e.target.classList.contains('lib-loose') || e.target.classList.contains('lib-cols')) && lsel.kind && !lsel.editing) { clearSel(); renderLibrary(); }
+    if ((e.target === $('lib-list') || e.target.classList.contains('lib-loose') ) && lsel.kind && !lsel.editing) { clearSel(); renderLibrary(); }
   });
   $('dl-close').addEventListener('click', () => { dock.panel = null; clearSel(); renderDock(); });
 
@@ -1681,11 +1685,64 @@
 
   // גרירה: הפרטים נפתחים ונסגרים צמוד לאצבע. בעזיבה – לפתוח או לסגור לפי המקום,
   // ותנועה מהירה (הַטָּלָה) ממשיכה לכיוון שלה. הקשה בלי תזוזה מחליפה מצב.
+  // משיכה למטה מעבר למצב הסגור – צעד אחורה. הדוק יורד עם האצבע; מעבר לסף מופיע "שחררו לחזרה"
+  const PULL = 90;
+  function pullMove(dy) {
+    const d = Math.max(0, dy);
+    dockEl.style.transition = 'none';
+    dockEl.style.transform = `translateY(${d < PULL ? d : PULL + (d - PULL) * 0.3}px)`;
+    dockEl.classList.toggle('pull-ready', d >= PULL);
+  }
+  function pullEnd(dy, back) {
+    const go = dy >= PULL;
+    dockEl.style.transition = 'transform .24s cubic-bezier(.22,1,.36,1), height .32s cubic-bezier(.22,1,.36,1)';
+    dockEl.style.transform = '';
+    dockEl.classList.remove('pull-ready');
+    setTimeout(() => (dockEl.style.transition = ''), 260);
+    if (go) back();
+  }
+  // לאן חוזרים מכל מצב (בניווט ובתכנון עם נקודות – שואלים קודם)
+  function dockBack() {
+    const m = dockMode();
+    if (m === 'route') {
+      if (active?.nav) return ask('לעצור את הניווט?', 'עצור', stopNav);
+      return $('ri-back').click();
+    }
+    if (m === 'plan') return plan?.wps.length > 1 ? ask('לבטל את התכנון?', 'ביטול התכנון', endPlan) : endPlan();
+    if (m === 'lib') return $('dl-close').click();
+  }
+  // שאלה קצרה בראש הדוק: כן / המשך
+  function ask(text, yes, fn) {
+    const a = $('dock-ask');
+    a.querySelector('span').textContent = text;
+    a.querySelector('.yes').textContent = yes;
+    a.querySelector('.yes').onclick = () => { a.hidden = true; fn(); };
+    a.querySelector('.no').onclick = () => (a.hidden = true);
+    a.hidden = false;
+  }
+  function attachPullBack(el) {
+    let y0 = null, moved = false;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('input, button:not(.grip), .dh')) return;
+      y0 = e.clientY; moved = false;
+      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (y0 == null) return;
+      const dy = e.clientY - y0;
+      if (!moved && dy < 8) return;
+      moved = true;
+      pullMove(dy);
+    });
+    const end = (e) => { if (y0 == null) return; const dy = e.clientY - y0; y0 = null; if (moved) pullEnd(dy, dockBack); };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', (e) => { if (y0 != null) { y0 = null; pullEnd(0, dockBack); } });
+  }
   function attachDockDrag(el) {
-    let y0 = null, h0 = 0, full = 0, moved = false, track = [];
+    let y0 = null, h0 = 0, full = 0, moved = false, track = [], pulling = false;
     el.addEventListener('pointerdown', (e) => {
       if (e.target.closest('input, button:not(.grip)')) return;
-      y0 = e.clientY; moved = false; track = [[e.clientY, e.timeStamp]];
+      y0 = e.clientY; moved = false; pulling = false; track = [[e.clientY, e.timeStamp]];
       h0 = more.offsetHeight;
       full = more.scrollHeight;
       try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -1694,15 +1751,19 @@
       if (y0 == null) return;
       const dy = e.clientY - y0;
       if (!moved && Math.abs(dy) < 6) return;
+      if (!moved) pulling = h0 === 0 && dy > 0; // סגור ומושכים למטה – זו חזרה, לא פתיחה
       moved = true;
+      if (pulling) return pullMove(dy);
       track.push([e.clientY, e.timeStamp]);
       if (track.length > 6) track.shift();
       more.style.transition = 'none';
       more.style.height = Math.max(0, Math.min(full, h0 - dy)) + 'px';
     });
-    const end = () => {
+    const end = (e) => {
       if (y0 == null) return;
+      const dy = e.clientY - y0;
       y0 = null;
+      if (pulling) return pullEnd(dy, dockBack);
       if (!moved) return setDockOpen(!dock.open);
       const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
       const v = (yb - ya) / Math.max(1, tb - ta); // פיקסלים למילישנייה; שלילי = למעלה
@@ -1714,6 +1775,7 @@
   attachDockDrag($('r-grip'));
   attachDockDrag(document.querySelector('#dock .r-title'));
   attachDockDrag($('ri-stats'));
+  for (const el of document.querySelectorAll('#dock .pull')) attachPullBack(el);
 
   // גובה הדוק נקבע לפי התוכן ועובר ברכות (בזמן גרירת פרטי המסלול – צמוד, בלי השהיה).
   // גם משתנה CSS, כדי שקנה המידה וזכויות היוצרים יישבו מעליו
