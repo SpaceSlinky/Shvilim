@@ -493,8 +493,7 @@
       if (seen.has(id)) continue;
       seen.add(id);
       let line = '';
-      if (p.k === 'trail') line = `שביל מסומן ${COLOR_NAMES[p.c] || p.c}` + (p.ref ? ` (${p.ref})` : '')
-        + `<small>OSM: ${[p.o && 'osmc:symbol=' + p.o, p.cl && 'colour=' + p.cl].filter(Boolean).join(' · ') || '—'}${p.w ? ' · הסימון רשום על השביל עצמו' : ''}</small>`;
+      if (p.k === 'trail') line = `שביל מסומן ${COLOR_NAMES[p.c] || p.c}` + (p.ref ? ` (${p.ref})` : '');
       else if (p.k === 'road') line = HW[p.h] || 'דרך';
       else if (p.k === 'water') line = 'נחל';
       else if (p.k === 'bike') line = 'מסלול אופניים';

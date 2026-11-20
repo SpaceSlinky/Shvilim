@@ -55,7 +55,9 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 
 /* MapLibre */
 .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: var(--dock-h, 0px); }
-.maplibregl-popup-content { font-size: 15px; padding: 8px 12px; }
+.maplibregl-popup-content { font-size: 15px; padding: 8px 12px; direction: rtl; }
+/* החלון עצמו משמאל-לימין: אחרת ב-RTL המשולש עובר לצד הלא נכון ומצביע הפוך */
+.maplibregl-popup { direction: ltr; }
 
 /* חיפוש */
 /* חיפוש: פס למעלה, משמאל למשטח הכלים */
@@ -91,6 +93,10 @@ body.night .maplibregl-ctrl-scale { background: rgba(30,30,30,.7); color: #ddd; 
 body.night .maplibregl-ctrl-attrib { background: rgba(30,30,30,.7); }
 body.night .maplibregl-ctrl-attrib a { color: #ccc; }
 body.night .maplibregl-popup-content { background: #23282e; color: #eee; }
+body.night .maplibregl-popup-anchor-top .maplibregl-popup-tip, body.night .maplibregl-popup-anchor-top-left .maplibregl-popup-tip, body.night .maplibregl-popup-anchor-top-right .maplibregl-popup-tip { border-bottom-color: #23282e; }
+body.night .maplibregl-popup-anchor-bottom .maplibregl-popup-tip, body.night .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip, body.night .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip { border-top-color: #23282e; }
+body.night .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #23282e; }
+body.night .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #23282e; }
 
 /* מצפן ושכבות */
 #compass-needle { transition: transform .15s linear; }
@@ -115,7 +121,6 @@ body.night #layers-dlg .area-row .a-del { color: #ef5350; }
 body.night #btn-compass.active { background: rgba(100,181,246,.18); }
 .info-row { padding: 3px 0; line-height: 1.35; }
 .info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }
-.info-row small { display: block; color: #777; font-size: 11px; direction: ltr; text-align: right; }
 body.night .info-row + .info-row { border-color: #444; }
 
 /* גיליון תחתון: נתוני מסלול ותכנון */
