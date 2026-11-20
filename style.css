@@ -12,10 +12,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 
 /* כפתורים צפים */
 /* משטח הכלים: נשלף מלמעלה, אייקונים בלי עיגולים */
-#controls { position: fixed; bottom: var(--safe-b); right: 10px; z-index: 8; --k: 0; --off: 0px; }
+#controls { position: fixed; top: var(--safe-t); right: 10px; z-index: 8; --k: 0; --off: 0px; }
 .kpanel { position: relative; display: flex; flex-direction: column; align-items: center;
-  transform: translateY(calc((var(--off) + 4px) * (1 - var(--k)))); /* סגור: רואים רק את פס המשיכה */ transition: transform .3s cubic-bezier(.22,1,.36,1); }
-.ksurf { background: #fff; border-radius: 14px 14px 0 0; box-shadow: 0 -2px 10px rgba(0,0,0,.25); padding: 0 3px 4px; display: flex; flex-direction: column; align-items: stretch; }
+  transform: translateY(calc((var(--off) + 4px) * (var(--k) - 1))); /* סגור: רואים רק את פס המשיכה */ transition: transform .3s cubic-bezier(.22,1,.36,1); }
+.ksurf { background: #fff; border-radius: 0 0 14px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25); padding: 4px 3px 0; display: flex; flex-direction: column; align-items: stretch; }
 .kbody { display: flex; align-items: stretch; gap: 2px; }
 #controls.dragging .kpanel { transition: none; }
 #controls .knife button, #controls .pins button { width: 44px; height: 44px; border: none; border-radius: 10px; background: none; display: grid; place-items: center; padding: 0; }
@@ -35,7 +35,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 .me.has-heading .me-heading { display: block; }
 
 /* הודעה קופצת */
-#toast { position: fixed; top: calc(var(--dock-h, 0px) + 10px); left: 14px; right: 80px; z-index: 10;
+#toast { position: fixed; top: calc(14px + var(--safe-t)); left: 14px; right: 80px; z-index: 10;
   background: rgba(30,30,30,.9); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 15px; }
 
 /* תפריט ומסך פתיחה */
@@ -54,14 +54,17 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 .card { background: #fff; border-radius: 16px; padding: 20px; width: min(92vw, 380px); line-height: 1.5; }
 
 /* MapLibre */
-.maplibregl-ctrl-bottom-left { bottom: var(--safe-b); }
-.maplibregl-ctrl-bottom-right { bottom: calc(var(--safe-b) + 40px); } /* מעל פס המשיכה של הכלים */
+.maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: var(--dock-h, 0px); }
 .maplibregl-popup-content { font-size: 15px; padding: 8px 12px; }
 
 /* חיפוש */
-#search-results { list-style: none; margin: 6px 0 0; padding: 0; max-height: min(55vh, 460px); overflow-y: auto; overscroll-behavior: contain; }
+#search { position: fixed; inset: 0 0 auto 0; z-index: 9; padding: calc(10px + var(--safe-t)) 10px 10px; }
+#search-form { display: flex; gap: 8px; }
+#search-input { flex: 1; font-size: 17px; padding: 12px 14px; border-radius: 12px; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#search-close { width: 48px; border-radius: 12px; border: none; background: #fff; font-size: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+#search-results { list-style: none; margin: 8px 0 0; padding: 0; background: #fff; border-radius: 12px; max-height: 60vh; overflow-y: auto; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
 #search-results:empty { display: none; }
-#search-results li { padding: 11px 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 10px; cursor: pointer; }
+#search-results li { padding: 12px 14px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 10px; }
 #search-results li.note { color: #777; font-size: 13px; justify-content: center; }
 .r-name { font-weight: 600; }
 .r-kind { color: #888; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
@@ -70,14 +73,16 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 /* מצב לילה */
 body.night { color-scheme: dark; }
 body.night .ksurf { background: #23282e; }
+body.night #search-close { background: #23282e; }
 body.night #controls .knife button:active, body.night #controls .pins button:active { background: rgba(255,255,255,.08); }
 body.night #controls svg { stroke: #ddd; fill: #ddd; }
 body.night #btn-locate.gps-on svg { stroke: #64b5f6; fill: #64b5f6; }
 body.night #btn-locate.active { background: rgba(100,181,246,.18); }
-body.night .card, body.night dialog { background: #1d2227; color: #e6e6e6; }
+body.night .card, body.night dialog, body.night #search-results { background: #1d2227; color: #e6e6e6; }
 body.night #search-results li { border-color: #333; }
 body.night dialog button, body.night .card button { background: #2a3036; color: #eee; border-color: #444; }
 body.night button.primary { background: #2e7d4f; border-color: #2e7d4f; }
+body.night #search-input { background: #1d2227; color: #eee; border-color: #444; }
 body.night .muted, body.night .r-kind { color: #999; }
 body.night .maplibregl-ctrl-scale { background: rgba(30,30,30,.7); color: #ddd; border-color: #ddd; }
 body.night .maplibregl-ctrl-attrib { background: rgba(30,30,30,.7); }
@@ -152,7 +157,7 @@ body.night .scrub-head { color: #ffab40; }
 #controls.open { --k: 1; }
 /* פס המשיכה בתחתית המשטח: גבוה מספיק כדי לבלוט כשהמשטח סגור, עם חריץ אחד */
 #controls .kgrip { display: block; width: 100%; height: 34px; padding: 0; border: 0; background: none; touch-action: none; cursor: grab; position: relative; }
-.kgrip .notch { position: absolute; left: 50%; top: 10px; translate: -50% 0; width: 22px; height: 4px; border-radius: 2px; background: #b5b5b5; }
+.kgrip .notch { position: absolute; left: 50%; bottom: 10px; translate: -50% 0; width: 22px; height: 4px; border-radius: 2px; background: #b5b5b5; }
 body.night .kgrip .notch { background: #666; }
 .knife { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 #controls.open .pins { display: none; }
@@ -176,10 +181,10 @@ body.night .vs-fill, body.night .vs-thumb { background: #4caf50; }
 body.night .vs-thumb { border-color: #23282e; }
 
 /* ===== הדוק התחתון: צר, ומשתנה לפי מה שעושים ===== */
-#dock { position: fixed; left: 0; right: 0; top: 0; z-index: 7; margin: 0 auto; max-width: 560px; overflow: hidden;
-  display: flex; flex-direction: column; justify-content: flex-start; /* הדוק יורד מלמעלה: הקצה התחתון זז */
+#dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; margin: 0 auto; max-width: 560px; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; /* התוכן צמוד לתחתית: כשהגובה משתנה – הקצה העליון זז, והכפתורים נשארים במקום */
   transition: none; /* הגובה צמוד לתוכן – התוכן עצמו מונפש */
-  background: #fff; border-radius: 0 0 16px 16px; box-shadow: 0 2px 14px rgba(0,0,0,.22); }
+  background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 14px rgba(0,0,0,.22); }
 #dock-in > section { padding: 8px 10px; }
   background: #f2f4f3; color: #222; font: inherit; font-size: 13px; }
 .dock-head { display: flex; align-items: flex-start; gap: 8px; }
@@ -190,7 +195,7 @@ body.night .vs-thumb { border-color: #23282e; }
 /* רשימת המסלולים */
 
 /* המסלול */
-.grip { display: block; width: 44px; height: 18px; margin: 2px auto -6px; padding: 0; border: 0; background: none; touch-action: none; position: relative; }
+.grip { display: block; width: 44px; height: 14px; margin: -6px auto 0; padding: 0; border: 0; background: none; touch-action: none; position: relative; }
 .grip::before { content: ""; position: absolute; left: 50%; top: 5px; translate: -50% 0; width: 36px; height: 4px; border-radius: 2px; background: #c9c9c9; }
 .r-more { height: 0; overflow: hidden; }
 #dock.open .r-more { height: auto; }
@@ -248,7 +253,7 @@ body.night .edit-in { border-color: #4caf50; }
 
 /* הגובה עובר ברכות בין מצבים; בפרטי המסלול – צמוד לאצבע */
 #dock.morph { transition: height .32s cubic-bezier(.22,1,.36,1); } /* רק במעבר בין מצבים */
-#dock-in { flex: none; padding-top: var(--safe-t); }
+#dock-in { flex: none; padding-bottom: var(--safe-b); }
 
 /* ===== מסלולים: טבלה לפי קטגוריות ===== */
 #lib-list { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -307,11 +312,11 @@ body.night .tgrp button.danger:not(.armed) { color: #ef5350; }
 
 /* משיכת הדוק למטה = חזרה */
 .pull { touch-action: none; }
-#dock::before { content: "↑ שחררו לחזרה"; position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--green);
+#dock::before { content: "↓ שחררו לחזרה"; position: absolute; top: 4px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--green);
   opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 2; }
 #dock.pull-ready::before { opacity: 1; }
 #dock-in > div.grip { margin-bottom: 0; }
-
+section > .grip.pull { display: block; width: 44px; height: 14px; margin: -6px auto 0; position: relative; }
 /* שאלה קצרה בראש הדוק */
 .dock-ask { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; background: #fff8e1; }
 .dock-ask span { flex: 1; font-weight: 700; font-size: 15px; }
@@ -325,25 +330,20 @@ body.night .dock-ask .no { background: #2a3036; color: #eee; }
 body.night #dock::before { color: #81c784; }
 
 /* ראשי = המסלולים: סגור – חיפוש ושורת "מסלולים"; פתוח – הרשימה נפתחת במקום ברכות */
-
-.search-pill { display: flex; align-items: center; gap: 8px; width: 100%; padding: 2px 6px 2px 14px; border-radius: 12px; background: #f1f3f2; color: #777; }
-#search-input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 16px; padding: 9px 0; color: #222; outline: none; }
-#search-input::-webkit-search-cancel-button { display: none; }
-#search-close { border: 0; background: none; font-size: 16px; padding: 6px 8px; color: #888; }
-section.searching .lib-main { display: none; }
+section[data-mode="lib"] > .grip { margin-bottom: 2px; }
+.search-pill { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; border: 0; border-radius: 12px; background: #f1f3f2;
+  color: #777; font: inherit; font-size: 15px; text-align: start; }
 .search-pill svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
 .lib-head { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; padding: 10px 6px 8px; border: 0; background: none;
   font: inherit; color: inherit; touch-action: none; cursor: pointer; }
 .lib-head b { font-size: 20px; font-weight: 800; }
 .lib-head .count { font-size: 14px; color: #888; }
-.lib-head .chev { margin-inline-start: auto; width: 10px; height: 10px; border-left: 2.5px solid #999; border-top: 2.5px solid #999; /* הדוק למעלה: סגור ⌄ · פתוח ⌃ */
-  transform: rotate(225deg); translate: 0 -3px; transition: transform .3s cubic-bezier(.22,1,.36,1), translate .3s; }
-section.open .lib-head .chev { transform: rotate(45deg); translate: 0 3px; }
+.lib-head .chev { margin-inline-start: auto; width: 10px; height: 10px; border-left: 2.5px solid #999; border-top: 2.5px solid #999; /* סגור ⌃ · פתוח ⌄ */
+  transform: rotate(45deg); translate: 0 3px; transition: transform .3s cubic-bezier(.22,1,.36,1), translate .3s; }
+section.open .lib-head .chev { transform: rotate(225deg); translate: 0 -3px; }
 .lib-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1); }
 .lib-body > div { overflow: hidden; min-height: 0; }
 section.open .lib-body { grid-template-rows: 1fr; }
 .lib-pull { touch-action: none; }
 body.night .search-pill { background: #2a3036; color: #aaa; }
 body.night .lib-head .chev { border-color: #777; }
-body.night #search-input { color: #eee; }
-body.night #search-results li { border-color: #333; }

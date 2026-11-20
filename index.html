@@ -19,69 +19,63 @@
   <!-- משטח הכלים ("אולר"): נשלף מלמעלה. סגור – רואים רק את ☰ בתחתית המשטח; משיכה למטה מורידה את כל המשטח -->
   <!-- משטח הכלים ("אולר"): משטח אחד שנשלף מלמעלה – הכלים, ולידם (כשיש מסלול) הסליידר להסתרת הרקע.
        בתחתית – פס עם חריץ למשיכה; סגור – רואים רק אותו -->
-  <!-- משטח הכלים ("אולר"): נשלף מלמטה – פס משיכה עם חריץ למעלה, מתחתיו הכלים, ולידם (כשיש מסלול) הסליידר.
-       סגור – רואים רק את פס המשיכה בתחתית המסך -->
   <div id="controls">
     <div class="kpanel">
       <div class="ksurf">
-        <button id="btn-menu" class="kgrip" title="כלים" aria-label="כלים" aria-expanded="false"><span class="notch"></span></button>
-  <div class="pins">
-          <button id="pin-north" aria-label="צפון למעלה" hidden><svg viewBox="0 0 24 24" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg></button>
-          <button id="pin-center" aria-label="חזרה למיקום שלי" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg></button>
-        </div>
         <div class="kbody">
-          <div class="knife">
-            <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
-            </button>
-            <button id="btn-fit" title="כל המסלול על המסך" aria-label="כל המסלול על המסך" hidden>
-              <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none"/><path d="M8 15c2-1 2-5 4-6s3 1 4-1" fill="none"/></svg>
-            </button>
-            <button id="btn-compass" title="מצפן: הקשה – סיבוב לפי כיוון הטלפון / צפון למעלה" aria-label="מצפן">
-              <svg viewBox="0 0 24 24" id="compass-needle" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg>
-            </button>
-            <button id="btn-layers" title="שכבות" aria-label="שכבות">
-              <svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5" fill="none"/></svg>
-            </button>
-            <button id="btn-settings" title="הגדרות" aria-label="הגדרות">
-              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" fill="none"/></svg>
-            </button>
-          </div>
-          <div id="dim-v" class="vslider" hidden aria-label="הסתרת הרקע" role="slider" aria-valuemin="0" aria-valuemax="0.9">
-            <svg viewBox="0 0 24 24" class="vs-ico"><circle cx="12" cy="12" r="8" fill="none"/><path d="M12 4a8 8 0 0 1 0 16z" class="half"/></svg>
-            <div class="vs-track"><div class="vs-fill"></div><div class="vs-thumb"></div></div>
-          </div>
+        <div class="knife">
+          <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
+          </button>
+          <button id="btn-fit" title="כל המסלול על המסך" aria-label="כל המסלול על המסך" hidden>
+            <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none"/><path d="M8 15c2-1 2-5 4-6s3 1 4-1" fill="none"/></svg>
+          </button>
+          <button id="btn-compass" title="מצפן: הקשה – סיבוב לפי כיוון הטלפון / צפון למעלה" aria-label="מצפן">
+            <svg viewBox="0 0 24 24" id="compass-needle" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg>
+          </button>
+          <button id="btn-layers" title="שכבות" aria-label="שכבות">
+            <svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5" fill="none"/></svg>
+          </button>
+          <button id="btn-settings" title="הגדרות" aria-label="הגדרות">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" fill="none"/></svg>
+          </button>
         </div>
+        <div id="dim-v" class="vslider" hidden aria-label="הסתרת הרקע" role="slider" aria-valuemin="0" aria-valuemax="0.9">
+          <svg viewBox="0 0 24 24" class="vs-ico"><circle cx="12" cy="12" r="8" fill="none"/><path d="M12 4a8 8 0 0 1 0 16z" class="half"/></svg>
+          <div class="vs-track"><div class="vs-fill"></div><div class="vs-thumb"></div></div>
+        </div>
+        </div>
+      <div class="pins">
+        <button id="pin-north" aria-label="צפון למעלה" hidden><svg viewBox="0 0 24 24" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg></button>
+        <button id="pin-center" aria-label="חזרה למיקום שלי" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg></button>
+      </div>
+        <!-- חריץ המשיכה – בתחתית המשטח עצמו; סגור = רואים רק את הפס הזה -->
+        <button id="btn-menu" class="kgrip" title="כלים" aria-label="כלים" aria-expanded="false"><span class="notch"></span></button>
       </div>
     </div>
+  </div>
   </div>
 
   <div id="toast" hidden></div>
 
-  <!-- הדוק העליון: משתנה לפי מה שעושים – מסלולים (עם חיפוש), מסלול, תכנון -->
+  <!-- הדוק התחתון: משתנה לפי מה שעושים – בית (חיפוש / מסלולים / חדש), רשימת מסלולים, מסלול, תכנון -->
   <div id="dock" data-mode="lib"><div id="dock-in">
     <div id="dock-ask" class="dock-ask" hidden><span></span><button class="yes"></button><button class="no">המשך</button></div>
     <!-- ראשי = המסלולים: סגור – חיפוש ושורת "מסלולים"; פתוח (משיכה למעלה / נגיעה בשורה) – הרשימה במקום.
          נגיעה במסלול בוחרת; הכלים למטה פועלים על מה שנבחר -->
     <section data-mode="lib" hidden>
-      <form id="search-form" class="search-pill" action="#">
-        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
-        <input id="search-input" type="search" enterkeyhint="search" placeholder="חיפוש מקום" autocomplete="off">
-        <button type="button" id="search-close" aria-label="ניקוי" hidden>✕</button>
-      </form>
-      <ul id="search-results"></ul>
-      <div class="lib-main">
+      <div class="grip lib-pull" aria-hidden="true"></div>
+      <button id="d-search" class="search-pill"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg><span>חיפוש מקום</span></button>
       <button id="lib-head" class="lib-head lib-pull" aria-expanded="false"><b>מסלולים</b><span id="lib-count" class="count"></span><span class="chev" aria-hidden="true"></span></button>
       <div id="lib-body" class="lib-body"><div>
         <div id="lib-list" class="dock-scroll"></div>
         <div id="lib-tools" class="lib-tools"></div>
       </div></div>
-      </div>
-      <div class="grip lib-pull" aria-hidden="true"></div>
     </section>
 
     <!-- מסלול: תצוגה מקדימה (לפני היציאה) או ניווט. שורת מספרים אחת שמשמעותה משתנה לפי המצב ולפי האצבע על הגרף -->
     <section data-mode="route" hidden>
+      <button class="grip" id="r-grip" aria-label="גרף"></button>
       <div class="dock-head three">
         <button id="ri-back" class="back">› מסלולים</button>
         <div class="r-title d-title"><b id="ri-name"></b></div>
@@ -98,10 +92,10 @@
         <canvas id="ri-profile" class="profile"></canvas>
       </div>
       <button id="ri-go" class="go primary">▶ יוצאים לדרך</button>
-      <button class="grip" id="r-grip" aria-label="גרף"></button>
     </section>
 
     <section data-mode="plan" hidden>
+      <div class="grip pull" aria-hidden="true"></div>
       <p id="pl-hint" class="center pull"></p>
       <div class="stats">
         <div><span class="lbl">אורך</span><span id="pl-len" class="v">–</span></div>
@@ -120,7 +114,6 @@
         <button id="pl-clear">נקה</button>
         <button id="pl-cancel">ביטול</button>
       </div>
-      <div class="grip pull" aria-hidden="true"></div>
     </section>
   </div></div>
 
@@ -134,6 +127,14 @@
       <button value="cancel" formnovalidate>חזרה לעריכה</button>
     </form>
   </dialog>
+
+  <div id="search" hidden>
+    <form id="search-form" action="#">
+      <input id="search-input" type="search" enterkeyhint="search" placeholder="חיפוש: שוויצריה הקטנה, נחל כלח, עין…" autocomplete="off">
+      <button type="button" id="search-close" aria-label="סגור">✕</button>
+    </form>
+    <ul id="search-results"></ul>
+  </div>
 
   <dialog id="layers-dlg">
     <h2>שכבות</h2>
@@ -179,7 +180,7 @@
       <h2>ברוכים הבאים 👋</h2>
       <p>כדי לנווט בלי אינטרנט, צריך להוריד פעם אחת את מפת הכרמל (כולל שוויצריה הקטנה): שבילים מסומנים, דרכים, נחלים ושמות. ההורדה לוקחת כחצי דקה, וצריך חיבור לאינטרנט.</p>
       <button id="w-carmel" class="primary">הורד את מפת הכרמל</button>
-      <p class="muted small">אחר כך אפשר להוריד אזורים נוספים מההגדרות (משטח הכלים למטה ← ⚙).</p>
+      <p class="muted small">אחר כך אפשר להוריד אזורים נוספים מההגדרות (☰ ← ⚙).</p>
     </div>
   </div>
 
