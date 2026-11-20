@@ -272,14 +272,14 @@ body.night .back { color: #81c784; }
 body.night .stop { color: #ef5350; border-color: #ef5350; }
 
 /* מסלולים: "+ מסלול חדש" קבוע למעלה */
-.lib-new { display: block; width: 100%; margin: 6px 0 2px; padding: 10px; border: 1px dashed var(--green); border-radius: 10px; background: none;
+.lib-new { display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 6px 0 2px; padding: 10px; border: 1px dashed var(--green); border-radius: 10px; background: none;
   font: inherit; font-size: 15px; font-weight: 700; color: var(--green); }
 body.night .lib-new { color: #81c784; border-color: #4caf50; }
 
 /* עץ: תיקייה – שורה מודגשת עם חץ ומספר; המסלולים בתוכה מוזחים, עם קו דק שמחבר אותם אליה */
 .lib-folder { display: flex; align-items: center; gap: 8px; padding: 10px 6px; border-radius: 8px; cursor: pointer; font-size: 16px; }
 .lib-folder b { flex: 1; min-width: 0; }
-.lib-folder .chev { width: 14px; text-align: center; color: #888; font-size: 15px; line-height: 1; }
+.lib-folder .chev { width: 34px; height: 30px; margin: -8px -6px -8px 0; display: grid; place-items: center; color: #888; font-size: 15px; line-height: 1; }
 .lib-folder .count { font-size: 13px; color: #888; }
 .lib-kids { margin-inline-start: 13px; padding-inline-start: 10px; border-inline-start: 2px solid #ddd; margin-bottom: 4px; }
 .lib-row { padding: 7px 6px; border-radius: 8px; cursor: pointer; }

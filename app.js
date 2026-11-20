@@ -932,12 +932,17 @@
       const chev = Object.assign(document.createElement('span'), { className: 'chev', textContent: open ? '⌄' : '‹' });
       const count = Object.assign(document.createElement('span'), { className: 'count', textContent: groups[folder].length });
       fh.append(chev, fsel && lsel.editing ? editField(folder, (v) => renameFolder(folder, v)) : Object.assign(document.createElement('b'), { textContent: folder }), count);
-      // נגיעה בתיקייה: פותחת/סוגרת ובוחרת אותה (לעריכת השם או למסלול חדש בתוכה)
-      fh.addEventListener('click', () => {
-        if (fsel && lsel.editing) return;
+      // החץ – פותח/סוגר בלבד. נגיעה בשם – בוחרת את התיקייה (ופותחת אותה); נגיעה נוספת – מבטלת את הבחירה
+      chev.addEventListener('click', (e) => {
+        e.stopPropagation();
         open ? libClosed.add(folder) : libClosed.delete(folder);
         keepClosed();
-        Object.assign(lsel, { kind: 'folder', id: null, folder, editing: false, moving: false });
+        renderLibrary();
+      });
+      fh.addEventListener('click', () => {
+        if (fsel && lsel.editing) return;
+        if (fsel) lsel.kind = null;
+        else { Object.assign(lsel, { kind: 'folder', id: null, folder, editing: false, moving: false }); libClosed.delete(folder); keepClosed(); }
         renderLibrary();
       });
       box.appendChild(fh);
@@ -959,7 +964,15 @@
     }
     renderLibTools(lib, folders);
   }
+  // התיקייה של מה שנבחר (תיקייה, או התיקייה של מסלול) – אליה ייכנס מסלול חדש
+  function ctxFolder(lib) {
+    if (lsel.kind === 'folder') return lsel.folder;
+    if (lsel.kind === 'route') return lib.find((x) => x.id === lsel.id)?.folder || 'כללי';
+    return null;
+  }
   function renderLibTools(lib, folders) {
+    const cf = ctxFolder(lib);
+    $('lib-new').textContent = cf ? `+ מסלול חדש ב"${cf}"` : '+ מסלול חדש';
     const tools = $('lib-tools');
     tools.replaceChildren();
     const btn = (txt, fn, cls = '') => { const b = Object.assign(document.createElement('button'), { textContent: txt, className: cls }); b.addEventListener('click', fn); tools.appendChild(b); return b; };
@@ -977,7 +990,6 @@
       }, 'danger');
     } else if (lsel.kind === 'folder') {
       btn('שם התיקייה', () => { lsel.editing = true; libClosed.delete(lsel.folder); renderLibrary(); });
-      btn('+ מסלול חדש כאן', () => { const folder = lsel.folder; dock.panel = 'lib'; lsel.kind = null; startPlan({ folder }); }, 'primary');
     } else if (lib.length) {
       tools.innerHTML = '<p class="muted small center">נגיעה בוחרת · נגיעה נוספת במסלול פותחת אותו</p>';
     }
@@ -1004,7 +1016,15 @@
   const moveRoute = (id, folder) => { lsel.moving = false; toast(`הועבר ל"${folder}"`); return libEdit((lib) => { const r = lib.find((x) => x.id === id); if (r) r.folder = folder; }); };
   // שינוי שם של תיקייה = כל המסלולים שבה עוברים לשם החדש (שם קיים – התיקיות מתאחדות)
   const renameFolder = (from, to) => { lsel.folder = to; if (libClosed.delete(from)) { libClosed.add(to); keepClosed(); } return libEdit((lib) => { for (const r of lib) if ((r.folder || 'כללי') === from) r.folder = to; }); };
-  $('lib-new').addEventListener('click', () => { dock.panel = 'lib'; lsel.kind = null; startPlan(); });
+  $('lib-new').addEventListener('click', async () => {
+    const folder = ctxFolder(await libLoad());
+    dock.panel = 'lib'; lsel.kind = null;
+    startPlan(folder ? { folder } : undefined);
+  });
+  // נגיעה ברקע הרשימה – מבטלת את הבחירה
+  $('lib-list').addEventListener('click', (e) => {
+    if (e.target === $('lib-list') || e.target.classList.contains('lib-kids')) { if (lsel.kind && !lsel.editing) { lsel.kind = null; renderLibrary(); } }
+  });
   $('dl-close').addEventListener('click', () => { dock.panel = null; Object.assign(lsel, { kind: null, editing: false, moving: false }); renderDock(); });
 
   // ---------- GPS ----------
