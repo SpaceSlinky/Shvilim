@@ -412,7 +412,7 @@
     const src = plan?.wps.length > 1 ? plan : active; // בתכנון – המסלול שמתכננים
     if (!src) return;
     const all = (src.segs || []).flatMap((sg) => sg.coords).concat((src.waypoints || []).map((w) => w.coord));
-    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 40, bottom: $('dock').offsetHeight + 30, left: 40, right: 76 }, maxZoom: 16 });
+    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: $('dock').offsetHeight + 30, bottom: 60, left: 40, right: 76 }, maxZoom: 16 });
   }
 
   async function showGpx(text, fit, save = true) {
@@ -1615,11 +1615,18 @@
     }
   }
 
-  function openSearch() { $('toast').hidden = true; $('search').hidden = false; $('search-input').value = ''; showResults([]); $('search-input').focus(); }
-  function closeSearch() { $('search').hidden = true; $('search-input').blur(); }
-  $('d-search').addEventListener('click', openSearch);
+  // החיפוש בתוך הדוק: כשכותבים – התוצאות במקום רשימת המסלולים
+  const libSec = document.querySelector('#dock section[data-mode="lib"]');
+  function syncSearch() {
+    const on = !!$('search-input').value.trim();
+    libSec.classList.toggle('searching', on);
+    $('search-close').hidden = !on;
+  }
+  function closeSearch() { $('search-input').value = ''; showResults([]); syncSearch(); $('search-input').blur(); }
+  $('search-input').addEventListener('focus', () => { $('toast').hidden = true; });
   $('search-close').addEventListener('click', closeSearch);
   $('search-input').addEventListener('input', (e) => {
+    syncSearch();
     const r = localSearch(e.target.value);
     showResults(r, e.target.value.trim() ? (r.length ? 'לא מצאתם? הקישו "חפש" במקלדת לחיפוש באינטרנט' : 'אין תוצאות במפה השמורה – הקישו "חפש" לחיפוש באינטרנט') : '');
   });
@@ -1724,7 +1731,7 @@
       libDragged = true;
       track.push([e.clientY, e.timeStamp]); if (track.length > 6) track.shift();
       libBody.style.transition = 'none';
-      libBody.style.gridTemplateRows = Math.max(0, Math.min(full, h0 - dy)) + 'px';
+      libBody.style.gridTemplateRows = Math.max(0, Math.min(full, h0 + dy)) + 'px'; // הדוק למעלה: למטה = פתיחה
     });
     const end = () => {
       if (y0 == null) return;
@@ -1732,7 +1739,7 @@
       if (!libDragged) return; // הקשה – מטופלת ב-click
       const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
       const v = (yb - ya) / Math.max(1, tb - ta);
-      const open = Math.abs(v) > 0.3 ? v < 0 : libBody.offsetHeight > full / 2;
+      const open = Math.abs(v) > 0.3 ? v > 0 : libBody.offsetHeight > full / 2;
       // מסיימים בהנפשה מהמקום שבו האצבע עזבה, ואז חוזרים לשליטת ה-CSS
       libBody.style.transition = EASE_L;
       libBody.style.gridTemplateRows = (open ? full : 0) + 'px';
@@ -1745,16 +1752,16 @@
 
   // גרירה: הפרטים נפתחים ונסגרים צמוד לאצבע. בעזיבה – לפתוח או לסגור לפי המקום,
   // ותנועה מהירה (הַטָּלָה) ממשיכה לכיוון שלה. הקשה בלי תזוזה מחליפה מצב.
-  // משיכה למטה מעבר למצב הסגור – צעד אחורה. הדוק יורד עם האצבע; מעבר לסף מופיע "שחררו לחזרה"
+  // משיכה למעלה מעבר למצב הסגור – צעד אחורה. הדוק עולה עם האצבע; מעבר לסף מופיע "שחררו לחזרה"
   const PULL = 90;
   function pullMove(dy) {
-    const d = Math.max(0, dy);
+    const d = Math.max(0, -dy); // הדוק למעלה: משיכה למעלה
     dockEl.style.transition = 'none';
-    dockEl.style.transform = `translateY(${d < PULL ? d : PULL + (d - PULL) * 0.3}px)`;
+    dockEl.style.transform = `translateY(${-(d < PULL ? d : PULL + (d - PULL) * 0.3)}px)`;
     dockEl.classList.toggle('pull-ready', d >= PULL);
   }
   function pullEnd(dy, back) {
-    const go = dy >= PULL;
+    const go = -dy >= PULL;
     dockEl.style.transition = 'transform .24s cubic-bezier(.22,1,.36,1), height .32s cubic-bezier(.22,1,.36,1)';
     dockEl.style.transform = '';
     dockEl.classList.remove('pull-ready');
@@ -1790,7 +1797,7 @@
     el.addEventListener('pointermove', (e) => {
       if (y0 == null) return;
       const dy = e.clientY - y0;
-      if (!moved && dy < 8) return;
+      if (!moved && dy > -8) return;
       moved = true;
       pullMove(dy);
     });
@@ -1811,13 +1818,13 @@
       if (y0 == null) return;
       const dy = e.clientY - y0;
       if (!moved && Math.abs(dy) < 6) return;
-      if (!moved) pulling = h0 === 0 && dy > 0; // סגור ומושכים למטה – זו חזרה, לא פתיחה
+      if (!moved) pulling = h0 === 0 && dy < 0; // סגור ומושכים למעלה – זו חזרה, לא פתיחה
       moved = true;
       if (pulling) return pullMove(dy);
       track.push([e.clientY, e.timeStamp]);
       if (track.length > 6) track.shift();
       more.style.transition = 'none';
-      more.style.height = Math.max(0, Math.min(full, h0 - dy)) + 'px';
+      more.style.height = Math.max(0, Math.min(full, h0 + dy)) + 'px';
     });
     const end = (e) => {
       if (y0 == null) return;
@@ -1826,8 +1833,8 @@
       if (pulling) return pullEnd(dy, dockBack);
       if (!moved) return setDockOpen(!dock.open);
       const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
-      const v = (yb - ya) / Math.max(1, tb - ta); // פיקסלים למילישנייה; שלילי = למעלה
-      setDockOpen(Math.abs(v) > 0.3 ? v < 0 : more.offsetHeight > full / 2);
+      const v = (yb - ya) / Math.max(1, tb - ta); // פיקסלים למילישנייה; חיובי = למטה
+      setDockOpen(Math.abs(v) > 0.3 ? v > 0 : more.offsetHeight > full / 2);
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
@@ -1868,7 +1875,7 @@
   setInterval(updatePins, 1000); // מצב ה-GPS והמעקב משתנים בכמה מקומות; בדיקה זולה
   $('pin-north').addEventListener('click', () => $('btn-compass').click());
   $('pin-center').addEventListener('click', () => $('btn-locate').click());
-  // גרירת ☰: כל המשטח זז עם האצבע; בעזיבה – פתוח או סגור לפי המקום ולפי מהירות התנועה. הקשה מחליפה
+  // גרירת פס המשיכה: כל המשטח זז עם האצבע; בעזיבה – פתוח או סגור לפי המקום ולפי מהירות התנועה. הקשה מחליפה
   (() => {
     const h = $('btn-menu');
     let y0 = null, moved = false, base = 0, k = 0, track = [];
@@ -1880,7 +1887,7 @@
       moved = true;
       track.push([e.clientY, e.timeStamp]); if (track.length > 6) track.shift();
       knife.classList.add('dragging');
-      k = Math.max(0, Math.min(1, base + dy / Math.max(1, knifeItems.offsetHeight)));
+      k = Math.max(0, Math.min(1, base - dy / Math.max(1, knifeItems.offsetHeight))); // מלמטה: למעלה = פתיחה
       knife.style.setProperty('--k', k);
     });
     const end = () => {
@@ -1890,7 +1897,7 @@
       if (!moved) return setKnife(!knifeOpen);
       const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
       const v = (yb - ya) / Math.max(1, tb - ta);
-      setKnife(Math.abs(v) > 0.3 ? v > 0 : k > 0.5);
+      setKnife(Math.abs(v) > 0.3 ? v < 0 : k > 0.5);
     };
     h.addEventListener('pointerup', end);
     h.addEventListener('pointercancel', end);
