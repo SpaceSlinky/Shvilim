@@ -209,9 +209,6 @@ body.night .vs-thumb { border-color: #23282e; }
 /* המסלול */
 .grip { display: block; width: 44px; height: 14px; margin: -6px auto 0; padding: 0; border: 0; background: none; touch-action: none; position: relative; }
 .grip::before { content: ""; position: absolute; left: 50%; top: 5px; translate: -50% 0; width: 36px; height: 4px; border-radius: 2px; background: #c9c9c9; }
-.r-title { flex: 1; min-width: 0; touch-action: none; cursor: pointer; padding: 2px; }
-.r-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 16px; line-height: 1.6; }
-.r-title b { font-weight: 700; }
 #ri-folder { color: #666; }
 .r-title .sep { color: #999; }
 body.night #ri-folder { color: #aaa; }
@@ -229,19 +226,11 @@ body.night .grip::before { background: #555; }
 #ri-stats { margin-top: 6px; touch-action: none; }
 #ri-stats .v { unicode-bidi: isolate; }
 #ri-stats.hot .v, #ri-stats.hot .lbl { color: #e65100; }
-#ri-x.stop { font-size: 14px; font-weight: 700; color: #c62828; border: 1px solid #c62828; border-radius: 10px; padding: 5px 12px; margin-top: 2px; }
 .go { display: block; width: 100%; margin-top: 8px; padding: 12px; font: inherit; font-size: 17px; font-weight: 700; border: 0; border-radius: 12px;
   background: var(--green); color: #fff; }
 .offroute { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #e67e00; color: #fff; font-weight: 700; text-align: center; }
 
 /* רשימת המסלולים: בחירה, ואז כלים */
-.lib-folder { padding: 9px 6px 5px; font-weight: 700; font-size: 14px; color: #555; border-radius: 8px; cursor: pointer; }
-.lib-row { padding: 8px 6px 8px 6px; margin-inline-start: 10px; border-top: 1px solid #eee; cursor: pointer; }
-.lib-row b { display: block; font-size: 16px; overflow-wrap: anywhere; }
-.lib-row span { display: block; margin-top: 2px; }
-.lib-folder.sel, .lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
-.edit-in { width: 100%; font: inherit; font-size: 16px; font-weight: 700; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--green); }
-.lib-folder .edit-in { width: calc(100% - 2em); }
 .lib-tools { display: flex; gap: 6px; margin-top: 8px; }
 .lib-tools:empty { display: none; }
 .lib-tools p { flex: 1; margin: 2px 0; }
@@ -253,14 +242,9 @@ body.night .grip::before { background: #555; }
 #lib-move { margin-top: 8px; }
 
 body.night #ri-stats.hot .v, body.night #ri-stats.hot .lbl { color: #ffab40; }
-body.night .lib-folder { color: #aaa; }
-body.night .lib-row { border-color: #333; }
-body.night .lib-folder.sel, body.night .lib-row.sel { background: rgba(76,175,80,.18); }
-body.night .edit-in { background: #1d2227; color: #eee; }
 body.night .lib-tools button { background: #2a3036; border-color: #444; }
 body.night .lib-tools button.primary { background: #2e7d4f; border-color: #2e7d4f; }
 body.night .lib-tools button.danger { color: #ef5350; }
-body.night #ri-x.stop { color: #ef5350; border-color: #ef5350; }
 
 /* שכבות: שלושה רקעים, והשאר תחת "עוד" */
 .seg { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 10px; overflow: hidden; margin: 6px 0 4px; }
@@ -274,3 +258,39 @@ body.night #ri-x.stop { color: #ef5350; border-color: #ef5350; }
 body.night .seg, body.night .seg label + label span { border-color: #444; }
 body.night .seg input:checked + span { background: #2e7d4f; }
 body.night .more-layers summary { color: #aaa; }
+
+/* כותרות הדוק: חזרה בפינה, כותרת ממורכזת למסך, ומקום זהה בצד השני */
+.dock-head.three { display: grid; grid-template-columns: 84px minmax(0, 1fr) 84px; align-items: center; gap: 4px; }
+.d-title { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 16px; line-height: 1.6; padding: 2px 0; }
+.r-title { touch-action: none; cursor: pointer; }
+.r-title b { font-weight: 700; }
+.back { justify-self: start; border: 0; background: none; padding: 6px 2px; font: inherit; font-size: 14px; color: var(--green); white-space: nowrap; }
+.stop { justify-self: end; grid-column: 3; font: inherit; font-size: 14px; font-weight: 700; color: #c62828; background: none;
+  border: 1px solid #c62828; border-radius: 10px; padding: 5px 12px; }
+.back[hidden] + .r-title { grid-column: 2; }
+body.night .back { color: #81c784; }
+body.night .stop { color: #ef5350; border-color: #ef5350; }
+
+/* מסלולים: "+ מסלול חדש" קבוע למעלה */
+.lib-new { display: block; width: 100%; margin: 6px 0 2px; padding: 10px; border: 1px dashed var(--green); border-radius: 10px; background: none;
+  font: inherit; font-size: 15px; font-weight: 700; color: var(--green); }
+body.night .lib-new { color: #81c784; border-color: #4caf50; }
+
+/* עץ: תיקייה – שורה מודגשת עם חץ ומספר; המסלולים בתוכה מוזחים, עם קו דק שמחבר אותם אליה */
+.lib-folder { display: flex; align-items: center; gap: 8px; padding: 10px 6px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+.lib-folder b { flex: 1; min-width: 0; }
+.lib-folder .chev { width: 14px; text-align: center; color: #888; font-size: 15px; line-height: 1; }
+.lib-folder .count { font-size: 13px; color: #888; }
+.lib-kids { margin-inline-start: 13px; padding-inline-start: 10px; border-inline-start: 2px solid #ddd; margin-bottom: 4px; }
+.lib-row { padding: 7px 6px; border-radius: 8px; cursor: pointer; }
+.lib-row b { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.lib-row span { display: block; margin-top: 1px; }
+.lib-folder.sel, .lib-row.sel { background: rgba(46,125,79,.12); }
+/* עריכת שם: אותו טקסט, רק קו דק מתחתיו */
+.edit-in { width: 100%; font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; border-bottom: 1.5px solid var(--green);
+  border-radius: 0; padding: 0 0 1px; outline: none; }
+.lib-folder .edit-in { flex: 1; min-width: 0; font-weight: 700; }
+.lib-row .edit-in { font-size: 15px; font-weight: 600; }
+body.night .lib-kids { border-color: #3a3f45; }
+body.night .lib-folder.sel, body.night .lib-row.sel { background: rgba(76,175,80,.18); }
+body.night .edit-in { border-color: #4caf50; }

@@ -51,12 +51,12 @@
     <section data-mode="home" class="dock-home">
       <button id="d-search"><span class="ico">🔍</span>חיפוש מקום</button>
       <button id="d-lib"><span class="ico">📚</span>מסלולים</button>
-      <button id="d-new"><span class="ico">✏️</span>מסלול חדש</button>
     </section>
 
     <!-- מסלולים: נגיעה בוחרת מסלול או תיקייה; הכלים למטה פועלים על מה שנבחר -->
     <section data-mode="lib" hidden>
-      <div class="dock-head"><b>מסלולים</b><button id="dl-close" class="x" aria-label="לראשי">✕</button></div>
+      <div class="dock-head three"><button id="dl-close" class="back">› ראשי</button><b class="d-title">מסלולים</b><span></span></div>
+      <button id="lib-new" class="lib-new">+ מסלול חדש</button>
       <div id="lib-list" class="dock-scroll"></div>
       <div id="lib-move" class="lib-move" hidden></div>
       <div id="lib-tools" class="lib-tools"></div>
@@ -65,9 +65,10 @@
     <!-- מסלול: תצוגה מקדימה (לפני היציאה) או ניווט. שורת מספרים אחת שמשמעותה משתנה לפי המצב ולפי האצבע על הגרף -->
     <section data-mode="route" hidden>
       <button class="grip" id="r-grip" aria-label="גרף"></button>
-      <div class="dock-head">
-        <div class="r-title"><span id="ri-folder"></span><span class="sep"> • </span><b id="ri-name"></b></div>
-        <button id="ri-x" class="x" aria-label="סגור את המסלול">✕</button>
+      <div class="dock-head three">
+        <button id="ri-back" class="back">› מסלולים</button>
+        <div class="r-title d-title"><span id="ri-folder"></span><span class="sep"> • </span><b id="ri-name"></b></div>
+        <button id="ri-stop" class="stop" hidden>עצור</button>
       </div>
       <div id="ri-off" class="offroute" hidden></div>
       <div id="ri-stats" class="stats">
@@ -76,10 +77,10 @@
         <div><span id="st-l3" class="lbl"></span><span id="st-v3" class="v"></span></div>
         <div><span id="st-l4" class="lbl"></span><span id="st-v4" class="v"></span></div>
       </div>
-      <button id="ri-go" class="go primary">▶ יוצאים לדרך</button>
       <div class="r-more">
         <canvas id="ri-profile" class="profile"></canvas>
       </div>
+      <button id="ri-go" class="go primary">▶ יוצאים לדרך</button>
     </section>
 
     <section data-mode="plan" hidden>
@@ -108,7 +109,7 @@
     <form method="dialog">
       <h2 id="plan-dlg-title">שמירת המסלול</h2>
       <label class="fld">שם<input id="plan-name" placeholder="למשל: טבעת כלח" maxlength="50"></label>
-      <label class="fld">אזור (תיקייה)<input id="plan-folder" list="folders" placeholder="למשל: שוויצריה הקטנה" maxlength="40"></label>
+      <label class="fld">תיקייה<input id="plan-folder" list="folders" placeholder="למשל: שוויצריה הקטנה" maxlength="40"></label>
       <datalist id="folders"></datalist>
       <button value="ok" class="primary">שמור</button>
       <button value="cancel" formnovalidate>חזרה לעריכה</button>

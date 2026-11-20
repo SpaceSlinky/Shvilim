@@ -603,8 +603,9 @@
     $('ri-folder').textContent = active.folder || 'כללי';
     // לפני היציאה, כשרחוקים מההתחלה – המרחק אליה על הכפתור
     $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
-    $('ri-x').textContent = nav ? 'עצור' : '✕';
-    $('ri-x').classList.toggle('stop', nav);
+    // בניווט: "עצור" במקום החזרה (שלא ייצאו מהמסלול בטעות באמצע הדרך)
+    $('ri-back').hidden = nav;
+    $('ri-stop').hidden = !nav;
     $('ri-go').hidden = nav;
     $('ri-off').hidden = !(nav && offState);
     const wait = '…';
@@ -631,12 +632,12 @@
     renderRouteInfo();
   }, () => { clearScrub(); renderRouteInfo(); });
 
-  // ✕ – יוצאים מהמסלול לרשימת המסלולים; בניווט הכפתור עוצר את הניווט
-  $('ri-x').addEventListener('click', async () => {
-    if (active?.nav) return stopNav();
+  // "› מסלולים" – יוצאים מהמסלול לרשימה; "עצור" – מפסיקים את הניווט
+  $('ri-back').addEventListener('click', async () => {
     dock.panel = 'lib';
     await clearRoute();
   });
+  $('ri-stop').addEventListener('click', () => stopNav());
 
   // יוצאים לדרך: מעקב אחרי המיקום, מסך דולק, והמפה מסתובבת לפי הטלפון
   $('ri-go').addEventListener('click', async () => {
@@ -899,6 +900,10 @@
     Object.assign(lsel, { kind: null, id: null, folder: null, editing: false, moving: false });
     await setActive({ ...r, libId: r.id, nav: false }, { fit: true });
   }
+  // תיקיות סגורות (נשמר בין פתיחות); חדשות – פתוחות
+  const libClosed = new Set((() => { try { return JSON.parse(localStorage.getItem('libClosed')) || []; } catch { return []; } })());
+  const keepClosed = () => { try { localStorage.setItem('libClosed', JSON.stringify([...libClosed])); } catch { /* ignore */ } };
+  const byName = (a, b) => a.localeCompare(b, 'he');
   async function renderLibrary() {
     const lib = await libLoad();
     const box = $('lib-list');
@@ -907,7 +912,8 @@
     if (!lib.length) box.innerHTML = '<p class="muted center">עדיין אין מסלולים שמורים. מסלול שתתכננו יישמר כאן, בתיקייה לפי האזור.</p>';
     const groups = {};
     for (const r of lib) (groups[r.folder || 'כללי'] ||= []).push(r);
-    const folders = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'he'));
+    const folders = Object.keys(groups).sort(byName);
+    // עריכה: הטקסט עצמו נהיה שדה, עם קו דק מתחתיו
     const editField = (value, onSave) => {
       const inp = Object.assign(document.createElement('input'), { className: 'edit-in', value, maxLength: 50 });
       let done = false;
@@ -915,18 +921,30 @@
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { done = true; lsel.editing = false; renderLibrary(); } });
       inp.addEventListener('blur', commit);
       inp.addEventListener('click', (e) => e.stopPropagation());
-      setTimeout(() => { inp.focus(); inp.select(); });
+      setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); inp.scrollIntoView({ block: 'nearest' }); });
       return inp;
     };
     for (const folder of folders) {
+      const open = !libClosed.has(folder);
       const fsel = lsel.kind === 'folder' && lsel.folder === folder;
       const fh = document.createElement('div');
-      fh.className = 'lib-folder' + (fsel ? ' sel' : '');
-      if (fsel && lsel.editing) fh.append('📁 ', editField(folder, (v) => renameFolder(folder, v)));
-      else fh.textContent = `📁 ${folder} (${groups[folder].length})`;
-      fh.addEventListener('click', () => libSelect('folder', folder));
+      fh.className = 'lib-folder' + (fsel ? ' sel' : '') + (open ? ' open' : '');
+      const chev = Object.assign(document.createElement('span'), { className: 'chev', textContent: open ? '⌄' : '‹' });
+      const count = Object.assign(document.createElement('span'), { className: 'count', textContent: groups[folder].length });
+      fh.append(chev, fsel && lsel.editing ? editField(folder, (v) => renameFolder(folder, v)) : Object.assign(document.createElement('b'), { textContent: folder }), count);
+      // נגיעה בתיקייה: פותחת/סוגרת ובוחרת אותה (לעריכת השם או למסלול חדש בתוכה)
+      fh.addEventListener('click', () => {
+        if (fsel && lsel.editing) return;
+        open ? libClosed.add(folder) : libClosed.delete(folder);
+        keepClosed();
+        Object.assign(lsel, { kind: 'folder', id: null, folder, editing: false, moving: false });
+        renderLibrary();
+      });
       box.appendChild(fh);
-      for (const r of groups[folder].sort((a, b) => (b.updated || 0) - (a.updated || 0))) {
+      if (!open) continue;
+      const kids = document.createElement('div');
+      kids.className = 'lib-kids';
+      for (const r of groups[folder].sort((a, b) => byName(a.name, b.name))) {
         const sel = lsel.kind === 'route' && lsel.id === r.id;
         const row = document.createElement('div');
         row.className = 'lib-row' + (sel ? ' sel' : '');
@@ -934,9 +952,10 @@
         else row.appendChild(Object.assign(document.createElement('b'), { textContent: r.name }));
         row.appendChild(Object.assign(document.createElement('span'), { className: 'muted small',
           textContent: [Geo.fmtDist(r.len), r.gain != null ? `↑${r.gain} ↓${r.loss ?? 0} מ'` : ''].filter(Boolean).join(' · ') }));
-        row.addEventListener('click', () => libSelect('route', r.id));
-        box.appendChild(row);
+        row.addEventListener('click', () => { if (!(sel && lsel.editing)) libSelect('route', r.id); });
+        kids.appendChild(row);
       }
+      box.appendChild(kids);
     }
     renderLibTools(lib, folders);
   }
@@ -946,10 +965,10 @@
     const btn = (txt, fn, cls = '') => { const b = Object.assign(document.createElement('button'), { textContent: txt, className: cls }); b.addEventListener('click', fn); tools.appendChild(b); return b; };
     const r = lsel.kind === 'route' ? lib.find((x) => x.id === lsel.id) : null;
     if (r) {
-      btn('▶ פתח', () => openFromLib(r.id), 'primary');
-      btn('✎ עריכה', () => { lsel.editing = true; lsel.moving = false; renderLibrary(); });
-      if (r.kind === 'plan') btn('〰 מסלול', () => { dock.panel = 'lib'; Object.assign(lsel, { kind: null }); startPlan({ ...r, libId: r.id }); });
-      btn('📁 העבר', () => { lsel.moving = !lsel.moving; lsel.editing = false; renderLibrary(); }, lsel.moving ? 'on' : '');
+      btn('פתח', () => openFromLib(r.id), 'primary');
+      btn('שם', () => { lsel.editing = true; lsel.moving = false; renderLibrary(); });
+      if (r.kind === 'plan') btn('מסלול', () => { dock.panel = 'lib'; Object.assign(lsel, { kind: null }); startPlan({ ...r, libId: r.id }); });
+      btn('העבר', () => { lsel.moving = !lsel.moving; lsel.editing = false; renderLibrary(); }, lsel.moving ? 'on' : '');
       const del = btn('🗑', async () => {
         if (!del.classList.contains('armed')) { del.classList.add('armed'); del.textContent = 'בטוח?'; setTimeout(() => { del.classList.remove('armed'); del.textContent = '🗑'; }, 3000); return; }
         await db.set('library', (await libLoad()).filter((x) => x.id !== r.id));
@@ -957,9 +976,10 @@
         lsel.kind = null; renderLibrary();
       }, 'danger');
     } else if (lsel.kind === 'folder') {
-      btn('✎ עריכת שם התיקייה', () => { lsel.editing = true; renderLibrary(); });
+      btn('שם התיקייה', () => { lsel.editing = true; libClosed.delete(lsel.folder); renderLibrary(); });
+      btn('+ מסלול חדש כאן', () => { const folder = lsel.folder; dock.panel = 'lib'; lsel.kind = null; startPlan({ folder }); }, 'primary');
     } else if (lib.length) {
-      tools.innerHTML = '<p class="muted small center">נגיעה בוחרת מסלול או תיקייה · נגיעה נוספת במסלול פותחת אותו</p>';
+      tools.innerHTML = '<p class="muted small center">נגיעה בוחרת · נגיעה נוספת במסלול פותחת אותו</p>';
     }
     // העברה לתיקייה: התיקיות הקיימות, או שם חדש
     const mv = $('lib-move');
@@ -967,7 +987,7 @@
     if (!mv.hidden) {
       mv.innerHTML = '<div class="chips"></div><form class="new-folder"><input placeholder="תיקייה חדשה" maxlength="40"><button>העבר</button></form>';
       for (const f of folders.filter((f) => f !== (r.folder || 'כללי'))) {
-        const c = Object.assign(document.createElement('button'), { type: 'button', textContent: '📁 ' + f });
+        const c = Object.assign(document.createElement('button'), { type: 'button', textContent: f });
         c.addEventListener('click', () => moveRoute(r.id, f));
         mv.querySelector('.chips').appendChild(c);
       }
@@ -983,7 +1003,8 @@
   const renameRoute = (id, name) => libEdit((lib) => { const r = lib.find((x) => x.id === id); if (r) r.name = name; });
   const moveRoute = (id, folder) => { lsel.moving = false; toast(`הועבר ל"${folder}"`); return libEdit((lib) => { const r = lib.find((x) => x.id === id); if (r) r.folder = folder; }); };
   // שינוי שם של תיקייה = כל המסלולים שבה עוברים לשם החדש (שם קיים – התיקיות מתאחדות)
-  const renameFolder = (from, to) => { lsel.folder = to; return libEdit((lib) => { for (const r of lib) if ((r.folder || 'כללי') === from) r.folder = to; }); };
+  const renameFolder = (from, to) => { lsel.folder = to; if (libClosed.delete(from)) { libClosed.add(to); keepClosed(); } return libEdit((lib) => { for (const r of lib) if ((r.folder || 'כללי') === from) r.folder = to; }); };
+  $('lib-new').addEventListener('click', () => { dock.panel = 'lib'; lsel.kind = null; startPlan(); });
   $('dl-close').addEventListener('click', () => { dock.panel = null; Object.assign(lsel, { kind: null, editing: false, moving: false }); renderDock(); });
 
   // ---------- GPS ----------
@@ -1480,14 +1501,13 @@
     setTimeout(done, 400);
   }
   $('d-lib').addEventListener('click', () => { dock.panel = 'lib'; renderDock(); });
-  $('d-new').addEventListener('click', () => startPlan());
 
   // גרירה: הפרטים נפתחים ונסגרים צמוד לאצבע. בעזיבה – לפתוח או לסגור לפי המקום,
   // ותנועה מהירה (הַטָּלָה) ממשיכה לכיוון שלה. הקשה בלי תזוזה מחליפה מצב.
   function attachDockDrag(el) {
     let y0 = null, h0 = 0, full = 0, moved = false, track = [];
     el.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('input, #ri-x')) return;
+      if (e.target.closest('input, button:not(.grip)')) return;
       y0 = e.clientY; moved = false; track = [[e.clientY, e.timeStamp]];
       h0 = more.offsetHeight;
       full = more.scrollHeight;
