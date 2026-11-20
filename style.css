@@ -163,19 +163,22 @@ body.night .new-folder input { background: #1d2227; color: #eee; border-color: #
 #btn-menu svg { transition: transform .2s; }
 #controls.open #btn-menu svg { transform: rotate(90deg); }
 .knife { display: flex; flex-direction: column; }
-#controls .knife > button, #dim-v { overflow: hidden; opacity: var(--k); transform: scaleY(var(--k)); transform-origin: top center; pointer-events: none;
+#controls .knife > button { overflow: hidden; opacity: var(--k); transform: scaleY(var(--k)); transform-origin: top center; pointer-events: none;
   transition: height .22s cubic-bezier(.22,1,.36,1), opacity .18s, transform .22s cubic-bezier(.22,1,.36,1); }
 #controls .knife > button { height: calc(44px * var(--k)); margin-top: calc(2px * var(--k)); }
 #controls.open .knife > button, #controls.open #dim-v { pointer-events: auto; }
-#controls.dragging .knife > button, #controls.dragging #dim-v { transition: none; }
+#controls.dragging .knife > button, #controls.dragging #dim-v, #controls.dragging { transition: none; }
 /* צפון ומרכוז נשארים בחוץ כשצריך אותם */
 #controls .knife > button.pin { height: 44px; margin-top: 2px; opacity: 1; transform: none; pointer-events: auto; }
 
-/* הסתרת הרקע: סליידר אנכי לאורך המשטח (למעלה – בלי, למטה – הכי מוסתר) */
-#dim-v { height: calc(170px * var(--k)); width: 100%; display: flex; flex-direction: column; align-items: center; --f: .6; }
+/* הסתרת הרקע: סליידר אנכי בצד שמאל של הכפתורים, לכל אורך המשטח (למעלה – בלי, למטה – הכי מוסתר) */
+#controls { transition: padding .22s cubic-bezier(.22,1,.36,1); }
+#controls.with-dim { padding-left: calc(30px * var(--k)); }
+#dim-v { position: absolute; left: 3px; top: 8px; bottom: 8px; width: 28px; display: flex; flex-direction: column; align-items: center; --f: .6;
+  opacity: var(--k); pointer-events: none; transition: opacity .18s; }
 #dim-v .vs-ico { width: 20px; height: 20px; margin: 6px 0 4px; flex: none; }
 #dim-v .vs-ico .half { fill: #333; stroke: none; }
-.vs-track { position: relative; flex: 1; width: 36px; margin-bottom: 6px; touch-action: none; cursor: pointer; }
+.vs-track { position: relative; flex: 1; width: 28px; margin-bottom: 6px; touch-action: none; cursor: pointer; }
 .vs-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; translate: -50% 0; border-radius: 2px; background: #ddd; }
 .vs-fill { position: absolute; left: 50%; top: 0; width: 4px; translate: -50% 0; height: calc(var(--f) * 100%); border-radius: 2px; background: var(--green); }
 .vs-thumb { position: absolute; left: 50%; top: calc(var(--f) * 100%); width: 18px; height: 18px; translate: -50% -50%; border-radius: 50%;

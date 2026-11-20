@@ -1453,6 +1453,7 @@
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
+    $('controls').classList.toggle('with-dim', !!(active || plan));
     showDim();
     dockEl.classList.toggle('open', dock.open);
     if (m === 'route') renderRouteInfo();
@@ -1540,7 +1541,7 @@
   (() => {
     const h = $('btn-menu');
     let y0 = null, moved = false, base = 0;
-    const full = () => knife.querySelectorAll('.knife > button:not([hidden])').length * 46 + ($('dim-v').hidden ? 0 : 170);
+    const full = () => knife.querySelectorAll('.knife > button:not([hidden])').length * 46;
     h.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; base = knifeOpen ? 1 : 0; h.setPointerCapture(e.pointerId); });
     h.addEventListener('pointermove', (e) => {
       if (y0 == null) return;
