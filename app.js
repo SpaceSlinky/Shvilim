@@ -2489,27 +2489,44 @@
   // נשאר פתוח עד נגיעה נוספת – לא נסגר לבד, גם לא ב"חזור"
   const knife = $('controls');
   let knifeOpen = false;
+  // העיגולים לא זזים מה-☰: כל אחד גדל במקומו (אחד אחרי השני), ונעלם באותה צורה. כשסגור נשארים רק "נעוצים":
+  // מצפן (המפה מסובבת / במצב מצפן) ומיקום (GPS פועל והמפה זזה ממך) – ועולים למקום הפנוי הראשון
+  function pinned(b) {
+    if (b.id === 'btn-compass') return compassMode || Math.abs(map.getBearing()) > 0.5;
+    if (b.id === 'btn-locate') return watchId != null && !follow && followedOnce;
+    return false;
+  }
   function layoutTools() {
-    let i = 0;
-    for (const b of document.querySelectorAll('#controls .kcol > button')) if (!b.hidden) b.style.setProperty('--i', i++); // נקרא גם לפני ש-knife מוגדר
+    const col = document.querySelector('#controls .kcol');
+    const all = [...col.children].filter((b) => !b.hidden);
+    const open = col.closest('#controls').classList.contains('open');
+    const show = open ? all : all.filter(pinned);
+    const now = new Set(show);
+    let n = 0, k = 0;
+    for (const b of all) {
+      const on = now.has(b), was = (layoutTools.shown || new Set()).has(b);
+      if (on) b.style.setProperty('--slot', show.indexOf(b));
+      // עיכוב: מי שמופיע – לפי הסדר מלמעלה; מי שנעלם – מלמטה למעלה
+      b.style.setProperty('--d', on && !was ? (n++) * 40 + 'ms' : !on && was ? (all.length - all.indexOf(b)) * 30 + 'ms' : '0ms');
+      b.classList.toggle('on', on);
+      k++;
+    }
+    layoutTools.shown = now; // (מאפיין ולא let – נקרא גם מ-renderDock לפני שהשורה הזו רצה)
+    const h = all.length * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
+    col.style.height = Math.max(0, show.length * 56 - 10) + 'px';
+    $('dim-v').style.height = h + 'px';
   }
   function setKnife(on) {
     knifeOpen = on;
-    layoutTools();
     knife.classList.toggle('open', on);
+    layoutTools();
     $('btn-menu').setAttribute('aria-expanded', on);
   }
   $('btn-menu').addEventListener('click', () => setKnife(!knifeOpen));
   $('search-input').addEventListener('focus', () => setKnife(false)); // תוצאות החיפוש נפתחות מתחת – בלי עיגולים מעליהן
-  // מתחת ל-☰ כשהמשטח סגור: צפון (כשהמפה מסובבת) ומרכוז (כש-GPS פועל והמפה זזה ממך אחרי מעקב)
-  function updatePins() {
-    $('pin-north').hidden = !(compassMode || Math.abs(map.getBearing()) > 0.5);
-    $('pin-center').hidden = !(watchId != null && !follow && followedOnce);
-  }
-  map.on('rotate', updatePins);
-  setInterval(updatePins, 1000); // מצב ה-GPS והמעקב משתנים בכמה מקומות; בדיקה זולה
-  $('pin-north').addEventListener('click', () => $('btn-compass').click());
-  $('pin-center').addEventListener('click', () => $('btn-locate').click());
+  // מצב ה-GPS, המעקב והסיבוב משתנים בכמה מקומות – בדיקה זולה מעדכנת את העיגולים ה"נעוצים"
+  map.on('rotate', layoutTools);
+  setInterval(layoutTools, 1000);
 
   // ---------- הפעלה ----------
   // שחזור המסלול הפעיל (וגם מסלול GPX מגרסה קודמת)

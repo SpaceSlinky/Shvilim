@@ -19,8 +19,8 @@
   <!-- משטח הכלים ("אולר"): נשלף מלמעלה. סגור – רואים רק את ☰ בתחתית המשטח; משיכה למטה מורידה את כל המשטח -->
   <!-- משטח הכלים ("אולר"): משטח אחד שנשלף מלמעלה – הכלים, ולידם (כשיש מסלול) הסליידר להסתרת הרקע.
        בתחתית – פס עם חריץ למשיכה; סגור – רואים רק אותו -->
-  <!-- כלים: עיגול ☰ בקצה הימני של שורת החיפוש (וכשאין חיפוש – באותו מקום). נגיעה – הכלים "צומחים" ממנו כעיגולים
-       במרחקים שווים; משמאלם (במסלול / בתכנון) – הסתרת הרקע. נשאר פתוח עד נגיעה נוספת -->
+  <!-- כלים: עיגול ☰ בקצה הימני של שורת החיפוש (וכשאין חיפוש – באותו מקום). נגיעה – העיגולים גדלים במקומם,
+       במרחקים שווים; משמאלם (במסלול / בתכנון) – הסתרת הרקע, מצוירת ישר על המפה. כשסגור – נשארים רק מה שצריך (מצפן כשהמפה מסובבת, מיקום כשזזת ממנו) -->
   <div id="controls">
     <button id="btn-menu" class="kmenu" title="כלים" aria-label="כלים" aria-expanded="false"><i></i><i></i><i></i></button>
     <div class="ktools">
@@ -46,10 +46,6 @@
           <svg viewBox="0 0 24 24" class="vs-ico"><circle cx="12" cy="12" r="8" fill="none"/><path d="M12 4a8 8 0 0 1 0 16z" class="half"/></svg>
           <div class="vs-track"><div class="vs-fill"></div><div class="vs-thumb"></div></div>
       </div>
-    </div>
-    <div class="pins">
-      <button id="pin-north" aria-label="צפון למעלה" hidden><svg viewBox="0 0 24 24" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg></button>
-      <button id="pin-center" aria-label="חזרה למיקום שלי" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg></button>
     </div>
   </div>
   </div>
