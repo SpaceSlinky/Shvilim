@@ -59,7 +59,7 @@
   const zw = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, a, 16, b];
   // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
   const zwShared = (a, b, fn) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, fn(a), 16, fn(b)];
-  const SN = ['coalesce', ['get', 'sn'], 1], SI = ['coalesce', ['get', 'si'], 0], SHARED_W = 0.7;
+  const SN = ['coalesce', ['get', 'sn'], 1], SI = ['coalesce', ['get', 'si'], 0], SHARED_W = 0.85, SHARED_STEP = 1.35; // רוחב כל קו, והמרחק בין קווים (פס לבן ביניהם)
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
@@ -115,10 +115,11 @@
       // קטע משותף לכמה שבילים (sn = כמה, si = מספר הקו): קווים צמודים זה לזה, כמו הסימון על הסלעים
       { id: 'trail-casing', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
-          'line-opacity': 0.85, 'line-width': zwShared(2.8, 7.5, (w) => ['+', w, ['*', ['-', SN, 1], w * 0.42]]) } },
+          'line-opacity': 0.85, 'line-width': ['interpolate', ['exponential', 1.5], ['zoom'],
+            11, ['+', 2.8, ['*', ['-', SN, 1], 1.5 * SHARED_STEP]], 16, ['+', 7.5, ['*', ['-', SN, 1], 4.5 * SHARED_STEP]]] } },
       { id: 'trail', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': zwShared(1.5, 4.5, (w) => ['*', w, ['case', ['>', SN, 1], SHARED_W, 1]]),
-          'line-offset': zwShared(1.5, 4.5, (w) => ['*', w * SHARED_W, ['-', SI, ['/', ['-', SN, 1], 2]]]) } },
+          'line-offset': zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]) } },
       // תוויות
       { id: 'water-label', type: 'symbol', source: 'osm', filter: ['all', k('water'), ['has', 'n']], minzoom: 13,
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'symbol-spacing': 300 },
