@@ -1550,7 +1550,6 @@
   }
   // מצב: auto (ברירת מחדל – כהה מהשקיעה עד הזריחה) / dark / light. הכפתור מחליף בסבב
   const THEMES = ['auto', 'dark', 'light'];
-  const THEME_NAME = { auto: 'אוטומטי – לפי השקיעה', dark: 'כהה', light: 'בהיר' };
   let themeMode = THEMES.includes(localStorage.getItem('theme')) ? localStorage.getItem('theme') : 'auto';
   let isNight = false;
   function nowNight() {
@@ -1575,7 +1574,6 @@
     themeMode = THEMES[(THEMES.indexOf(themeMode) + 1) % THEMES.length];
     try { localStorage.setItem('theme', themeMode); } catch { /* ignore */ }
     syncTheme();
-    toast('תצוגה: ' + THEME_NAME[themeMode], 1800);
   });
 
   // אזורים מוכרים (לחיפוש ולהצעת תיקייה)
@@ -1848,7 +1846,7 @@
   // כשאין לאן לחזור – הרשומה יורדת, ו"חזור" הבא יוצא מהאפליקציה כרגיל.
   const openDialog = () => document.querySelector('dialog[open]');
   function canGoBack() {
-    return !!(openDialog() || knifeOpen || !$('dock-ask').hidden || $('search-input').value || dockMode() !== 'lib' || dock.libOpen);
+    return !!(openDialog() || !$('dock-ask').hidden || $('search-input').value || dockMode() !== 'lib' || dock.libOpen);
   }
   let backArmed = false, backIgnore = false;
   function syncBack() {
@@ -1862,7 +1860,6 @@
     const d = openDialog();
     if (d) d.close();
     else if (!$('dock-ask').hidden) $('dock-ask').hidden = true;
-    else if (knifeOpen) setKnife(false);
     else if ($('search-input').value) closeSearch();
     else dockBack();
     setTimeout(syncBack, 50); // אם עדיין יש לאן לחזור – שוב רשומה
@@ -1935,7 +1932,6 @@
   function setKnife(on) {
     knifeOpen = on;
     knife.classList.toggle('open', on);
-    setTimeout(syncBack);
     knife.style.removeProperty('--k');
     $('btn-menu').setAttribute('aria-expanded', on);
   }
@@ -1975,10 +1971,7 @@
     h.addEventListener('pointerup', end);
     h.addEventListener('pointercancel', end);
   })();
-  // אחרי פעולה בכלים – המשטח נסגר
-  for (const b of knife.querySelectorAll('.knife > button')) b.addEventListener('click', () => setTimeout(() => setKnife(false), 250));
-  map.on('click', () => knifeOpen && setKnife(false));
-  map.on('dragstart', () => knifeOpen && setKnife(false));
+  // המשטח נשאר פתוח עד שמעלים אותו (או נוגעים בפס) – לא נסגר לבד
 
   // ---------- הפעלה ----------
   // שחזור המסלול הפעיל (וגם מסלול GPX מגרסה קודמת)
