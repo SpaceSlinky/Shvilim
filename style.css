@@ -35,7 +35,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 .me.has-heading .me-heading { display: block; }
 
 /* הודעה קופצת */
-#toast { position: fixed; top: calc(14px + var(--safe-t)); left: 14px; right: 80px; z-index: 10;
+#toast { position: fixed; top: calc(64px + var(--safe-t)); left: 14px; right: 80px; z-index: 10;
   background: rgba(30,30,30,.9); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 15px; }
 
 /* תפריט ומסך פתיחה */
@@ -58,13 +58,16 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 .maplibregl-popup-content { font-size: 15px; padding: 8px 12px; }
 
 /* חיפוש */
-#search { position: fixed; inset: 0 0 auto 0; z-index: 9; padding: calc(10px + var(--safe-t)) 10px 10px; }
-#search-form { display: flex; gap: 8px; }
-#search-input { flex: 1; font-size: 17px; padding: 12px 14px; border-radius: 12px; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
-#search-close { width: 48px; border-radius: 12px; border: none; background: #fff; font-size: 18px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
-#search-results { list-style: none; margin: 8px 0 0; padding: 0; background: #fff; border-radius: 12px; max-height: 60vh; overflow-y: auto; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+/* חיפוש: פס למעלה, משמאל למשטח הכלים */
+#search { position: fixed; top: calc(8px + var(--safe-t)); left: 10px; right: 70px; z-index: 9; }
+#search-form { display: flex; align-items: center; gap: 6px; padding: 0 6px 0 12px; background: #fff; border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.22); color: #888; }
+#search-form > svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+#search-input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 16px; padding: 12px 0; color: #222; outline: none; }
+#search-input::-webkit-search-cancel-button { display: none; }
+#search-close { border: 0; background: none; font-size: 16px; padding: 6px 8px; color: #888; }
+#search-results { list-style: none; margin: 6px 0 0; padding: 0; background: #fff; border-radius: 12px; max-height: 55vh; overflow-y: auto; box-shadow: 0 2px 10px rgba(0,0,0,.22); }
 #search-results:empty { display: none; }
-#search-results li { padding: 12px 14px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 10px; }
+#search-results li { padding: 12px 14px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; gap: 10px; cursor: pointer; }
 #search-results li.note { color: #777; font-size: 13px; justify-content: center; }
 .r-name { font-weight: 600; }
 .r-kind { color: #888; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
@@ -73,7 +76,7 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 /* מצב לילה */
 body.night { color-scheme: dark; }
 body.night .ksurf { background: #23282e; }
-body.night #search-close { background: #23282e; }
+body.night #search-form { background: #23282e; color: #999; }
 body.night #controls .knife button:active, body.night #controls .pins button:active { background: rgba(255,255,255,.08); }
 body.night #controls svg { stroke: #ddd; fill: #ddd; }
 body.night #btn-locate.gps-on svg { stroke: #64b5f6; fill: #64b5f6; }
@@ -82,7 +85,7 @@ body.night .card, body.night dialog, body.night #search-results { background: #1
 body.night #search-results li { border-color: #333; }
 body.night dialog button, body.night .card button { background: #2a3036; color: #eee; border-color: #444; }
 body.night button.primary { background: #2e7d4f; border-color: #2e7d4f; }
-body.night #search-input { background: #1d2227; color: #eee; border-color: #444; }
+body.night #search-input { color: #eee; }
 body.night .muted, body.night .r-kind { color: #999; }
 body.night .maplibregl-ctrl-scale { background: rgba(30,30,30,.7); color: #ddd; border-color: #ddd; }
 body.night .maplibregl-ctrl-attrib { background: rgba(30,30,30,.7); }
@@ -331,9 +334,6 @@ body.night #dock::before { color: #81c784; }
 
 /* ראשי = המסלולים: סגור – חיפוש ושורת "מסלולים"; פתוח – הרשימה נפתחת במקום ברכות */
 section[data-mode="lib"] > .grip { margin-bottom: 2px; }
-.search-pill { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; border: 0; border-radius: 12px; background: #f1f3f2;
-  color: #777; font: inherit; font-size: 15px; text-align: start; }
-.search-pill svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
 .lib-head { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; padding: 10px 6px 8px; border: 0; background: none;
   font: inherit; color: inherit; touch-action: none; cursor: pointer; }
 .lib-head b { font-size: 20px; font-weight: 800; }
@@ -345,5 +345,4 @@ section.open .lib-head .chev { transform: rotate(225deg); translate: 0 -3px; }
 .lib-body > div { overflow: hidden; min-height: 0; }
 section.open .lib-body { grid-template-rows: 1fr; }
 .lib-pull { touch-action: none; }
-body.night .search-pill { background: #2a3036; color: #aaa; }
 body.night .lib-head .chev { border-color: #777; }

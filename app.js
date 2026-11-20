@@ -1615,11 +1615,13 @@
     }
   }
 
-  function openSearch() { $('toast').hidden = true; $('search').hidden = false; $('search-input').value = ''; showResults([]); $('search-input').focus(); }
-  function closeSearch() { $('search').hidden = true; $('search-input').blur(); }
-  $('d-search').addEventListener('click', openSearch);
+  // חיפוש מקום: פס קבוע למעלה (רק כשלא בתוך מסלול או בתכנון). ✕ מנקה
+  function syncSearch() { $('search-close').hidden = !$('search-input').value; }
+  function closeSearch() { $('search-input').value = ''; showResults([]); syncSearch(); $('search-input').blur(); }
+  $('search-input').addEventListener('focus', () => { $('toast').hidden = true; });
   $('search-close').addEventListener('click', closeSearch);
   $('search-input').addEventListener('input', (e) => {
+    syncSearch();
     const r = localSearch(e.target.value);
     showResults(r, e.target.value.trim() ? (r.length ? 'לא מצאתם? הקישו "חפש" במקלדת לחיפוש באינטרנט' : 'אין תוצאות במפה השמורה – הקישו "חפש" לחיפוש באינטרנט') : '');
   });
@@ -1667,6 +1669,8 @@
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
+    $('search').hidden = m !== 'lib'; // חיפוש – רק כשלא בתוך מסלול או בתכנון
+    if (m !== 'lib') closeSearch();
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
     showDim();
     dockEl.classList.toggle('open', dock.open);

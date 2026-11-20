@@ -65,7 +65,6 @@
          נגיעה במסלול בוחרת; הכלים למטה פועלים על מה שנבחר -->
     <section data-mode="lib" hidden>
       <div class="grip lib-pull" aria-hidden="true"></div>
-      <button id="d-search" class="search-pill"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg><span>חיפוש מקום</span></button>
       <button id="lib-head" class="lib-head lib-pull" aria-expanded="false"><b>מסלולים</b><span id="lib-count" class="count"></span><span class="chev" aria-hidden="true"></span></button>
       <div id="lib-body" class="lib-body"><div>
         <div id="lib-list" class="dock-scroll"></div>
@@ -128,10 +127,12 @@
     </form>
   </dialog>
 
-  <div id="search" hidden>
+  <!-- חיפוש מקום: פס קבוע למעלה כשלא נמצאים בתוך מסלול או בתכנון -->
+  <div id="search">
     <form id="search-form" action="#">
-      <input id="search-input" type="search" enterkeyhint="search" placeholder="חיפוש: שוויצריה הקטנה, נחל כלח, עין…" autocomplete="off">
-      <button type="button" id="search-close" aria-label="סגור">✕</button>
+      <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+      <input id="search-input" type="search" enterkeyhint="search" placeholder="חיפוש מקום" autocomplete="off">
+      <button type="button" id="search-close" aria-label="ניקוי" hidden>✕</button>
     </form>
     <ul id="search-results"></ul>
   </div>
