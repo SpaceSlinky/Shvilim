@@ -60,6 +60,8 @@
   // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
   const zwShared = (a, b, fn) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, fn(a), 16, fn(b)];
   const SN = ['coalesce', ['get', 'sn'], 1], SI = ['coalesce', ['get', 'si'], 0], SHARED_W = 0.85, SHARED_STEP = 1.35; // רוחב כל קו, והמרחק בין קווים (פס לבן ביניהם)
+  // ההזזה הצידה של קו בקטע משותף – זהה לשבילים במפה ולמסלול שעליהם
+  const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]);
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
@@ -117,10 +119,10 @@
         paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
           // לכל קו מסגרת משלו (במקום מסגרת רחבה אחת) – כך גם שביל לבן נראה, עם המסגרת הכהה שלו
           'line-opacity': 0.85, 'line-width': zwShared(2.8, 7.5, (w) => ['*', w, ['case', ['>', SN, 1], SHARED_W, 1]]),
-          'line-offset': zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]) } },
+          'line-offset': SHARED_OFFSET } },
       { id: 'trail', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': zwShared(1.5, 4.5, (w) => ['*', w, ['case', ['>', SN, 1], SHARED_W, 1]]),
-          'line-offset': zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]) } },
+          'line-offset': SHARED_OFFSET } },
       // תוויות
       { id: 'water-label', type: 'symbol', source: 'osm', filter: ['all', k('water'), ['has', 'n']], minzoom: 13,
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'symbol-spacing': 300 },
@@ -157,10 +159,10 @@
       { id: 'dim', type: 'fill', source: 'dim', layout: { visibility: 'none' }, paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } },
       { id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-width': zw(4, 8.5) } },
+        paint: { 'line-color': '#ffffff', 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
       { id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(2.4, 5),
+        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(2.4, 5), 'line-offset': SHARED_OFFSET,
           'line-dasharray': ['case', ['==', ['get', 'h'], 'free'], ['literal', [1, 1]], ['literal', [1, 0]]] } },
       // מה שכבר הלכת: קו בצבע הרקע מעל המסלול, כך שהחלק הזה נראה דהוי
       { id: 'route-walked', type: 'line', source: 'walked', layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -342,6 +344,8 @@
   }
   async function setMapData(fc) {
     const trailGeoms = markShared(fc);
+    buildSharedIdx(fc);
+    if (active && !plan) map.getSource('route')?.setData(routeFeatures(active.segs)); // המסלול זז עם הקווים המשותפים
     mapFC = fc;
     searchIndex = null;
     const lvl = smoothLevel();
@@ -542,9 +546,50 @@
   let prevAlong = null;
   let prof = null;       // פרופיל גובה
 
+  // קטעים משותפים במפה מוזזים הצידה (קו לכל צבע); המסלול זז בדיוק כמו הקו בצבע שלו, כדי לשבת עליו.
+  // sharedIdx: הקטעים (זוגות נקודות) של שבילים מסומנים משותפים, עם הצבע והמיקום (si/sn)
+  let sharedIdx = [];
+  function buildSharedIdx(fc) {
+    sharedIdx = [];
+    for (const f of fc.features) {
+      const p = f.properties;
+      if (p.k !== 'trail' || !(p.sn > 1)) continue;
+      const c = f.geometry.coordinates;
+      for (let i = 1; i < c.length; i++) sharedIdx.push({ c: p.c, si: p.si, sn: p.sn, a: c[i - 1], b: c[i] });
+    }
+  }
+  function sharedOffset(color, m) {
+    if (!sharedIdx.length || !color) return null;
+    const kx = Math.cos((m[1] * Math.PI) / 180) * 111320, ky = 110540;
+    let best = null, bd = 7; // מטרים
+    for (const e of sharedIdx) {
+      if (e.c !== color) continue;
+      const ax = (e.a[0] - m[0]) * kx, ay = (e.a[1] - m[1]) * ky, bx = (e.b[0] - m[0]) * kx, by = (e.b[1] - m[1]) * ky;
+      if (Math.min(ax, bx) > bd || Math.max(ax, bx) < -bd || Math.min(ay, by) > bd || Math.max(ay, by) < -bd) continue;
+      const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+      const t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+      const d = Math.hypot(ax + t * dx, ay + t * dy);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best && { si: best.si, sn: best.sn };
+  }
+  // מחלק כל קטע של המסלול לפי המקום שלו בקטע משותף (או בלי)
+  function splitShared(sg) {
+    const props = { ...(sg.c ? { c: sg.c } : {}), ...(sg.h ? { h: sg.h } : {}) };
+    if (!sharedIdx.length || !sg.c || sg.h === 'free') return [{ coords: sg.coords, props }];
+    const out = [];
+    let cur = null;
+    const c = sg.coords;
+    for (let i = 1; i < c.length; i++) {
+      const o = sharedOffset(sg.c, [(c[i - 1][0] + c[i][0]) / 2, (c[i - 1][1] + c[i][1]) / 2]);
+      const key = o ? o.si + '/' + o.sn : '';
+      if (cur && cur.key === key) cur.coords.push(c[i]);
+      else { cur = { key, coords: [c[i - 1], c[i]], props: o ? { ...props, ...o } : props }; out.push(cur); }
+    }
+    return out;
+  }
   function routeFeatures(segs, wpts) {
-    const f = segs.map((sg) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: sg.coords },
-      properties: { ...(sg.c ? { c: sg.c } : {}), ...(sg.h ? { h: sg.h } : {}) } }));
+    const f = segs.flatMap(splitShared).map((x) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: x.coords }, properties: x.props }));
     const all = segs.flatMap((sg) => sg.coords);
     if (all.length > 1) {
       f.push({ type: 'Feature', geometry: { type: 'Point', coordinates: all[all.length - 1] }, properties: { kind: 'end' } });
