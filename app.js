@@ -115,8 +115,9 @@
       // קטע משותף לכמה שבילים (sn = כמה, si = מספר הקו): קווים צמודים זה לזה, כמו הסימון על הסלעים
       { id: 'trail-casing', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
-          'line-opacity': 0.85, 'line-width': ['interpolate', ['exponential', 1.5], ['zoom'],
-            11, ['+', 2.8, ['*', ['-', SN, 1], 1.5 * SHARED_STEP]], 16, ['+', 7.5, ['*', ['-', SN, 1], 4.5 * SHARED_STEP]]] } },
+          // לכל קו מסגרת משלו (במקום מסגרת רחבה אחת) – כך גם שביל לבן נראה, עם המסגרת הכהה שלו
+          'line-opacity': 0.85, 'line-width': zwShared(2.8, 7.5, (w) => ['*', w, ['case', ['>', SN, 1], SHARED_W, 1]]),
+          'line-offset': zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]) } },
       { id: 'trail', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['get', 'c'], 'line-width': zwShared(1.5, 4.5, (w) => ['*', w, ['case', ['>', SN, 1], SHARED_W, 1]]),
           'line-offset': zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]) } },
