@@ -235,17 +235,20 @@ body.night .seg input:checked + span { background: #2e7d4f; }
 body.night .more-layers summary { color: #aaa; }
 
 /* כותרות הדוק: חזרה בפינה, כותרת ממורכזת למסך, ומקום זהה בצד השני */
-.dock-head.three { display: grid; grid-template-columns: 78px minmax(0, 1fr) 78px; align-items: center; gap: 4px; }
+.dock-head.three { display: grid; grid-template-columns: 96px minmax(0, 1fr) 96px; align-items: center; gap: 4px; }
 .d-title { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 16px; line-height: 1.6; padding: 2px 0; }
 .r-title { touch-action: none; cursor: pointer; display: flex; justify-content: center; align-items: baseline; min-width: 0; }
 /* כשאין מקום – שם התיקייה מתקצר קודם, ושם המסלול נשאר */
 #ri-name { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .r-title b { font-weight: 700; }
-.back { justify-self: start; border: 0; background: none; padding: 6px 2px; font: inherit; font-size: 14px; color: var(--green); white-space: nowrap; }
+/* חזרה: גלולה ברורה, בגודל אגודל */
+.back { justify-self: start; min-height: 36px; padding: 6px 12px; border: 0; border-radius: 18px; background: rgba(46,125,79,.12);
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--green); white-space: nowrap; }
+.back:active { background: rgba(46,125,79,.22); }
 .stop { justify-self: end; grid-column: 3; font: inherit; font-size: 14px; font-weight: 700; color: #c62828; background: none;
   border: 1px solid #c62828; border-radius: 10px; padding: 5px 12px; }
 .back[hidden] + .r-title { grid-column: 2; }
-body.night .back { color: #81c784; }
+body.night .back { color: #81c784; background: rgba(76,175,80,.16); }
 body.night .stop { color: #ef5350; border-color: #ef5350; }
 
 
@@ -310,13 +313,6 @@ body.night .tgrp { border-color: #3a3f45; background: #3a3f45; }
 body.night .tgrp button { background: #2a3036; color: #81c784; }
 body.night .tgrp button.danger:not(.armed) { color: #ef5350; }
 
-/* משיכת הדוק למטה = חזרה */
-.pull { touch-action: none; }
-#dock::before { content: "↓ שחררו לחזרה"; position: absolute; top: 4px; left: 0; right: 0; text-align: center; font-size: 12px; color: var(--green);
-  opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 2; }
-#dock.pull-ready::before { opacity: 1; }
-#dock-in > div.grip { margin-bottom: 0; }
-section > .grip.pull { display: block; width: 44px; height: 14px; margin: -6px auto 0; position: relative; }
 /* שאלה קצרה בראש הדוק */
 .dock-ask { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; background: #fff8e1; }
 .dock-ask span { flex: 1; font-weight: 700; font-size: 15px; }
@@ -325,7 +321,6 @@ section > .grip.pull { display: block; width: 44px; height: 14px; margin: -6px a
 .dock-ask .no { background: #eee; color: #222; }
 body.night .dock-ask { background: #3a3220; border-color: #333; }
 body.night .dock-ask .no { background: #2a3036; color: #eee; }
-body.night #dock::before { color: #81c784; }
 
 /* ראשי = המסלולים: סגור – חיפוש ושורת "מסלולים"; פתוח – הרשימה נפתחת במקום ברכות */
 section[data-mode="lib"] > .grip { margin-bottom: 2px; }

@@ -1670,6 +1670,7 @@
     ls.classList.toggle('open', dock.libOpen);
     $('lib-head').setAttribute('aria-expanded', dock.libOpen);
     if (m === 'lib') renderLibrary();
+    if (typeof syncBack === 'function') setTimeout(syncBack);
   }
   // פתיחה וסגירה של פרטי המסלול: הגובה עובר בהנפשה מהמקום שבו הוא עומד (גם באמצע גרירה) אל היעד
   const more = document.querySelector('#dock .r-more');
@@ -1740,22 +1741,6 @@
 
   // גרירה: הפרטים נפתחים ונסגרים צמוד לאצבע. בעזיבה – לפתוח או לסגור לפי המקום,
   // ותנועה מהירה (הַטָּלָה) ממשיכה לכיוון שלה. הקשה בלי תזוזה מחליפה מצב.
-  // משיכה למטה מעבר למצב הסגור – צעד אחורה. הדוק יורד עם האצבע; מעבר לסף מופיע "שחררו לחזרה"
-  const PULL = 90;
-  function pullMove(dy) {
-    const d = Math.max(0, dy);
-    dockEl.style.transition = 'none';
-    dockEl.style.transform = `translateY(${d < PULL ? d : PULL + (d - PULL) * 0.3}px)`;
-    dockEl.classList.toggle('pull-ready', d >= PULL);
-  }
-  function pullEnd(dy, back) {
-    const go = dy >= PULL;
-    dockEl.style.transition = 'transform .24s cubic-bezier(.22,1,.36,1), height .32s cubic-bezier(.22,1,.36,1)';
-    dockEl.style.transform = '';
-    dockEl.classList.remove('pull-ready');
-    setTimeout(() => (dockEl.style.transition = ''), 260);
-    if (go) back();
-  }
   // לאן חוזרים מכל מצב (בניווט ובתכנון עם נקודות – שואלים קודם)
   function dockBack() {
     const m = dockMode();
@@ -1766,6 +1751,35 @@
     if (m === 'plan') return plan?.wps.length > 1 ? ask('לבטל את התכנון?', 'ביטול התכנון', endPlan) : endPlan();
     if (m === 'lib') return setLibOpen(false);
   }
+  // ---------- כפתור "חזור" של הטלפון ----------
+  // כשיש לאן לחזור, יש בהיסטוריה רשומה אחת שלנו; "חזור" מוריד אותה (popstate), ואנחנו עושים צעד אחד אחורה.
+  // כשאין לאן לחזור – הרשומה יורדת, ו"חזור" הבא יוצא מהאפליקציה כרגיל.
+  const openDialog = () => document.querySelector('dialog[open]');
+  function canGoBack() {
+    return !!(openDialog() || knifeOpen || !$('dock-ask').hidden || $('search-input').value || dockMode() !== 'lib' || dock.libOpen);
+  }
+  let backArmed = false, backIgnore = false;
+  function syncBack() {
+    const want = canGoBack();
+    if (want && !backArmed) { history.pushState({ shvilim: 1 }, ''); backArmed = true; }
+    else if (!want && backArmed) { backArmed = false; backIgnore = true; history.back(); }
+  }
+  addEventListener('popstate', () => {
+    if (backIgnore) { backIgnore = false; return; }
+    backArmed = false;
+    const d = openDialog();
+    if (d) d.close();
+    else if (!$('dock-ask').hidden) $('dock-ask').hidden = true;
+    else if (knifeOpen) setKnife(false);
+    else if ($('search-input').value) closeSearch();
+    else dockBack();
+    setTimeout(syncBack, 50); // אם עדיין יש לאן לחזור – שוב רשומה
+  });
+  // מעקב אחרי שינויים שמשפיעים על "יש לאן לחזור"
+  for (const d of document.querySelectorAll('dialog')) { d.addEventListener('close', () => setTimeout(syncBack)); new MutationObserver(() => setTimeout(syncBack)).observe(d, { attributes: true, attributeFilter: ['open'] }); }
+  new MutationObserver(() => setTimeout(syncBack)).observe($('dock-ask'), { attributes: true, attributeFilter: ['hidden'] });
+  $('search-input').addEventListener('input', () => setTimeout(syncBack));
+
   // שאלה קצרה בראש הדוק: כן / המשך
   function ask(text, yes, fn) {
     const a = $('dock-ask');
@@ -1775,29 +1789,11 @@
     a.querySelector('.no').onclick = () => (a.hidden = true);
     a.hidden = false;
   }
-  function attachPullBack(el) {
-    let y0 = null, moved = false;
-    el.addEventListener('pointerdown', (e) => {
-      if (e.target.closest('input, button:not(.grip), .dh')) return;
-      y0 = e.clientY; moved = false;
-      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    });
-    el.addEventListener('pointermove', (e) => {
-      if (y0 == null) return;
-      const dy = e.clientY - y0;
-      if (!moved && dy < 8) return;
-      moved = true;
-      pullMove(dy);
-    });
-    const end = (e) => { if (y0 == null) return; const dy = e.clientY - y0; y0 = null; if (moved) pullEnd(dy, dockBack); };
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', (e) => { if (y0 != null) { y0 = null; pullEnd(0, dockBack); } });
-  }
   function attachDockDrag(el) {
-    let y0 = null, h0 = 0, full = 0, moved = false, track = [], pulling = false;
+    let y0 = null, h0 = 0, full = 0, moved = false, track = [];
     el.addEventListener('pointerdown', (e) => {
       if (e.target.closest('input, button:not(.grip)')) return;
-      y0 = e.clientY; moved = false; pulling = false; track = [[e.clientY, e.timeStamp]];
+      y0 = e.clientY; moved = false; track = [[e.clientY, e.timeStamp]];
       h0 = more.offsetHeight;
       full = more.scrollHeight;
       try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
@@ -1806,9 +1802,7 @@
       if (y0 == null) return;
       const dy = e.clientY - y0;
       if (!moved && Math.abs(dy) < 6) return;
-      if (!moved) pulling = h0 === 0 && dy > 0; // סגור ומושכים למטה – זו חזרה, לא פתיחה
       moved = true;
-      if (pulling) return pullMove(dy);
       track.push([e.clientY, e.timeStamp]);
       if (track.length > 6) track.shift();
       more.style.transition = 'none';
@@ -1818,7 +1812,6 @@
       if (y0 == null) return;
       const dy = e.clientY - y0;
       y0 = null;
-      if (pulling) return pullEnd(dy, dockBack);
       if (!moved) return setDockOpen(!dock.open);
       const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
       const v = (yb - ya) / Math.max(1, tb - ta); // פיקסלים למילישנייה; שלילי = למעלה
@@ -1830,7 +1823,6 @@
   attachDockDrag($('r-grip'));
   attachDockDrag(document.querySelector('#dock .r-title'));
   attachDockDrag($('ri-stats'));
-  for (const el of document.querySelectorAll('#dock .pull')) attachPullBack(el);
 
   // גובה הדוק נקבע לפי התוכן ועובר ברכות (בזמן גרירת פרטי המסלול – צמוד, בלי השהיה).
   // גם משתנה CSS, כדי שקנה המידה וזכויות היוצרים יישבו מעליו
@@ -1851,6 +1843,7 @@
   function setKnife(on) {
     knifeOpen = on;
     knife.classList.toggle('open', on);
+    setTimeout(syncBack);
     knife.style.removeProperty('--k');
     $('btn-menu').setAttribute('aria-expanded', on);
   }
