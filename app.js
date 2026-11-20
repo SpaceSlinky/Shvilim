@@ -1408,27 +1408,52 @@
       }
       lastY = ev.clientY;
       ghost.style.top = ev.clientY - ghost.dataset.dy + 'px';
-      clearMarks();
+      // השורה שנגררת נשארת ברשימה כמקום ריק, וזזה אחרי האצבע; השאר "מפנות לה מקום" (תנועה רכה)
       const under = document.elementFromPoint(ev.clientX, ev.clientY);
-      drop = null;
+      const y = ev.clientY;
+      const isBefore = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const mid = (x) => { const r = x.getBoundingClientRect(); return r.top + r.height / 2; };
       if (kind === 'route') {
+        box.querySelectorAll('.drop').forEach((x) => x.classList.remove('drop'));
+        dropCat = null;
         const row = under?.closest('.lib-row');
+        const cat = under?.closest('.cat');
         if (row && row !== src && box.contains(row)) {
-          const r = row.getBoundingClientRect();
-          const after = ev.clientY > r.top + r.height / 2;
-          row.classList.add(after ? 'drop-after' : 'drop-before');
-          drop = { folder: row.closest('.cat')?.dataset.cat || '', row, after };
-        } else {
-          const cat = under?.closest('.cat');
-          if (cat) { cat.classList.add('drop'); drop = { folder: cat.dataset.cat }; }
-          else if (under?.closest('#lib-list')) { box.querySelector('.lib-loose').classList.add('drop'); drop = { folder: '' }; }
+          if (isBefore(src, row) && y > mid(row)) flip(() => row.after(src));
+          else if (isBefore(row, src) && y < mid(row)) flip(() => row.before(src));
+          else if (row.parentNode !== src.parentNode) flip(() => (y > mid(row) ? row.after(src) : row.before(src)));
+        } else if (cat && !cat.classList.contains('open')) {
+          cat.classList.add('drop'); dropCat = cat.dataset.cat; // קטגוריה סגורה – נכנסים לסופה
+        } else if (cat) {
+          const list = cat.querySelector('.cat-body > div');
+          if (under.closest('.cat-head')) { if (list.firstChild !== src) flip(() => list.prepend(src)); }
+          else if (src.parentNode !== list) flip(() => list.insertBefore(src, list.querySelector('.cat-empty')));
+        } else if (under?.closest('.lib-loose') || under === box) {
+          const loose = box.querySelector('.lib-loose');
+          if (src.parentNode !== loose) flip(() => loose.appendChild(src));
         }
       } else {
-        // קטגוריה: לפני הקטגוריה שמרכזה מתחת לאצבע
-        const secs = [...box.querySelectorAll('.cat')].filter((x) => x !== src);
-        const before = secs.find((x) => { const r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) || null;
-        if (before) before.classList.add('drop-before'); else secs[secs.length - 1]?.classList.add('drop-after');
-        drop = { before };
+        const sec = under?.closest('.cat');
+        if (sec && sec !== src && box.contains(sec)) {
+          if (isBefore(src, sec) && y > mid(sec)) flip(() => sec.after(src));
+          else if (isBefore(sec, src) && y < mid(sec)) flip(() => sec.before(src));
+        }
+      }
+    };
+    // FLIP: מודדים, מזיזים ב-DOM, ומחזירים כל שורה ממקומה הקודם למקומה החדש בתנועה
+    let dropCat = null;
+    const flip = (mutate) => {
+      const els = [...box.querySelectorAll(kind === 'route' ? '.lib-row, .cat, .cat-empty, .lib-loose' : '.cat')].filter((x) => x !== src);
+      const was = new Map(els.map((x) => [x, x.getBoundingClientRect().top]));
+      mutate();
+      for (const x of els) {
+        const dy = was.get(x) - x.getBoundingClientRect().top;
+        if (Math.abs(dy) < 0.5) continue;
+        x.style.transition = 'none';
+        x.style.transform = `translateY(${dy}px)`;
+        x.getBoundingClientRect();
+        x.style.transition = 'transform .2s cubic-bezier(.2,.8,.3,1)';
+        x.style.transform = '';
       }
     };
     const finish = (cancelled) => {
@@ -1440,7 +1465,7 @@
       if (active) { dragJustEnded = true; setTimeout(() => (dragJustEnded = false), 350); }
       return !cancelled && active;
     };
-    const cancel = () => finish(true);
+    const cancel = () => { const was = active; finish(true); if (was) renderLibrary(); };
     const up = async (ev) => {
       if (ev.pointerId !== id) return;
       const wasActive = active;
@@ -1452,11 +1477,18 @@
         if (lsel.kind === 'folder' && lsel.folder === key) clearSel(); else Object.assign(lsel, { kind: 'folder', id: null, folder: key, editing: false });
         return renderLibrary();
       }
-      if (!drop) return;
-      if (kind === 'route') await dropRoute(key, drop);
-      else {
-        const cats = catOrder(await catLoad(), await libLoad()).filter((c) => c !== key);
-        cats.splice(drop.before ? cats.indexOf(drop.before.dataset.cat) : cats.length, 0, key);
+      // המקום שבו נשאר המקום הריק = המקום החדש
+      if (kind === 'route') {
+        let drop;
+        if (dropCat != null) drop = { folder: dropCat };
+        else {
+          const sib = (dir) => { let x = src[dir]; while (x && !x.classList?.contains('lib-row')) x = x[dir]; return x; };
+          const prev = sib('previousElementSibling'), next = sib('nextElementSibling');
+          drop = { folder: src.closest('.cat')?.dataset.cat || '', row: prev || next, after: !!prev };
+        }
+        await dropRoute(key, drop);
+      } else {
+        const cats = [...box.querySelectorAll('.cat')].map((x) => x.dataset.cat);
         await db.set('folders', cats);
       }
       renderLibrary();

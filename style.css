@@ -301,7 +301,8 @@ body.night .c-len { color: #ccc; }
 .lib-row .edit-in { font-size: 15px; font-weight: 600; }
 /* גרירה */
 .ghost { position: fixed; z-index: 30; pointer-events: none; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.3); border-radius: 10px; opacity: .95; }
-.lib-row.dragging, .cat.dragging { opacity: .3; } /* רק ברשימה – לא על משטח הכלים */
+.lib-row.dragging, .cat.dragging { opacity: 0; } /* מקום ריק שזז עם האצבע – רק ברשימה, לא על משטח הכלים */
+.cat-body > div:has(.lib-row) > .cat-empty { display: none; }
 .lib-loose:empty { min-height: 0; }
 #lib-list.drag-route .lib-loose { min-height: 38px; border: 1.5px dashed transparent; border-radius: 8px; margin: 4px 0; }
 #lib-list.drag-route .lib-loose:empty::after { content: "להוצאה מהקטגוריה – גררו לכאן"; display: block; text-align: center; font-size: 13px; color: #999; padding: 9px; }
