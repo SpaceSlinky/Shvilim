@@ -321,6 +321,7 @@
   let smoother = null;
   db.del('mapsmooth').catch(() => {}); // ניקוי העותק השמור מגרסאות קודמות
   // שבילים מסומנים שעוברים על אותה דרך (אותה גאומטריה): לכל צבע מספר קו (si) ומספר הקווים (sn)
+  // מחזיר את הגאומטריות שעליהן עובר שביל מסומן (כדי לעגל גם את הדרך שמתחת – אחרת היא מבצבצת לצדו)
   function markShared(fc) {
     const groups = new Map();
     for (const f of fc.features) {
@@ -336,16 +337,18 @@
       if (colors.length < 2) continue;
       for (const f of g) { f.properties.sn = Math.min(colors.length, 3); f.properties.si = Math.min(colors.indexOf(f.properties.c), 2); }
     }
+    return groups;
   }
   async function setMapData(fc) {
-    markShared(fc);
+    const trailGeoms = markShared(fc);
     mapFC = fc;
     searchIndex = null;
     const lvl = smoothLevel();
     smoother = lvl ? Geo.makeSmoother(fc, lvl) : null;
     if (!lvl) return map.getSource('osm').setData(fc);
     // פעם אחת בלבד (לא קודם המקורי ואז המעוגל – זה כפל עבודה למפה). מעגלים רק שבילים, דרכי עפר ונחלים
-    if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track') };
+    if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track'
+      || trailGeoms.has(JSON.stringify(f.geometry.coordinates))) };
     if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
   }
   // ---------- המפה השמורה מתעדכנת לבד ----------
