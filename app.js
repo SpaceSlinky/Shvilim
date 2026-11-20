@@ -232,31 +232,36 @@
 
   // ---------- נתוני המפה: הורדה חד-פעמית ושמירה בטלפון ----------
   let downloading = false;
-  async function downloadArea(bbox) {
+  // quiet: עדכון ברקע בלי הודעות; area: אזור חדש – הודעה קצרה בהתחלה ובסוף
+  async function downloadArea(bbox, { quiet = false, area = false } = {}) {
     if (downloading) return;
-    if (!navigator.onLine) return toast('אין חיבור לאינטרנט');
+    if (!navigator.onLine) return quiet || area ? undefined : toast('אין חיבור לאינטרנט');
     downloading = true;
     $('nodata').hidden = true;
+    const say = (m, ms) => { if (!quiet && !area) toast(m, ms); };
+    if (area) toast('מוריד את האזור לשימוש בלי אינטרנט…', 3000);
     try {
-      const fresh = await OSM.download(bbox, (m) => toast(m, 120000));
+      const fresh = await OSM.download(bbox, (m) => say(m, 120000));
       if (!fresh.features.length) throw new Error('לא נמצאו נתונים באזור');
       const old = await db.get('mapdata').catch(() => null);
       const fc = old ? OSM.merge(old, fresh) : fresh;
       await db.set('mapdata', fc);
       await mapReady;
       setMapData(fc);
-      toast('שומר גופנים…', 60000);
+      say('שומר גופנים…', 60000);
       // טעינה מוקדמת של הגופנים שהשמות דורשים – ה-Service Worker שומר אותם לאופליין
       await Promise.all(OSM.glyphRanges(fc).map((r) =>
         fetch(GLYPHS.replace('{fontstack}', encodeURIComponent(FONT[0])).replace('{range}', r)).catch(() => null)));
-      toast('שומר נתוני גובה…', 60000);
+      say('שומר נתוני גובה…', 60000);
       await Elev.prefetch(bbox).catch(() => 0);
       if (navigator.storage?.persist) navigator.storage.persist();
       const trails = fc.features.filter((f) => f.properties.k === 'trail').length;
-      toast(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
+      markArea(bbox);
+      if (area) toast('האזור נשמר לשימוש בלי אינטרנט ✓', 2500);
+      else say(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
     } catch (e) {
       console.error(e);
-      toast('ההורדה נכשלה: ' + (e.message || e) + '. נסו שוב.', 6000);
+      if (!quiet && !area) toast('ההורדה נכשלה: ' + (e.message || e) + '. נסו שוב.', 6000);
       if (!(await db.get('mapdata').catch(() => null))) $('nodata').hidden = false;
     } finally {
       downloading = false;
@@ -294,9 +299,42 @@
     }
     if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
   }
+  // ---------- המפה השמורה מתעדכנת לבד ----------
+  // אזורים שהורדו (localStorage `dlAreas`: [{b, t}]). פעם בשבועיים – עדכון שקט ברקע;
+  // אזור חדש שמגיעים אליו (בזום קרוב, עם אינטרנט) – מורד לבד. בלי חיבור / חיסכון בנתונים – לא מורידים.
+  const REFRESH_MS = 14 * 864e5;
+  const dlAreas = () => { try { return JSON.parse(localStorage.getItem('dlAreas')) || []; } catch { return []; } };
+  function markArea(b) {
+    const list = dlAreas().filter((a) => a.b.join() !== b.join());
+    list.push({ b, t: Date.now() });
+    try { localStorage.setItem('dlAreas', JSON.stringify(list)); } catch { /* ignore */ }
+  }
+  const netOk = () => navigator.onLine && !navigator.connection?.saveData;
   Promise.all([db.get('mapdata').catch(() => null), mapReady]).then(([fc]) => {
-    if (fc) setMapData(fc);
+    if (fc) {
+      setMapData(fc);
+      if (!dlAreas().length) try { localStorage.setItem('dlAreas', JSON.stringify([{ b: CARMEL, t: 0 }])); } catch { /* ignore */ }
+      // עדכון שקט של האזור הישן ביותר
+      const old = dlAreas().sort((a, b) => a.t - b.t)[0];
+      if (old && Date.now() - old.t > REFRESH_MS && netOk()) setTimeout(() => downloadArea(old.b, { quiet: true }), 8000);
+    } else if (navigator.onLine) downloadArea(CARMEL); // פעם ראשונה – מורידים לבד
     else $('nodata').hidden = false;
+  });
+  // אזור חדש: כשהמפה נעצרת מחוץ לאזורים שהורדו
+  let areaTimer = 0;
+  map.on('moveend', () => {
+    clearTimeout(areaTimer);
+    areaTimer = setTimeout(() => {
+      if (!mapFC || downloading || !netOk() || map.getZoom() < 12) return;
+      const c = map.getCenter();
+      if (dlAreas().some(({ b }) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3])) return;
+      const v = map.getBounds();
+      const bb = [v.getWest(), v.getSouth(), v.getEast(), v.getNorth()];
+      const pad = 0.01; // קצת מעבר למסך
+      const big = [bb[0] - pad, bb[1] - pad, bb[2] + pad, bb[3] + pad].map((x) => +x.toFixed(4));
+      if ((big[2] - big[0]) * (big[3] - big[1]) > 0.12) return; // רחוק מדי – לא מורידים
+      downloadArea(big, { area: true });
+    }, 1500);
   });
   mapReady.then(() => !map.hasImage('arrow') && map.addImage('arrow', arrowImage(), { pixelRatio: 2 }));
 
@@ -602,9 +640,7 @@
     const toStart = !nav && lastPos ? Geo.haversine(lastPos.p, route.pts[0]) : 0;
     // לפני היציאה, כשרחוקים מההתחלה – המרחק אליה על הכפתור
     $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
-    // בניווט: "עצור" במקום החזרה (שלא ייצאו מהמסלול בטעות באמצע הדרך)
-    $('ri-back').hidden = nav;
-    $('ri-stop').hidden = !nav;
+    $('k-exit-2').textContent = nav ? 'מניווט' : 'מהמסלול';
     $('ri-go').hidden = nav;
     $('ri-off').hidden = !(nav && offState);
     const wait = '…';
@@ -631,12 +667,12 @@
     renderRouteInfo();
   }, () => { clearScrub(); renderRouteInfo(); });
 
-  // "› מסלולים" – יוצאים מהמסלול לרשימה; "עצור" – מפסיקים את הניווט
-  $('ri-back').addEventListener('click', async () => {
-    dock.libOpen = true; // חוזרים לרשימה פתוחה
+  // יציאה – מקצה משטח הכלים: בניווט – עוצרים את הניווט; אחרת – חוזרים לרשימה, כמו שהייתה
+  async function exitRoute() {
+    dock.libOpen = true;
     await clearRoute();
-  });
-  $('ri-stop').addEventListener('click', () => stopNav());
+  }
+  $('k-exit').addEventListener('click', () => (active?.nav ? stopNav() : exitRoute()));
 
   // יוצאים לדרך: מעקב אחרי המיקום, מסך דולק, והמפה מסתובבת לפי הטלפון
   $('ri-go').addEventListener('click', async () => {
@@ -949,9 +985,15 @@
         const head = el('div', 'cat-head');
         const g = gripEl();
         head.append(g, fsel && lsel.editing ? editField(c, (v) => renameCat(c, v)) : el('span', 'cat-name', c), el('span', 'cat-count', items.length || ''));
-        // נגיעה בכותרת – פותחת/סוגרת ברכות (בלי לצייר מחדש)
+        // נגיעה בכותרת: בוחרת את הקטגוריה (כמו מסלול) ופותחת/סוגרת אותה ברכות
         head.addEventListener('click', () => {
           if (dragJustEnded || (fsel && lsel.editing)) return;
+          // נגיעה ראשונה – בוחרת ופותחת; נגיעה בקטגוריה שכבר נבחרה – פותחת/סוגרת
+          if (!(lsel.kind === 'folder' && lsel.folder === c)) {
+            libOpen.add(c);
+            Object.assign(lsel, { kind: 'folder', id: null, folder: c, editing: false });
+            return renderLibrary();
+          }
           const open = !libOpen.has(c);
           open ? libOpen.add(c) : libOpen.delete(c);
           sec.classList.toggle('open', open);
@@ -1116,18 +1158,19 @@
       g.appendChild(b);
       return b;
     };
-    const delBtn = (g) => {
-      const del = btn(g, 'del', 'מחיקה', async () => {
-        if (!del.classList.contains('armed')) {
-          del.classList.add('armed'); del.querySelector('span').textContent = 'בטוח?';
-          setTimeout(() => { del.classList.remove('armed'); del.querySelector('span').textContent = 'מחיקה'; }, 3000);
-          return;
-        }
-        if (r) { await db.set('library', (await libLoad()).filter((x) => x.id !== r.id)); toast(`"${r.name}" נמחק`); }
-        if (c) await deleteCat(c);
-        clearSel(); renderLibrary();
-      }, 'danger');
-    };
+    const delBtn = (g) => btn(g, 'del', 'מחיקה', async () => {
+      if (r) {
+        if (!(await confirmDlg(`למחוק את "${r.name}"?`, 'המסלול יימחק מהטלפון, ואי אפשר יהיה לשחזר אותו.'))) return;
+        await db.set('library', (await libLoad()).filter((x) => x.id !== r.id));
+        toast(`"${r.name}" נמחק`);
+      }
+      if (c) {
+        const n = lib.filter((x) => x.folder === c).length;
+        if (!(await confirmDlg(`למחוק את הקטגוריה "${c}"?`, n ? `רק הקטגוריה נמחקת. ${n === 1 ? 'המסלול שבה לא יימחק – הוא יעבור' : `${n} המסלולים שבה לא יימחקו – הם יעברו`} לרשימה, מחוץ לקטגוריות.` : 'הקטגוריה ריקה.'))) return;
+        await deleteCat(c);
+      }
+      clearSel(); renderLibrary();
+    }, 'danger');
     const cf = ctxFolder(lib);
     const addRoute = (g) => { btn(g, 'add', 'מסלול', () => { clearSel(); startPlan(cf ? { folder: cf } : undefined); }).title = cf ? `מסלול חדש ב"${cf}"` : 'מסלול חדש'; };
     const addCatBtn = (g) => btn(g, 'cat', 'קטגוריה', () => addCat(cats));
@@ -1148,6 +1191,15 @@
     }
   }
 
+  // חלון אישור: כותרת, מה יקרה, ביטול / מחיקה
+  function confirmDlg(title, text) {
+    const d = $('confirm-dlg');
+    $('cf-title').textContent = title;
+    $('cf-text').textContent = text;
+    d.returnValue = '';
+    d.showModal();
+    return new Promise((res) => d.addEventListener('close', () => res(d.returnValue === 'ok'), { once: true }));
+  }
   async function libEdit(fn) {
     const lib = await libLoad();
     fn(lib);
@@ -1173,7 +1225,7 @@
     for (const r of lib) if (r.folder === c) r.folder = '';
     await db.set('library', lib);
     if (active?.folder === c) { active.folder = ''; db.set('active', active); }
-    toast(`הקטגוריה "${c}" נמחקה; המסלולים שבה נשארו`, 3000);
+    toast(`הקטגוריה "${c}" נמחקה`, 2000);
   }
   async function addCat(cats) {
     let name = 'קטגוריה חדשה', n = 2;
@@ -1265,7 +1317,7 @@
   map.on('dragstart', () => follow && setFollow(false));
 
   async function requestWake() {
-    if (!$('m-wake').checked || !('wakeLock' in navigator) || wakeLock || watchId == null) return;
+    if (!('wakeLock' in navigator) || wakeLock || watchId == null) return; // תמיד דולק כש-GPS פועל
     try {
       wakeLock = await navigator.wakeLock.request('screen');
       wakeLock.addEventListener('release', () => (wakeLock = null));
@@ -1273,11 +1325,6 @@
   }
   function releaseWake() { wakeLock?.release(); wakeLock = null; }
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && requestWake());
-  $('m-wake').checked = localStorage.getItem('wake') !== '0';
-  $('m-wake').addEventListener('change', (e) => {
-    localStorage.setItem('wake', e.target.checked ? '1' : '0');
-    e.target.checked ? requestWake() : releaseWake();
-  });
 
   // ---------- מיקום ביחס למסלול ----------
   function updateStatus() {
@@ -1291,28 +1338,8 @@
   }
 
   // ---------- כפתורים ותפריט ----------
-  const menu = $('menu');
   $('btn-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
-  $('btn-settings').addEventListener('click', async () => {
-    const ready = navigator.serviceWorker?.controller ? 'האפליקציה והמפה שמורות לשימוש אופליין ✓' : 'טוען לשימוש אופליין…';
-    $('offline-info').textContent = ready;
-    storageInfo().then((t) => ($('storage-info').textContent = t));
-    menu.showModal();
-  });
-  $('m-close').addEventListener('click', () => menu.close());
-  $('m-area').addEventListener('click', () => { menu.close(); downloadVisible(); });
-  $('m-carmel').addEventListener('click', () => { menu.close(); downloadArea(CARMEL); });
   $('w-carmel').addEventListener('click', () => downloadArea(CARMEL));
-
-  async function storageInfo() {
-    try {
-      const est = await navigator.storage.estimate();
-      const mb = (b) => (b / 1048576).toFixed(1) + 'MB';
-      const d = est.usageDetails || {};
-      const parts = [d.indexedDB != null && `מפה ומסלולים ${mb(d.indexedDB)}`, d.caches != null && `אפליקציה, גופנים וגובה ${mb(d.caches)}`].filter(Boolean);
-      return `נפח בטלפון: ${mb(est.usage)}` + (parts.length ? ` (${parts.join(' · ')})` : '');
-    } catch { return ''; }
-  }
 
   // ---------- סיבוב ומצפן ----------
   let compassMode = false;
@@ -1491,12 +1518,13 @@
     for (const b of ['sat', 'topo', 'ihm']) map.setPaintProperty('base-' + b, 'raster-brightness-max', night ? 0.7 : 1);
   }
   const nightPref = localStorage.getItem('night');
-  $('m-night').checked = nightPref ? nightPref === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
-  document.body.classList.toggle('night', $('m-night').checked);
-  mapReady.then(() => applyTheme($('m-night').checked));
-  $('m-night').addEventListener('change', (e) => {
-    localStorage.setItem('night', e.target.checked ? '1' : '0');
-    applyTheme(e.target.checked);
+  let isNight = nightPref ? nightPref === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
+  document.body.classList.toggle('night', isNight);
+  mapReady.then(() => applyTheme(isNight));
+  $('btn-theme').addEventListener('click', () => {
+    isNight = !isNight;
+    localStorage.setItem('night', isNight ? '1' : '0');
+    applyTheme(isNight);
     applyLayers(); renderRouteInfo();
   });
 
@@ -1660,6 +1688,7 @@
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
+    $('k-exit').hidden = m !== 'route';
     $('search').hidden = m !== 'lib'; // חיפוש – רק כשלא בתוך מסלול או בתכנון
     if (m !== 'lib') closeSearch();
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
@@ -1748,7 +1777,7 @@
     if (m === 'route') {
       if (dock.open) return setDockOpen(false); // הגרף
       if (active?.nav) return ask('לעצור את הניווט?', 'עצור', stopNav); // שומרים מעצירה בטעות
-      return $('ri-back').click(); // לרשימה, כמו שהייתה
+      return exitRoute(); // לרשימה, כמו שהייתה
     }
     if (m === 'plan') return plan?.wps.length ? $('pl-undo').click() : endPlan(); // הנקודה האחרונה; בלי נקודות – יציאה
     if (m === 'lib') {
