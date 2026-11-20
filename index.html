@@ -18,7 +18,7 @@
   <!-- עמודת הכלים ("אולר"): סגורה = רק ☰. משיכה למטה או הקשה פותחת; פעולה או הקשה על המפה סוגרת -->
   <!-- משטח הכלים ("אולר"): נשלף מלמעלה. סגור – רואים רק את ☰ בתחתית המשטח; משיכה למטה מורידה את כל המשטח -->
   <!-- משטח הכלים ("אולר"): משטח אחד שנשלף מלמעלה – הכלים, ולידם (כשיש מסלול) הסליידר להסתרת הרקע.
-       בתחתית – לשונית עם חריץ למשיכה; סגור – רואים רק אותה -->
+       בתחתית – פס עם חריץ למשיכה; סגור – רואים רק אותו -->
   <div id="controls">
     <div class="kpanel">
       <div class="ksurf">
@@ -49,8 +49,9 @@
         <button id="pin-north" aria-label="צפון למעלה" hidden><svg viewBox="0 0 24 24" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg></button>
         <button id="pin-center" aria-label="חזרה למיקום שלי" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg></button>
       </div>
+        <!-- חריץ המשיכה – בתחתית המשטח עצמו; סגור = רואים רק את הפס הזה -->
+        <button id="btn-menu" class="kgrip" title="כלים" aria-label="כלים" aria-expanded="false"><span class="notch"></span></button>
       </div>
-      <button id="btn-menu" class="ktab" title="כלים" aria-label="כלים" aria-expanded="false"><span class="notch"></span></button>
     </div>
   </div>
   </div>

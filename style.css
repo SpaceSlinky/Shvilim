@@ -14,8 +14,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 /* משטח הכלים: נשלף מלמעלה, אייקונים בלי עיגולים */
 #controls { position: fixed; top: var(--safe-t); right: 10px; z-index: 8; --k: 0; --off: 0px; }
 .kpanel { position: relative; display: flex; flex-direction: column; align-items: center;
-  transform: translateY(calc((var(--off) + 10px) * (var(--k) - 1))); /* סגור: הלשונית עולה מעט, בלי צל מהמשטח */ transition: transform .3s cubic-bezier(.22,1,.36,1); }
-.ksurf { background: #fff; border-radius: 0 0 14px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25); padding: 2px 3px 4px; }
+  transform: translateY(calc((var(--off) + 4px) * (var(--k) - 1))); /* סגור: רואים רק את פס המשיכה */ transition: transform .3s cubic-bezier(.22,1,.36,1); }
+.ksurf { background: #fff; border-radius: 0 0 14px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25); padding: 4px 3px 0; display: flex; flex-direction: column; align-items: stretch; }
 .kbody { display: flex; align-items: stretch; gap: 2px; }
 #controls.dragging .kpanel { transition: none; }
 #controls .knife button, #controls .pins button { width: 44px; height: 44px; border: none; border-radius: 10px; background: none; display: grid; place-items: center; padding: 0; }
@@ -72,7 +72,7 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 
 /* מצב לילה */
 body.night { color-scheme: dark; }
-body.night .ksurf, body.night .ktab .tface { background: #23282e; }
+body.night .ksurf { background: #23282e; }
 body.night #search-close { background: #23282e; }
 body.night #controls .knife button:active, body.night #controls .pins button:active { background: rgba(255,255,255,.08); }
 body.night #controls svg { stroke: #ddd; fill: #ddd; }
@@ -155,14 +155,10 @@ body.night .scrub-head { color: #ffab40; }
 
 /* ===== משטח הכלים ("אולר"): הכלים מעל ה-☰; סגור – הם מחוץ למסך ===== */
 #controls.open { --k: 1; }
-/* הלשונית: קטנה, עם חריץ אחד; אזור המגע גדול ממנה */
-#controls .ktab { width: 64px; height: 28px; margin-top: -1px; padding: 0; border: 0; background: none; display: flex; justify-content: center; align-items: flex-start;
-  touch-action: none; cursor: grab; }
-.ktab .notch { display: block; width: 42px; height: 16px; border-radius: 0 0 10px 10px; background: #fff; box-shadow: 0 3px 6px -2px rgba(0,0,0,.25);
-  position: relative; }
-.ktab .notch::before { content: ""; position: absolute; left: 50%; top: 6px; translate: -50% 0; width: 20px; height: 3px; border-radius: 2px; background: #b5b5b5; }
-body.night .ktab .notch { background: #23282e; }
-body.night .ktab .notch::before { background: #666; }
+/* פס המשיכה בתחתית המשטח: גבוה מספיק כדי לבלוט כשהמשטח סגור, עם חריץ אחד */
+#controls .kgrip { display: block; width: 100%; height: 34px; padding: 0; border: 0; background: none; touch-action: none; cursor: grab; position: relative; }
+.kgrip .notch { position: absolute; left: 50%; bottom: 10px; translate: -50% 0; width: 22px; height: 4px; border-radius: 2px; background: #b5b5b5; }
+body.night .kgrip .notch { background: #666; }
 .knife { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 #controls.open .pins { display: none; }
 .pins { display: flex; flex-direction: column; align-items: center; }
@@ -307,9 +303,8 @@ body.night .edit-in { border-color: #4caf50; }
 .tgrp button { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 58px; padding: 7px 0 6px; border: 0; background: #f7f7f7;
   color: var(--green); font: inherit; font-size: 12px; }
 .tgrp button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.tgrp button:disabled { color: #bbb; }
-.tgrp button.danger:not(:disabled) { color: #c62828; }
-.tgrp button.armed { background: #c62828; color: #fff; }
+.tgrp button.danger { color: #c62828; }
+.tgrp button.armed, .tgrp button.danger.armed { background: #c62828; color: #fff; }
 .tgrp button:active:not(:disabled) { background: #e7efe9; }
 
 body.night .lib-row { border-color: #2c3136; }
@@ -318,8 +313,7 @@ body.night .cat.open .cat-name { color: #81c784; }
 body.night .ghost { background: #252b31; }
 body.night .tgrp { border-color: #3a3f45; background: #3a3f45; }
 body.night .tgrp button { background: #2a3036; color: #81c784; }
-body.night .tgrp button:disabled { color: #555; }
-body.night .tgrp button.danger:not(:disabled) { color: #ef5350; }
+body.night .tgrp button.danger:not(.armed) { color: #ef5350; }
 
 /* משיכת הדוק למטה = חזרה */
 .pull { touch-action: none; }

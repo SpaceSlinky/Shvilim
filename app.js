@@ -1106,41 +1106,56 @@
   };
   // התיקייה של מה שנבחר – אליה ייכנס מסלול חדש
   const ctxFolder = (lib) => (lsel.kind === 'folder' ? lsel.folder : lsel.kind === 'route' ? lib.find((x) => x.id === lsel.id)?.folder || '' : '');
+  // כמו בשירותים ב-ezpz: מופיעים רק הכפתורים שרלוונטיים למה שנבחר (לא כבויים)
+  //  כלום:    + מסלול · + קטגוריה
+  //  מסלול:   פתח · עריכה · מסלול (רק למתוכנן) · מחיקה | + מסלול (באותה קטגוריה)
+  //  קטגוריה: עריכה · מחיקה | + מסלול (בתוכה) · + קטגוריה
   function renderLibTools(lib, cats) {
     const tools = $('lib-tools');
     tools.replaceChildren();
     const r = lsel.kind === 'route' ? lib.find((x) => x.id === lsel.id) : null;
     const c = lsel.kind === 'folder' ? lsel.folder : null;
     const grp = () => tools.appendChild(el('div', 'tgrp'));
-    const btn = (g, ico, label, fn, { on = true, cls = '' } = {}) => {
+    const btn = (g, ico, label, fn, cls = '') => {
       const b = el('button', cls);
       b.innerHTML = `<svg viewBox="0 0 24 24">${ICON[ico]}</svg><span></span>`;
       b.querySelector('span').textContent = label;
-      b.disabled = !on;
       b.addEventListener('click', fn);
       g.appendChild(b);
       return b;
     };
-    const g1 = grp();
-    btn(g1, 'open', 'פתח', () => openFromLib(r.id), { on: !!r });
-    btn(g1, 'edit', 'עריכה', () => { lsel.editing = true; if (c) libOpen.add(c); renderLibrary(); }, { on: !!(r || c) });
-    btn(g1, 'route', 'מסלול', () => { dock.panel = 'lib'; clearSel(); startPlan({ ...r, libId: r.id }); }, { on: r?.kind === 'plan' });
-    const del = btn(g1, 'del', 'מחיקה', async () => {
-      if (!del.classList.contains('armed')) {
-        del.classList.add('armed'); del.querySelector('span').textContent = 'בטוח?';
-        setTimeout(() => { del.classList.remove('armed'); del.querySelector('span').textContent = 'מחיקה'; }, 3000);
-        return;
-      }
-      if (r) { await db.set('library', (await libLoad()).filter((x) => x.id !== r.id)); toast(`"${r.name}" נמחק`); }
-      if (c) await deleteCat(c);
-      clearSel(); renderLibrary();
-    }, { on: !!(r || c), cls: 'danger' });
-    const g2 = grp();
+    const delBtn = (g) => {
+      const del = btn(g, 'del', 'מחיקה', async () => {
+        if (!del.classList.contains('armed')) {
+          del.classList.add('armed'); del.querySelector('span').textContent = 'בטוח?';
+          setTimeout(() => { del.classList.remove('armed'); del.querySelector('span').textContent = 'מחיקה'; }, 3000);
+          return;
+        }
+        if (r) { await db.set('library', (await libLoad()).filter((x) => x.id !== r.id)); toast(`"${r.name}" נמחק`); }
+        if (c) await deleteCat(c);
+        clearSel(); renderLibrary();
+      }, 'danger');
+    };
     const cf = ctxFolder(lib);
-    btn(g2, 'add', 'מסלול', () => { dock.panel = 'lib'; clearSel(); startPlan(cf ? { folder: cf } : undefined); })
-      .title = cf ? `מסלול חדש ב"${cf}"` : 'מסלול חדש';
-    btn(g2, 'cat', 'קטגוריה', () => addCat(cats));
+    const addRoute = (g) => { btn(g, 'add', 'מסלול', () => { dock.panel = 'lib'; clearSel(); startPlan(cf ? { folder: cf } : undefined); }).title = cf ? `מסלול חדש ב"${cf}"` : 'מסלול חדש'; };
+    const addCatBtn = (g) => btn(g, 'cat', 'קטגוריה', () => addCat(cats));
+    if (r) {
+      const g1 = grp();
+      btn(g1, 'open', 'פתח', () => openFromLib(r.id));
+      btn(g1, 'edit', 'עריכה', () => { lsel.editing = true; renderLibrary(); });
+      if (r.kind === 'plan') btn(g1, 'route', 'מסלול', () => { dock.panel = 'lib'; clearSel(); startPlan({ ...r, libId: r.id }); });
+      delBtn(g1);
+      addRoute(grp());
+    } else if (c) {
+      const g1 = grp();
+      btn(g1, 'edit', 'עריכה', () => { lsel.editing = true; libOpen.add(c); renderLibrary(); });
+      delBtn(g1);
+      const g2 = grp(); addRoute(g2); addCatBtn(g2);
+    } else {
+      const g = grp(); addRoute(g); addCatBtn(g);
+    }
   }
+
   async function libEdit(fn) {
     const lib = await libLoad();
     fn(lib);
