@@ -215,7 +215,6 @@ body.night .grip::before { background: #555; }
 #ri-stats.hot .v, #ri-stats.hot .lbl { color: #e65100; }
 .go { display: block; width: 100%; margin-top: 8px; padding: 12px; font: inherit; font-size: 17px; font-weight: 700; border: 0; border-radius: 12px;
   background: var(--green); color: #fff; }
-.offroute { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #e67e00; color: #fff; font-weight: 700; text-align: center; }
 
 /* רשימת המסלולים: בחירה, ואז כלים */
 

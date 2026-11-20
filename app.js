@@ -439,7 +439,7 @@
     map.getSource('route').setData(routeFeatures(a.segs));
     map.getSource('wpts').setData({ type: 'FeatureCollection',
       features: (a.waypoints || []).map((w) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: w.coord }, properties: { name: w.name } })) });
-    walkedAt = -1; offState = false;
+    walkedAt = -1;
     applyLayers();
     renderDock();
     if (fit) fitRoute();
@@ -480,7 +480,6 @@
     map.getSource('route').setData(empty);
     map.getSource('wpts').setData(empty);
     setWalked(null);
-    offState = false;
     clearScrub();
     applyLayers();
     renderDock();
@@ -632,7 +631,6 @@
   // בתצוגה – של כל המסלול; בניווט – מה שנשאר; בגרירה על הגרף – עד האצבע (בכתום), וחוזרת בעזיבה.
   const fmtClock = (min) => { const t = new Date(Date.now() + min * 60000); return `\u2066~${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}\u2069`; }; // בידוד LTR בתוך טקסט עברי
   const mtr = (v) => Math.round(v) + " מ'";
-  let offState = false; // סטייה מהמסלול (בניווט)
   function setStats(cells, hot) {
     cells.forEach(([l, v], i) => {
       $('st-l' + (i + 1)).textContent = l;
@@ -654,7 +652,6 @@
     $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
     $('k-exit-2').textContent = nav ? 'מניווט' : 'מהמסלול';
     $('ri-go').hidden = nav;
-    $('ri-off').hidden = !(nav && offState);
     const wait = '…';
     if (scrubAt != null && prof) {
       // האצבע על הגרף: מהמיקום שלך (בניווט, אם הנקודה לפניך) או מתחילת המסלול
@@ -689,7 +686,7 @@
   // יוצאים לדרך: מעקב אחרי המיקום, מסך דולק, והמפה מסתובבת לפי הטלפון
   $('ri-go').addEventListener('click', async () => {
     if (!active) return;
-    active.nav = true; offState = false;
+    active.nav = true;
     db.set('active', active);
     startGps(); setFollow(true);
     if (lastPos) map.easeTo({ center: lastPos.p, zoom: Math.max(map.getZoom(), 16) });
@@ -699,7 +696,7 @@
   });
   function stopNav() {
     if (!active) return;
-    active.nav = false; offState = false;
+    active.nav = false;
     db.set('active', active);
     setFollow(false);
     if (compassMode) { compassMode = false; map.rotateTo(0, { duration: 400 }); updateCompassIcon(); }
@@ -717,16 +714,6 @@
     const i = idxAt(route.cum, along);
     const coords = route.pts.slice(0, i + 1).concat([pointAt(route, along)]);
     map.getSource('walked')?.setData(coords.length > 1 ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } } : empty);
-  }
-
-  // סטייה מהמסלול: מופיעה רק כשיש בעיה, עם רטט בכניסה וביציאה
-  function checkOff(off, accuracy) {
-    const th = Math.max(30, accuracy || 0);
-    const was = offState;
-    if (!offState && off > th) offState = true;
-    else if (offState && off < th * 0.7) offState = false;
-    if (offState !== was) navigator.vibrate?.(offState ? [250, 120, 250] : [80]);
-    $('ri-off').textContent = `סטית ${Geo.fmtDist(off)} מהמסלול`;
   }
 
   // ---------- תכנון מסלול ----------
@@ -1351,7 +1338,7 @@
     if (lastPos) {
       const r = Geo.locate(route, lastPos.p, prevAlong);
       prevAlong = r.along;
-      if (active?.nav) { checkOff(r.off, lastPos.accuracy); setWalked(r.along); }
+      if (active?.nav) setWalked(r.along);
     }
     renderRouteInfo();
   }
