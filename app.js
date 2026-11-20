@@ -1931,7 +1931,11 @@
     farTimer = setTimeout(() => {
       if (!showingRoute() || follow || detour) return;
       if (touching || map.isMoving?.()) return checkFar();
-      if (nav) setFollow(true);
+      if (nav) {
+        // חזרה למיקום שמתחילה רך ונגמרת רך (ולא קפיצה מהירה בהתחלה); אחרי זה – מעקב רגיל
+        if (lastPos) map.easeTo({ center: lastPos.p, duration: 1400, easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) });
+        setFollow(true);
+      }
       else if (outOfEnvelope()) fitRoute({ duration: 900 });
     }, nav ? RETURN_MS : 1000);
   }
