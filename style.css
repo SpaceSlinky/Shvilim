@@ -102,6 +102,15 @@ body.night .maplibregl-popup-content { background: #23282e; color: #eee; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
 .grid2 .row { font-size: 14px; }
 body.night #layers-dlg h3 { color: #aaa; }
+.area-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(0,0,0,.08); }
+#layers-dlg .area-row button { width: auto; margin: 0; padding: 8px 2px; border: 0; background: none; font: inherit; color: inherit; border-radius: 0; }
+#layers-dlg .area-row .a-name { flex: 1; min-width: 0; text-align: start; font-size: 15px; font-weight: 600; }
+.a-name small { display: block; font-size: 12px; font-weight: 400; color: #777; }
+#layers-dlg .area-row .a-del { flex: none; font-size: 14px; font-weight: 700; color: #c62828; padding-inline: 6px; }
+body.night .area-row { border-color: rgba(255,255,255,.1); }
+body.night .a-name small { color: #aaa; }
+body.night #layers-dlg .area-row .a-del { color: #ef5350; }
+#areas-list:empty::after { content: 'אין מפות שמורות'; display: block; padding: 6px 0; font-size: 14px; color: #888; }
 body.night #btn-compass.active { background: rgba(100,181,246,.18); }
 .info-row { padding: 3px 0; line-height: 1.35; }
 .info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }

@@ -334,7 +334,7 @@
     if (fc) {
       setMapData(fc);
       // מפה מגרסה ישנה (בלי תאריך) – נחשבת עדכנית; העדכון הבא בעוד שבועיים
-      const list = dlAreas().length ? dlAreas() : [{ b: CARMEL, t: 0 }];
+      const list = localStorage.getItem('dlAreas') == null ? [{ b: CARMEL, t: 0 }] : dlAreas();
       if (list.some((a) => !a.t)) try { localStorage.setItem('dlAreas', JSON.stringify(list.map((a) => ({ ...a, t: a.t || Date.now() })))); } catch { /* ignore */ }
       // עדכון שקט של האזור הישן ביותר
       const old = dlAreas().sort((a, b) => a.t - b.t)[0];
@@ -342,6 +342,76 @@
     } else if (navigator.onLine) downloadArea(CARMEL); // פעם ראשונה – מורידים לבד
     else $('nodata').hidden = false;
   });
+  // ---------- מפות שמורות: רשימה ומחיקה (בחלון השכבות, תחת "עוד") ----------
+  const inBox = (b) => (c) => c[0] >= b[0] && c[0] <= b[2] && c[1] >= b[1] && c[1] <= b[3];
+  const touchesBox = (f, test) => (f.geometry.type === 'Point' ? test(f.geometry.coordinates) : f.geometry.coordinates.some(test));
+  const PLACE_RANK = { city: 0, town: 1, village: 2, suburb: 3, hamlet: 4, neighbourhood: 5, locality: 6 };
+  function areaName(b) {
+    if (b.join() === CARMEL.join()) return 'הכרמל';
+    const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2, inside = inBox(b);
+    let best = null, bestScore = Infinity;
+    for (const f of mapFC?.features || []) {
+      if (f.properties.k !== 'place' || !inside(f.geometry.coordinates)) continue;
+      const [x, y] = f.geometry.coordinates;
+      const score = (PLACE_RANK[f.properties.t] ?? 7) * 10 + Math.hypot(x - cx, y - cy) / (b[2] - b[0]);
+      if (score < bestScore) { bestScore = score; best = f.properties.n; }
+    }
+    return best || 'אזור ללא שם';
+  }
+  const fmtSize = (n) => '\u2066' + (n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB') + '\u2069'; // בידוד: "KB 1" → "1 KB"
+  function renderAreas() {
+    const box = $('areas-list');
+    box.textContent = '';
+    const list = dlAreas().sort((a, b) => b.t - a.t);
+    for (const a of list) {
+      const test = inBox(a.b);
+      let size = 0;
+      for (const f of mapFC?.features || []) if (touchesBox(f, test)) size += JSON.stringify(f).length;
+      const name = areaName(a.b);
+      const row = document.createElement('div');
+      row.className = 'area-row';
+      const go = document.createElement('button');
+      go.className = 'a-name';
+      go.textContent = name;
+      const sm = document.createElement('small');
+      sm.textContent = `${fmtSize(size)} · ${a.t ? 'עודכן ' + new Date(a.t).toLocaleDateString('he-IL') : ''}`;
+      go.append(sm);
+      go.addEventListener('click', () => {
+        $('layers-dlg').close();
+        map.fitBounds([[a.b[0], a.b[1]], [a.b[2], a.b[3]]], { padding: 20, duration: 600 });
+      });
+      const del = document.createElement('button');
+      del.className = 'a-del';
+      del.textContent = 'מחיקה';
+      del.addEventListener('click', async () => {
+        if (!(await confirmDlg(`למחוק את המפה של ${name}?`, 'המפה של האזור תימחק מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותה שוב כשיש אינטרנט.'))) return;
+        await deleteArea(a.b);
+      });
+      row.append(go, del);
+      box.append(row);
+    }
+  }
+  // מוחקים את מה שבתוך האזור – חוץ ממה שנוגע באזור שמור אחר
+  async function deleteArea(b) {
+    if (dlJob?.quiet) { dlJob.ctl.abort(new DOMException('הופסק', 'AbortError')); await dlJob.done; }
+    const rest = dlAreas().filter((a) => a.b.join() !== b.join());
+    const del = inBox(b), keep = rest.map((a) => inBox(a.b));
+    const fc = mapFC || (await db.get('mapdata').catch(() => null)) || { type: 'FeatureCollection', features: [] };
+    const features = fc.features.filter((f) => !touchesBox(f, del) || keep.some((t) => touchesBox(f, t)));
+    const bbox = rest.length ? rest.reduce((u, { b: x }) => [Math.min(u[0], x[0]), Math.min(u[1], x[1]), Math.max(u[2], x[2]), Math.max(u[3], x[3])], rest[0].b) : undefined;
+    const nfc = { type: 'FeatureCollection', features, ...(bbox ? { bbox } : {}) };
+    await db.set('mapdata', nfc); // נשאר גם כשריק – כדי שהכרמל לא יורד שוב לבד
+    try { localStorage.setItem('dlAreas', JSON.stringify(rest)); } catch { /* ignore */ }
+    // גם נתוני הגובה של האזור (מה שלא משותף לאזור אחר)
+    const keepUrls = new Set(rest.flatMap((a) => Elev.tileUrls(a.b)));
+    const drop = Elev.tileUrls(b).filter((u) => !keepUrls.has(u));
+    if (self.caches) for (const k of await caches.keys()) { const c = await caches.open(k); await Promise.all(drop.map((u) => c.delete(u))); }
+    await setMapData(nfc);
+    renderAreas();
+    checkArea();
+  }
+  $('layers-dlg').querySelector('.more-layers').addEventListener('toggle', (e) => { if (e.target.open) renderAreas(); });
+
   // אזור בלי מפה שמורה (למשל אחרי חיפוש): במרכז המסך – "להורדת מפות האזור" (לחיץ)
   const dlHere = $('dl-here');
   let dlMsg = '';
@@ -1502,7 +1572,7 @@
     applyLayers();
     if (el.name === 'smooth' && mapFC) setTimeout(() => setMapData(mapFC), 30);
   });
-  $('btn-layers').addEventListener('click', () => { syncLayerForm(); $('layers-dlg').showModal(); });
+  $('btn-layers').addEventListener('click', () => { syncLayerForm(); if ($('layers-dlg').querySelector('.more-layers').open) renderAreas(); $('layers-dlg').showModal(); });
   $('layers-close').addEventListener('click', () => $('layers-dlg').close());
   mapReady.then(applyLayers);
 
@@ -1824,7 +1894,7 @@
   // ---------- כפתור "חזור" של הטלפון ----------
   // כשיש לאן לחזור, יש בהיסטוריה רשומה אחת שלנו; "חזור" מוריד אותה (popstate), ואנחנו עושים צעד אחד אחורה.
   // כשאין לאן לחזור – הרשומה יורדת, ו"חזור" הבא יוצא מהאפליקציה כרגיל.
-  const openDialog = () => document.querySelector('dialog[open]');
+  const openDialog = () => [...document.querySelectorAll('dialog[open]')].pop(); // העליון (אישור מעל השכבות)
   function canGoBack() {
     return !!(openDialog() || !$('dock-ask').hidden || $('search-input').value || dockMode() !== 'lib' || dock.libOpen);
   }

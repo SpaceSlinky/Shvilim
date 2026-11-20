@@ -33,6 +33,15 @@
     return tiles.get(k);
   }
 
+  // כתובות האריחים שמכסים אזור (למחיקה מהמטמון)
+  function tileUrls([w, s, e, nn]) {
+    const out = [];
+    for (let x = Math.floor(worldX(w) / 256); x <= Math.floor(worldX(e) / 256); x++)
+      for (let y = Math.floor(worldY(nn) / 256); y <= Math.floor(worldY(s) / 256); y++)
+        out.push(URL_T.replace('{z}', Z).replace('{x}', x).replace('{y}', y));
+    return out;
+  }
+
   async function prefetch(bbox) {
     const [w, s, e, nn] = bbox;
     const x0 = Math.floor(worldX(w) / 256), x1 = Math.floor(worldX(e) / 256);
@@ -109,5 +118,5 @@
     return { dist, ele, gain, loss, min: Math.min(...ele), max: Math.max(...ele), total };
   }
 
-  root.Elev = { prefetch, profile, Z };
+  root.Elev = { prefetch, profile, tileUrls, Z };
 })(typeof self !== 'undefined' ? self : globalThis);
