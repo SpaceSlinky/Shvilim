@@ -183,7 +183,7 @@ body.night .vs-thumb { border-color: #23282e; }
 /* ===== הדוק התחתון: צר, ומשתנה לפי מה שעושים ===== */
 #dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; margin: 0 auto; max-width: 560px; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-end; /* התוכן צמוד לתחתית: כשהגובה משתנה – הקצה העליון זז, והכפתורים נשארים במקום */
-  transition: height .32s cubic-bezier(.22,1,.36,1);
+  transition: none; /* הגובה צמוד לתוכן – התוכן עצמו מונפש */
   background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 14px rgba(0,0,0,.22); }
 #dock-in > section { padding: 8px 10px; }
   background: #f2f4f3; color: #222; font: inherit; font-size: 13px; }
@@ -252,7 +252,7 @@ body.night .stop { color: #ef5350; border-color: #ef5350; }
 body.night .edit-in { border-color: #4caf50; }
 
 /* הגובה עובר ברכות בין מצבים; בפרטי המסלול – צמוד לאצבע */
-#dock[data-mode="route"] { transition: none; }
+#dock.morph { transition: height .32s cubic-bezier(.22,1,.36,1); } /* רק במעבר בין מצבים */
 #dock-in { flex: none; padding-bottom: var(--safe-b); }
 
 /* ===== מסלולים: טבלה לפי קטגוריות ===== */

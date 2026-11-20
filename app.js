@@ -1662,6 +1662,7 @@
   let lastMode = null;
   function renderDock() {
     const m = dockMode();
+    if (lastMode && lastMode !== m) { dockEl.classList.add('morph'); clearTimeout(renderDock.t); renderDock.t = setTimeout(() => dockEl.classList.remove('morph'), 400); }
     lastMode = m;
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
@@ -1702,21 +1703,44 @@
     renderDock();
   }
   $('lib-head').addEventListener('click', () => { if (!libDragged) setLibOpen(!dock.libOpen); });
-  // משיכה למעלה פותחת, למטה סוגרת (על הידית ושורת "מסלולים")
+  // גרירה על הידית או על שורת "מסלולים": הרשימה נפתחת ונסגרת צמוד לאצבע;
+  // בעזיבה – פתוח או סגור לפי המקום, ותנועה מהירה ממשיכה לכיוון שלה
   let libDragged = false;
+  const libBody = $('lib-body');
+  const EASE_L = 'grid-template-rows .3s cubic-bezier(.22,1,.36,1)';
   for (const el of document.querySelectorAll('#dock .lib-pull')) {
-    let y0 = null;
-    el.addEventListener('pointerdown', (e) => { y0 = e.clientY; libDragged = false; try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ } });
+    let y0 = null, h0 = 0, full = 0, track = [];
+    el.addEventListener('pointerdown', (e) => {
+      y0 = e.clientY; libDragged = false; track = [[e.clientY, e.timeStamp]];
+      h0 = libBody.offsetHeight;
+      if (!dock.libOpen) { libOpen.clear(); renderLibrary(); } // התוכן מוכן למדידה
+      try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    });
     el.addEventListener('pointermove', (e) => {
       if (y0 == null) return;
       const dy = e.clientY - y0;
-      if (Math.abs(dy) < 30) return;
-      libDragged = true; y0 = null;
-      setLibOpen(dy < 0);
-      setTimeout(() => (libDragged = false), 300);
+      if (!libDragged && Math.abs(dy) < 6) return;
+      if (!libDragged) full = libBody.firstElementChild.scrollHeight;
+      libDragged = true;
+      track.push([e.clientY, e.timeStamp]); if (track.length > 6) track.shift();
+      libBody.style.transition = 'none';
+      libBody.style.gridTemplateRows = Math.max(0, Math.min(full, h0 - dy)) + 'px';
     });
-    el.addEventListener('pointerup', () => (y0 = null));
-    el.addEventListener('pointercancel', () => (y0 = null));
+    const end = () => {
+      if (y0 == null) return;
+      y0 = null;
+      if (!libDragged) return; // הקשה – מטופלת ב-click
+      const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
+      const v = (yb - ya) / Math.max(1, tb - ta);
+      const open = Math.abs(v) > 0.3 ? v < 0 : libBody.offsetHeight > full / 2;
+      // מסיימים בהנפשה מהמקום שבו האצבע עזבה, ואז חוזרים לשליטת ה-CSS
+      libBody.style.transition = EASE_L;
+      libBody.style.gridTemplateRows = (open ? full : 0) + 'px';
+      setTimeout(() => { libBody.style.transition = ''; libBody.style.gridTemplateRows = ''; dock.libOpen = open; if (!open) clearSel(); renderDock(); }, 300);
+      setTimeout(() => (libDragged = false), 350);
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   }
 
   // גרירה: הפרטים נפתחים ונסגרים צמוד לאצבע. בעזיבה – לפתוח או לסגור לפי המקום,
