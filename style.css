@@ -103,7 +103,7 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 
 /* מצב לילה */
 body.night { color-scheme: dark; }
-body.night #search-form { background: #3a424a; color: #c4c8cc; }
+body.night #search-form { background: #2c333a; color: #b9bec3; box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 2px 10px rgba(0,0,0,.5); }
 body.night #controls svg { stroke: #ddd; fill: #ddd; }
 body.night #btn-locate.gps-on svg { stroke: #64b5f6; fill: #64b5f6; }
 body.night #btn-locate.active { background: rgba(100,181,246,.18); }
@@ -453,11 +453,11 @@ body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.n
 #controls.open #dim-v .vs-thumb { scale: 1; transition-delay: .35s; }
 /* על המפה: קו כהה עם הילה לבהירה ביום, קו בהיר עם הילה כהה בלילה */
 #dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); }
-#dim-v .vs-track::before { background: #6b6b6b; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
+#dim-v .vs-track::before { background: #5f5f5f; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
 body.night #dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000); }
-body.night #dim-v .vs-track::before { background: #9aa0a6; box-shadow: 0 0 0 1.5px rgba(0,0,0,.8); }
-body.night #controls button { background: #3a424a; }
-body.night #controls:not(.alone) .kmenu { background: #4a535c; }
+body.night #dim-v .vs-track::before { background: #b4b9be; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85); }
+body.night #controls button { background: #2c333a; box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 2px 10px rgba(0,0,0,.5); }
+body.night #controls:not(.alone) .kmenu { background: #3b444c; box-shadow: none; }
 body.night .kmenu i { background: #ddd; }
 
 /* ===== כל הכפתורים – גלולה ===== */
