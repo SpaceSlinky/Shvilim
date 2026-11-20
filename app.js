@@ -600,8 +600,9 @@
     const atP = nav && prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
     // שורת משנה: תיקייה; בתצוגה – גם המרחק להתחלה כשרחוקים ממנה
     const toStart = !nav && lastPos ? Geo.haversine(lastPos.p, route.pts[0]) : 0;
-    $('ri-sub').textContent = ['📁 ' + (active.folder || 'כללי'), toStart > 150 ? `📍 ${Geo.fmtDist(toStart)} להתחלה` : '', nav ? 'בניווט' : '']
-      .filter(Boolean).join(' · ');
+    $('ri-folder').textContent = active.folder || 'כללי';
+    // לפני היציאה, כשרחוקים מההתחלה – המרחק אליה על הכפתור
+    $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
     $('ri-x').textContent = nav ? 'עצור' : '✕';
     $('ri-x').classList.toggle('stop', nav);
     $('ri-go').hidden = nav;
@@ -1453,7 +1454,7 @@
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
-    $('controls').classList.toggle('with-dim', !!(active || plan));
+    $('controls').classList.toggle('with-dim', !!(active || plan)); // הסליידר מתווסף לצד המשטח
     showDim();
     dockEl.classList.toggle('open', dock.open);
     if (m === 'route') renderRouteInfo();

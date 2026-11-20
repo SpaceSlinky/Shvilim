@@ -172,13 +172,15 @@ body.night .new-folder input { background: #1d2227; color: #eee; border-color: #
 #controls .knife > button.pin { height: 44px; margin-top: 2px; opacity: 1; transform: none; pointer-events: auto; }
 
 /* הסתרת הרקע: סליידר אנכי בצד שמאל של הכפתורים, לכל אורך המשטח (למעלה – בלי, למטה – הכי מוסתר) */
-#controls { transition: padding .22s cubic-bezier(.22,1,.36,1); }
-#controls.with-dim { padding-left: calc(30px * var(--k)); }
-#dim-v { position: absolute; left: 3px; top: 8px; bottom: 8px; width: 28px; display: flex; flex-direction: column; align-items: center; --f: .6;
+/* המשטח מקבל תוספת משמאל; הכפתורים נשארים במקומם */
+#controls.with-dim.open { border-bottom-left-radius: 0; }
+#dim-v { position: absolute; right: 100%; top: 0; bottom: 0; width: 32px; display: flex; flex-direction: column; align-items: center; --f: .6;
+  background: #fff; border-radius: 0 0 0 14px; box-shadow: -3px 3px 8px -2px rgba(0,0,0,.2);
   opacity: var(--k); pointer-events: none; transition: opacity .18s; }
+body.night #dim-v { background: #23282e; }
 #dim-v .vs-ico { width: 20px; height: 20px; margin: 6px 0 4px; flex: none; }
 #dim-v .vs-ico .half { fill: #333; stroke: none; }
-.vs-track { position: relative; flex: 1; width: 28px; margin-bottom: 6px; touch-action: none; cursor: pointer; }
+.vs-track { position: relative; flex: 1; width: 30px; margin-bottom: 6px; touch-action: none; cursor: pointer; }
 .vs-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; translate: -50% 0; border-radius: 2px; background: #ddd; }
 .vs-fill { position: absolute; left: 50%; top: 0; width: 4px; translate: -50% 0; height: calc(var(--f) * 100%); border-radius: 2px; background: var(--green); }
 .vs-thumb { position: absolute; left: 50%; top: calc(var(--f) * 100%); width: 18px; height: 18px; translate: -50% -50%; border-radius: 50%;
@@ -208,7 +210,11 @@ body.night .vs-thumb { border-color: #23282e; }
 .grip { display: block; width: 44px; height: 14px; margin: -6px auto 0; padding: 0; border: 0; background: none; touch-action: none; position: relative; }
 .grip::before { content: ""; position: absolute; left: 50%; top: 5px; translate: -50% 0; width: 36px; height: 4px; border-radius: 2px; background: #c9c9c9; }
 .r-title { flex: 1; min-width: 0; touch-action: none; cursor: pointer; padding: 2px; }
-.r-title b { display: block; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
+.r-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 16px; line-height: 1.6; }
+.r-title b { font-weight: 700; }
+#ri-folder { color: #666; }
+.r-title .sep { color: #999; }
+body.night #ri-folder { color: #aaa; }
 .r-more { height: 0; overflow: hidden; }
 #dock.open .r-more { height: auto; }
 .r-more .profile { margin-top: 6px; }
@@ -223,7 +229,6 @@ body.night .grip::before { background: #555; }
 #ri-stats { margin-top: 6px; touch-action: none; }
 #ri-stats .v { unicode-bidi: isolate; }
 #ri-stats.hot .v, #ri-stats.hot .lbl { color: #e65100; }
-.r-title span { display: block; margin-top: 2px; }
 #ri-x.stop { font-size: 14px; font-weight: 700; color: #c62828; border: 1px solid #c62828; border-radius: 10px; padding: 5px 12px; margin-top: 2px; }
 .go { display: block; width: 100%; margin-top: 8px; padding: 12px; font: inherit; font-size: 17px; font-weight: 700; border: 0; border-radius: 12px;
   background: var(--green); color: #fff; }
