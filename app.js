@@ -57,6 +57,9 @@
   const k = (v) => ['==', ['get', 'k'], v];
   const road = (r) => ['all', k('road'), ['==', ['get', 'r'], r]];
   const zw = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, a, 16, b];
+  // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
+  const zwShared = (a, b, fn) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, fn(a), 16, fn(b)];
+  const SN = ['coalesce', ['get', 'sn'], 1], SI = ['coalesce', ['get', 'si'], 0], SHARED_W = 0.7;
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
@@ -109,11 +112,13 @@
       { id: 'bike', type: 'line', source: 'osm', filter: k('bike'), minzoom: 11, layout: { 'line-join': 'round', visibility: 'none' },
         paint: { 'line-color': '#ff6d00', 'line-width': zw(1, 3), 'line-dasharray': [2, 1.2], 'line-opacity': 0.9 } },
       // שבילים מסומנים
+      // קטע משותף לכמה שבילים (sn = כמה, si = מספר הקו): קווים צמודים זה לזה, כמו הסימון על הסלעים
       { id: 'trail-casing', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
-          'line-opacity': 0.85, 'line-width': zw(2.8, 7.5) } },
+          'line-opacity': 0.85, 'line-width': zwShared(2.8, 7.5, (w) => ['+', w, ['*', ['-', SN, 1], w * 0.42]]) } },
       { id: 'trail', type: 'line', source: 'osm', filter: k('trail'), layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['get', 'c'], 'line-width': zw(1.5, 4.5) } },
+        paint: { 'line-color': ['get', 'c'], 'line-width': zwShared(1.5, 4.5, (w) => ['*', w, ['case', ['>', SN, 1], SHARED_W, 1]]),
+          'line-offset': zwShared(1.5, 4.5, (w) => ['*', w * SHARED_W, ['-', SI, ['/', ['-', SN, 1], 2]]]) } },
       // תוויות
       { id: 'water-label', type: 'symbol', source: 'osm', filter: ['all', k('water'), ['has', 'n']], minzoom: 13,
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'symbol-spacing': 300 },
@@ -318,7 +323,25 @@
   let smoothCache = null;
   let smoother = null;
   db.del('mapsmooth').catch(() => {}); // ניקוי העותק השמור מגרסאות קודמות
+  // שבילים מסומנים שעוברים על אותה דרך (אותה גאומטריה): לכל צבע מספר קו (si) ומספר הקווים (sn)
+  function markShared(fc) {
+    const groups = new Map();
+    for (const f of fc.features) {
+      if (f.properties.k !== 'trail') continue;
+      delete f.properties.si; delete f.properties.sn;
+      const key = JSON.stringify(f.geometry.coordinates);
+      let g = groups.get(key);
+      if (!g) groups.set(key, (g = []));
+      g.push(f);
+    }
+    for (const g of groups.values()) {
+      const colors = [...new Set(g.map((f) => f.properties.c))].sort();
+      if (colors.length < 2) continue;
+      for (const f of g) { f.properties.sn = Math.min(colors.length, 3); f.properties.si = Math.min(colors.indexOf(f.properties.c), 2); }
+    }
+  }
   async function setMapData(fc) {
+    markShared(fc);
     mapFC = fc;
     searchIndex = null;
     const lvl = smoothLevel();
