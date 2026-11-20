@@ -159,9 +159,10 @@
       return out.length ? out : pts;
     };
   }
-  function smoothFC(fc, iters = 2) {
+  // which – אילו קווים לעגל (ברירת מחדל: כולם). רחובות לא צריך – וזה רוב הנפח, ועיגול מכפיל את מספר הנקודות
+  function smoothFC(fc, iters = 2, which = () => true) {
     const sm = makeSmoother(fc, iters);
-    return { type: 'FeatureCollection', features: fc.features.map((f) => f.geometry.type !== 'LineString' ? f
+    return { type: 'FeatureCollection', features: fc.features.map((f) => f.geometry.type !== 'LineString' || !which(f) ? f
       : { ...f, geometry: { type: 'LineString', coordinates: sm(f.geometry.coordinates) } }) };
   }
 

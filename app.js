@@ -151,21 +151,18 @@
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
           'text-size': ['match', ['get', 't'], ['city', 'town'], 17, 15] },
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
-      // מסלול פעיל: המפה מתחתיו דוהה, והמסלול מצויר עבה בצבעי השבילים עם מסגרת לבנה וקו מתאר כהה
+      // מסלול פעיל: המפה מתחתיו דוהה, והמסלול מצויר בצבעי השבילים עם מסגרת לבנה (בלי קו מתאר כהה)
       { id: 'dim', type: 'fill', source: 'dim', layout: { visibility: 'none' }, paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } },
-      { id: 'route-outer', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
-        layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#000000', 'line-opacity': 0.55, 'line-width': zw(7, 15) } },
       { id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-width': zw(5, 11) } },
+        paint: { 'line-color': '#ffffff', 'line-width': zw(4, 8.5) } },
       { id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(3, 6.5),
+        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(2.4, 5),
           'line-dasharray': ['case', ['==', ['get', 'h'], 'free'], ['literal', [1, 1]], ['literal', [1, 0]]] } },
       // מה שכבר הלכת: קו בצבע הרקע מעל המסלול, כך שהחלק הזה נראה דהוי
       { id: 'route-walked', type: 'line', source: 'walked', layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(5, 11) } },
+        paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(4, 8.5) } },
       { id: 'route-arrows', type: 'symbol', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'symbol-placement': 'line', 'symbol-spacing': 70, 'icon-image': 'arrow',
           'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map' } },
@@ -319,7 +316,6 @@
   let searchIndex = null;
   // הגרסה המוחלקת מחושבת פעם אחת ונשמרת, כדי שהפתיחה תהיה מהירה
   // העיגול מחושב בזיכרון בכל פתיחה ולא נשמר – כך הוא לא תופס נפח בטלפון.
-  // המפה מוצגת מיד בקווים המקוריים, והגרסה המעוגלת מחליפה אותה כשהחישוב מסתיים.
   let smoothCache = null;
   let smoother = null;
   db.del('mapsmooth').catch(() => {}); // ניקוי העותק השמור מגרסאות קודמות
@@ -347,11 +343,8 @@
     const lvl = smoothLevel();
     smoother = lvl ? Geo.makeSmoother(fc, lvl) : null;
     if (!lvl) return map.getSource('osm').setData(fc);
-    if (smoothCache?.src !== fc) {
-      map.getSource('osm').setData(fc);
-      await new Promise((r) => setTimeout(r, 50)); // לתת למפה להופיע קודם
-      smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl) };
-    }
+    // פעם אחת בלבד (לא קודם המקורי ואז המעוגל – זה כפל עבודה למפה). מעגלים רק שבילים, דרכי עפר ונחלים
+    if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track') };
     if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
   }
   // ---------- המפה השמורה מתעדכנת לבד ----------
@@ -1886,7 +1879,7 @@
     poi: ['poi-icon', 'poi-label', 'peak'],
     bike: ['bike'],
     places: ['place-minor', 'place-major'],
-    route: ['route-outer', 'route-casing', 'route-line', 'route-walked', 'route-arrows', 'route-ends', 'wpts'],
+    route: ['route-casing', 'route-line', 'route-walked', 'route-arrows', 'route-ends', 'wpts'],
   };
   const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major']);
   const layerPrefs = Object.assign(
