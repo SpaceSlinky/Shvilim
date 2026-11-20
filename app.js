@@ -201,7 +201,7 @@
     dragRotate: true,
     pitchWithRotate: false,
     touchPitch: false,
-    attributionControl: { compact: true },
+    attributionControl: false, // הקרדיטים – בחלון השכבות
   });
   map.touchPitch?.disable?.();
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 100 }), 'bottom-left');
@@ -1435,6 +1435,7 @@
     updateMarkerHeading();
     el.classList.toggle('poor', accuracy > 50);
     map.getSource('acc')?.setData({ type: 'Feature', geometry: Geo.circle(p, accuracy), properties: {} });
+    if (active?.nav) applyEnvelope();
     if (follow && first) map.easeTo({ center: p, zoom: Math.max(map.getZoom(), 15.5), duration: 600 });
     else if (follow) startCamera();
     updateStatus();
@@ -1573,6 +1574,36 @@
     if (moving) map.jumpTo(opts);
     if (moving || compassMode) startCamera();
   }
+  // ---------- בתוך מסלול: המפה נשארת בתוך המעטפת שלו, ובניווט חוזרת לבד למיקום ----------
+  function applyEnvelope() {
+    let b = null;
+    if (active && !plan && dockMode() === 'route') {
+      const all = active.segs.flatMap((sg) => sg.coords);
+      if (active.nav && lastPos) all.push(lastPos.p); // סטית מהמסלול – המעטפת גדלה איתך
+      const [[w, so], [e, n]] = Geo.bounds(all);
+      // ריפוד: רבע מגודל המסלול, ולפחות כ-600 מ'
+      const px = Math.max(0.0065, (e - w) * 0.25), py = Math.max(0.0055, (n - so) * 0.25);
+      b = [[w - px, so - py], [e + px, n + py]];
+    }
+    const key = b ? b.flat().map((v) => v.toFixed(4)).join() : '';
+    if (key === applyEnvelope.key) return; // (מאפיין ולא let – נקרא גם לפני שהשורה הזו רצה)
+    applyEnvelope.key = key;
+    map.setMaxBounds(b);
+  }
+  // הזזת את המפה בניווט – אחרי כמה שניות בלי נגיעה היא חוזרת למיקום שלך
+  const RETURN_MS = 8000;
+  let returnTimer = 0;
+  function scheduleReturn() {
+    clearTimeout(returnTimer);
+    if (!active?.nav || follow || watchId == null) return;
+    returnTimer = setTimeout(() => {
+      if (!active?.nav || follow || watchId == null) return;
+      if (touching || map.isMoving?.()) scheduleReturn(); else setFollow(true);
+    }, RETURN_MS);
+  }
+  map.on('moveend', scheduleReturn);
+  mapEl.addEventListener('touchend', scheduleReturn, { passive: true });
+
   let orientationOn = false;
   async function enableOrientation() {
     if (orientationOn) return true;
@@ -1863,6 +1894,7 @@
   let lastMode = null;
   function renderDock() {
     const m = dockMode();
+    applyEnvelope();
     if (lastMode && lastMode !== m) { dockEl.classList.add('morph'); clearTimeout(renderDock.t); renderDock.t = setTimeout(() => dockEl.classList.remove('morph'), 400); }
     lastMode = m;
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
