@@ -508,7 +508,7 @@
     const { x, y } = e.point;
     const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
     if (!feats.length) return;
-    // שבילים מסומנים – ריבוע בצבע השביל משמאל לשם הדרך (ולא שורה "שביל מסומן ירוק")
+    // שבילים מסומנים – ריבוע בצבע השביל, הכי שמאלי בשורה (אחרי שם הדרך וסוגה) (ולא שורה "שביל מסומן ירוק")
     const trails = feats.filter((f) => f.properties.k === 'trail');
     const colors = [...new Set(trails.map((f) => f.properties.c))];
     const trailName = trails.map((f) => f.properties.n).find(Boolean) || '';
@@ -530,11 +530,11 @@
       const withSq = p.k === 'road' && !gotSquares && colors.length;
       if (withSq) gotSquares = true;
       const name = p.n || (withSq ? trailName : '');
-      rows.push(`<div class="info-row">${name ? `<b>${esc(name)}</b>` : ''}${withSq ? squares : ''} ${line}</div>`);
+      rows.push(`<div class="info-row">${name ? `<b>${esc(name)}</b> ` : ''}${line}${withSq ? squares : ''}</div>`);
       if (rows.length >= 4) break;
     }
     // שביל מסומן בלי דרך מתחתיו
-    if (colors.length && !gotSquares) rows.unshift(`<div class="info-row">${trailName ? `<b>${esc(trailName)}</b>` : ''}${squares} שביל</div>`);
+    if (colors.length && !gotSquares) rows.unshift(`<div class="info-row">${trailName ? `<b>${esc(trailName)}</b> ` : ''}שביל${squares}</div>`);
     if (!rows.length) return;
     new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
   });

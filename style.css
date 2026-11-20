@@ -155,7 +155,7 @@ body.night #layers-dlg .area-row .a-del { color: #ef5350; }
 body.night #btn-compass.active { background: rgba(100,181,246,.18); }
 .info-row { padding: 3px 0; line-height: 1.35; }
 .info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }
-.info-row .sq { display: inline-block; width: 12px; height: 12px; margin-inline-start: 6px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); vertical-align: -1px; }
+.info-row .sq { display: inline-block; width: 12px; height: 12px; margin-inline-start: 8px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); vertical-align: -1px; }
 .info-row .sq + .sq { margin-inline-start: 3px; }
 body.night .info-row + .info-row { border-color: #444; }
 
