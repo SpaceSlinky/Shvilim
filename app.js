@@ -62,6 +62,7 @@
 
   const style = {
     version: 8,
+    transition: { duration: 0, delay: 0 }, // החלפת בהיר/כהה ושינויי צבע – מיד
     glyphs: GLYPHS,
     sources: {
       osm: { type: 'geojson', data: empty, attribution: '© OpenStreetMap', tolerance: 0.3 },
@@ -1532,48 +1533,18 @@
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
     for (const b of ['sat', 'topo', 'ihm']) map.setPaintProperty('base-' + b, 'raster-brightness-max', night ? 0.7 : 1);
   }
-  // זריחה ושקיעה (נוסחת SunCalc), לפי המיקום או מרכז המפה
-  function sunTimes(date, lat, lon) {
-    const rad = Math.PI / 180, J1970 = 2440588, J2000 = 2451545, J0 = 0.0009;
-    const days = date.getTime() / 864e5 - 0.5 + J1970 - J2000;
-    const lw = -lon * rad, phi = lat * rad;
-    const n = Math.round(days - J0 - lw / (2 * Math.PI));
-    const ds = J0 + lw / (2 * Math.PI) + n;
-    const M = rad * (357.5291 + 0.98560028 * ds);
-    const L = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
-    const dec = Math.asin(Math.sin(rad * 23.4397) * Math.sin(L));
-    const noon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
-    const w = Math.acos((Math.sin(-0.833 * rad) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
-    const set = J2000 + J0 + (w + lw) / (2 * Math.PI) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
-    const toMs = (j) => (j + 0.5 - J1970) * 864e5;
-    return { rise: toMs(noon - (set - noon)), set: toMs(set) };
-  }
-  // מצב: auto (ברירת מחדל – כהה מהשקיעה עד הזריחה) / dark / light. הכפתור מחליף בסבב
-  const THEMES = ['auto', 'dark', 'light'];
-  let themeMode = THEMES.includes(localStorage.getItem('theme')) ? localStorage.getItem('theme') : 'auto';
-  let isNight = false;
-  function nowNight() {
-    if (themeMode !== 'auto') return themeMode === 'dark';
-    const p = lastPos?.p || [map.getCenter().lng, map.getCenter().lat];
-    const { rise, set } = sunTimes(new Date(), p[1], p[0]);
-    const t = Date.now();
-    return t < rise || t > set;
-  }
-  function syncTheme(force) {
-    const n = nowNight();
-    $('btn-theme').dataset.mode = themeMode;
-    if (n === isNight && !force) return;
-    isNight = n;
-    applyTheme(n);
-    applyLayers(); renderRouteInfo();
-  }
-  document.body.classList.toggle('night', nowNight());
-  mapReady.then(() => syncTheme(true));
-  setInterval(syncTheme, 60000);
+  // בהיר / כהה: כפתור אחד שמחליף מיד (בלי מצב אוטומטי). נשמר ב-localStorage `theme`
+  let isNight = localStorage.getItem('theme') === 'dark';
+  const showTheme = () => ($('btn-theme').dataset.mode = isNight ? 'dark' : 'light');
+  document.body.classList.toggle('night', isNight);
+  showTheme();
+  mapReady.then(() => applyTheme(isNight));
   $('btn-theme').addEventListener('click', () => {
-    themeMode = THEMES[(THEMES.indexOf(themeMode) + 1) % THEMES.length];
-    try { localStorage.setItem('theme', themeMode); } catch { /* ignore */ }
-    syncTheme();
+    isNight = !isNight;
+    try { localStorage.setItem('theme', isNight ? 'dark' : 'light'); } catch { /* ignore */ }
+    showTheme();
+    applyTheme(isNight);
+    applyLayers(); renderRouteInfo();
   });
 
   // אזורים מוכרים (לחיפוש ולהצעת תיקייה)

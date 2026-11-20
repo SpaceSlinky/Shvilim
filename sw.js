@@ -1,7 +1,7 @@
 /* Service Worker: שומר את האפליקציה, הספריות והגופנים לשימוש אופליין.
    נתוני המפה עצמם נשמרים ב-IndexedDB (ראו app.js).
    קבצי האפליקציה: מוגשים מהמטמון ומתעדכנים ברקע. ספריות וגופנים מ-CDN: מהמטמון בלבד אחרי הפעם הראשונה. */
-const CACHE = 'shvilim-v39';
+const CACHE = 'shvilim-v40';
 const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'router.js', 'elev.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png'];
 const CDN = [
