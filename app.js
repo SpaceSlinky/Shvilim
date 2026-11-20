@@ -2234,6 +2234,8 @@
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     $('search').hidden = m !== 'lib'; // חיפוש – רק כשלא בתוך מסלול או בתכנון
+    $('controls').classList.toggle('alone', m !== 'lib'); // בלי שורת חיפוש – ה-☰ עיגול לבד, באותו מקום
+    layoutTools();
     if (m !== 'lib') closeSearch();
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
     showDim();
@@ -2482,18 +2484,23 @@
   }).observe(dockIn);
   renderDock();
 
-  // ---------- משטח הכלים ("אולר"): נשלף מלמעלה; סגור – רק ☰; פותחים לרגע, ונסגר אחרי פעולה ----------
-  // המשטח זז באמת: --k בין 0 (סגור) ל-1 (פתוח), ו---off הוא גובה הכלים שמעל ה-☰
+  // ---------- כלים: עיגול ☰ בקצה הימני של שורת החיפוש (וכשאין חיפוש – באותו מקום) ----------
+  // נגיעה פותחת: הכלים צומחים ממנו כעיגולים במרחקים שווים (--i = המקום בעמודה, לעיכוב ולמרחק).
+  // נשאר פתוח עד נגיעה נוספת – לא נסגר לבד, גם לא ב"חזור"
   const knife = $('controls');
-  const knifeItems = knife.querySelector('.kbody'); // הכלים והסליידר – מה שנשלף
   let knifeOpen = false;
-  new ResizeObserver(() => knife.style.setProperty('--off', knifeItems.offsetHeight + 'px')).observe(knifeItems);
+  function layoutTools() {
+    let i = 0;
+    for (const b of document.querySelectorAll('#controls .kcol > button')) if (!b.hidden) b.style.setProperty('--i', i++); // נקרא גם לפני ש-knife מוגדר
+  }
   function setKnife(on) {
     knifeOpen = on;
+    layoutTools();
     knife.classList.toggle('open', on);
-    knife.style.removeProperty('--k');
     $('btn-menu').setAttribute('aria-expanded', on);
   }
+  $('btn-menu').addEventListener('click', () => setKnife(!knifeOpen));
+  $('search-input').addEventListener('focus', () => setKnife(false)); // תוצאות החיפוש נפתחות מתחת – בלי עיגולים מעליהן
   // מתחת ל-☰ כשהמשטח סגור: צפון (כשהמפה מסובבת) ומרכוז (כש-GPS פועל והמפה זזה ממך אחרי מעקב)
   function updatePins() {
     $('pin-north').hidden = !(compassMode || Math.abs(map.getBearing()) > 0.5);
@@ -2503,34 +2510,6 @@
   setInterval(updatePins, 1000); // מצב ה-GPS והמעקב משתנים בכמה מקומות; בדיקה זולה
   $('pin-north').addEventListener('click', () => $('btn-compass').click());
   $('pin-center').addEventListener('click', () => $('btn-locate').click());
-  // גרירת ☰: כל המשטח זז עם האצבע; בעזיבה – פתוח או סגור לפי המקום ולפי מהירות התנועה. הקשה מחליפה
-  (() => {
-    const h = $('btn-menu');
-    let y0 = null, moved = false, base = 0, k = 0, track = [];
-    h.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; base = knifeOpen ? 1 : 0; track = [[e.clientY, e.timeStamp]]; h.setPointerCapture(e.pointerId); });
-    h.addEventListener('pointermove', (e) => {
-      if (y0 == null) return;
-      const dy = e.clientY - y0;
-      if (!moved && Math.abs(dy) < 6) return;
-      moved = true;
-      track.push([e.clientY, e.timeStamp]); if (track.length > 6) track.shift();
-      knife.classList.add('dragging');
-      k = Math.max(0, Math.min(1, base + dy / Math.max(1, knifeItems.offsetHeight)));
-      knife.style.setProperty('--k', k);
-    });
-    const end = () => {
-      if (y0 == null) return;
-      y0 = null;
-      knife.classList.remove('dragging');
-      if (!moved) return setKnife(!knifeOpen);
-      const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
-      const v = (yb - ya) / Math.max(1, tb - ta);
-      setKnife(Math.abs(v) > 0.3 ? v > 0 : k > 0.5);
-    };
-    h.addEventListener('pointerup', end);
-    h.addEventListener('pointercancel', end);
-  })();
-  // המשטח נשאר פתוח עד שמעלים אותו (או נוגעים בפס) – לא נסגר לבד
 
   // ---------- הפעלה ----------
   // שחזור המסלול הפעיל (וגם מסלול GPX מגרסה קודמת)
