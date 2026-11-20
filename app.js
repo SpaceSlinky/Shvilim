@@ -1003,9 +1003,12 @@
           if (dragJustEnded || (fsel && lsel.editing)) return;
           // נגיעה ראשונה – בוחרת ופותחת; נגיעה בקטגוריה שכבר נבחרה – פותחת/סוגרת
           if (!(lsel.kind === 'folder' && lsel.folder === c)) {
+            // בחירה בלי לצייר מחדש – כך הפתיחה מונפשת, כמו הסגירה
             libOpen.add(c);
             Object.assign(lsel, { kind: 'folder', id: null, folder: c, editing: false });
-            return renderLibrary();
+            box.querySelectorAll('.sel').forEach((x) => x.classList.remove('sel'));
+            sec.classList.add('sel', 'open');
+            return renderLibTools(lib, cats);
           }
           const open = !libOpen.has(c);
           open ? libOpen.add(c) : libOpen.delete(c);
