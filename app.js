@@ -394,7 +394,7 @@
     renderDock();
     if (fit) fitRoute();
     // כל מסלול נשמר בספרייה (מסלולים ישנים שלא נשמרו – נשמרים עכשיו)
-    if (!a.libId) { a.libId = Date.now(); a.folder ||= suggestFolder(route.pts); libPut(a); }
+    if (!a.libId) { a.libId = Date.now(); a.folder ||= ''; libPut(a); }
     if (save) db.set('active', a).catch(console.error);
     map.getSource('walked')?.setData(empty);
     if (a.nav) { startGps(); setFollow(true); }
@@ -600,7 +600,8 @@
     const atP = nav && prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
     // שורת משנה: תיקייה; בתצוגה – גם המרחק להתחלה כשרחוקים ממנה
     const toStart = !nav && lastPos ? Geo.haversine(lastPos.p, route.pts[0]) : 0;
-    $('ri-folder').textContent = active.folder || 'כללי';
+    $('ri-folder').textContent = active.folder || '';
+    document.querySelector('#dock .r-title .sep').hidden = !active.folder;
     // לפני היציאה, כשרחוקים מההתחלה – המרחק אליה על הכפתור
     $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
     // בניווט: "עצור" במקום החזרה (שלא ייצאו מהמסלול בטעות באמצע הדרך)
@@ -829,10 +830,10 @@
   async function openSaveDlg(mode, { name = '', folder = '', coords = [] } = {}) {
     saveMode = mode;
     const lib = await libLoad();
-    $('folders').replaceChildren(...[...new Set(lib.map((r) => r.folder))]
+    $('folders').replaceChildren(...catOrder(await catLoad(), lib)
       .filter(Boolean).map((f) => Object.assign(document.createElement('option'), { value: f })));
     $('plan-name').value = name;
-    $('plan-folder').value = folder || suggestFolder(coords);
+    $('plan-folder').value = folder || '';
     $('plan-dlg-title').textContent = mode === 'plan' ? 'שמירת המסלול' : 'שמירה בספרייה';
     $('plan-dlg').showModal();
   }
@@ -840,21 +841,21 @@
   $('plan-dlg').addEventListener('close', async () => {
     if ($('plan-dlg').returnValue !== 'ok') return;
     const name = $('plan-name').value.trim() || 'מסלול מתוכנן';
-    const folder = $('plan-folder').value.trim() || 'כללי';
+    const folder = $('plan-folder').value.trim();
     if (saveMode === 'plan' && plan) {
       const a = { kind: 'plan', name, folder, wps: plan.wps, opts: plan.opts, segs: plan.segs, waypoints: [], libId: plan.libId || Date.now() };
       endPlan();
       await libPut(a);
       await setActive(a, { fit: true });
-      toast(`"${name}" נשמר בתיקייה "${folder}" · ${Geo.fmtDist(route.total)}`, 4000);
+      toast(`"${name}" נשמר${folder ? ` ב"${folder}"` : ''} · ${Geo.fmtDist(route.total)}`, 4000);
     }
   });
 
   // ---------- ספריית מסלולים (לפי אזורים) ----------
-  const libLoad = async () => (await db.get('library').catch(() => null)) || [];
+  const libLoad = async () => { const lib = (await db.get('library').catch(() => null)) || []; for (const r of lib) if (!r.folder || r.folder === 'כללי') r.folder = ''; return lib; };
   async function libPut(a) {
     const lib = await libLoad();
-    const entry = { id: a.libId, kind: a.kind, name: a.name, folder: a.folder || 'כללי', segs: a.segs, wps: a.wps, opts: a.opts,
+    const entry = { id: a.libId, kind: a.kind, name: a.name, folder: a.folder || '', segs: a.segs, wps: a.wps, opts: a.opts,
       waypoints: a.waypoints,
       len: segsToLines(a.segs).reduce((s2, l) => s2 + l.reduce((acc, p, j) => (j ? acc + Geo.haversine(l[j - 1], p) : 0), 0), 0),
       gain: a.gain, loss: a.loss, updated: Date.now() };
@@ -869,142 +870,232 @@
     if (r && p) { r.gain = Math.round(p.gain); r.loss = Math.round(p.loss); await db.set('library', lib); }
   }
 
-  // הצעת תיקייה: אזור מוכר שמכיל את תחילת המסלול, אחרת היישוב/המקום הקרוב
-  function suggestFolder(coords) {
-    const p = coords?.[0];
-    if (!p) return 'כללי';
-    const preset = PRESETS.find((a) => p[0] >= a.bbox[0] && p[0] <= a.bbox[2] && p[1] >= a.bbox[1] && p[1] <= a.bbox[3]);
-    if (preset) return preset.name;
-    let best = null, bd = 6000;
-    for (const f of mapFC?.features || []) {
-      if (f.properties.k !== 'place') continue;
-      const d = Geo.haversine(p, f.geometry.coordinates);
-      if (d < bd) { bd = d; best = f.properties.n; }
-    }
-    return best || 'כללי';
+  // ---------- מסלולים: טבלה לפי קטגוריות ----------
+  // שורה = מסלול: שם · אורך · ˄עלייה ˅ירידה. קטגוריה = כותרת; נגיעה בה פותחת/סוגרת, ותמיד מתחילות סגורות.
+  // מסלול בלי קטגוריה – בחוץ, בלי כותרת. גרירה בידית (⋮⋮): מסלול לקטגוריה אחרת, או קטגוריה למקום אחר.
+  // נגיעה במסלול בוחרת (נגיעה נוספת פותחת); נגיעה בידית של קטגוריה בוחרת אותה. הכלים למטה פועלים על הנבחר.
+  const lsel = { kind: null, id: null, folder: null, editing: false };
+  const libOpen = new Set(); // קטגוריות פתוחות – מתאפס בכל כניסה לרשימה
+  const byName = (a, b) => a.localeCompare(b, 'he');
+  const catLoad = async () => (await db.get('folders').catch(() => null)) || [];
+  // סדר הקטגוריות: מה שנשמר (גרירה), ואחריו קטגוריות שעוד לא נשמרו – לפי א"ב
+  function catOrder(saved, lib) {
+    const out = saved.filter((f) => typeof f === 'string' && f);
+    for (const f of [...new Set(lib.map((r) => r.folder).filter(Boolean))].sort(byName)) if (!out.includes(f)) out.push(f);
+    return out;
   }
-
-  // ---------- מסלולים: נגיעה בוחרת מסלול או תיקייה, והכלים למטה פועלים על מה שנבחר ----------
-  // נגיעה נוספת במסלול שנבחר פותחת אותו. "עריכה" הופכת את השם לשדה עריכה.
-  const lsel = { kind: null, id: null, folder: null, editing: false, moving: false };
-  const selKey = () => (lsel.kind === 'route' ? 'r' + lsel.id : lsel.kind === 'folder' ? 'f' + lsel.folder : '');
-  function libSelect(kind, val) {
-    const key = kind === 'route' ? 'r' + val : 'f' + val;
-    if (selKey() === key && kind === 'route') return openFromLib(val); // נגיעה שנייה – פותחת
-    Object.assign(lsel, { kind, id: kind === 'route' ? val : null, folder: kind === 'folder' ? val : null, editing: false, moving: false });
+  const clearSel = () => Object.assign(lsel, { kind: null, id: null, folder: null, editing: false });
+  function libSelect(id) {
+    if (lsel.kind === 'route' && lsel.id === id) return openFromLib(id); // נגיעה שנייה – פותחת
+    Object.assign(lsel, { kind: 'route', id, folder: null, editing: false });
     renderLibrary();
   }
   async function openFromLib(id) {
     const r = (await libLoad()).find((x) => x.id === id);
     if (!r) return;
-    Object.assign(lsel, { kind: null, id: null, folder: null, editing: false, moving: false });
+    clearSel();
     await setActive({ ...r, libId: r.id, nav: false }, { fit: true });
   }
-  // תיקיות סגורות (נשמר בין פתיחות); חדשות – פתוחות
-  const libClosed = new Set((() => { try { return JSON.parse(localStorage.getItem('libClosed')) || []; } catch { return []; } })());
-  const keepClosed = () => { try { localStorage.setItem('libClosed', JSON.stringify([...libClosed])); } catch { /* ignore */ } };
-  const byName = (a, b) => a.localeCompare(b, 'he');
+  // עריכה: הטקסט עצמו נהיה שדה, עם קו דק מתחתיו
+  function editField(value, onSave) {
+    const inp = Object.assign(document.createElement('input'), { className: 'edit-in', value, maxLength: 50 });
+    let done = false;
+    const commit = () => { if (done) return; done = true; lsel.editing = false; const v = inp.value.trim(); v && v !== value ? onSave(v) : renderLibrary(); };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { done = true; lsel.editing = false; renderLibrary(); } });
+    inp.addEventListener('blur', commit);
+    inp.addEventListener('click', (e) => e.stopPropagation());
+    inp.addEventListener('pointerdown', (e) => e.stopPropagation());
+    setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); inp.scrollIntoView({ block: 'nearest' }); });
+    return inp;
+  }
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const gripEl = () => { const g = el('span', 'dh'); g.innerHTML = '<svg viewBox="0 0 10 16"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg>';
+    g.addEventListener('click', (e) => e.stopPropagation()); // הידית מטופלת בגרירה; הלחיצה שאחריה לא תפתח/תסגור
+    return g; };
+  function rowEl(r) {
+    const sel = lsel.kind === 'route' && lsel.id === r.id;
+    const row = el('div', 'lib-row' + (sel ? ' sel' : ''));
+    row.dataset.id = r.id;
+    const g = gripEl();
+    const name = sel && lsel.editing ? editField(r.name, (v) => renameRoute(r.id, v)) : el('span', 'c-name', r.name);
+    const ele = el('span', 'c-ele', r.gain != null ? `˄${r.gain} ˅${r.loss ?? 0}` : '');
+    ele.dir = 'ltr';
+    row.append(g, name, el('span', 'c-len', Geo.fmtDist(r.len)), ele);
+    row.addEventListener('click', () => { if (!(sel && lsel.editing)) libSelect(r.id); });
+    g.addEventListener('pointerdown', (e) => startDrag(e, row, 'route', r.id));
+    return row;
+  }
   async function renderLibrary() {
     const lib = await libLoad();
+    const cats = catOrder(await catLoad(), lib);
+    if (lsel.kind === 'route' && !lib.some((r) => r.id === lsel.id)) clearSel();
+    if (lsel.kind === 'folder' && !cats.includes(lsel.folder)) clearSel();
     const box = $('lib-list');
+    const scroll = box.scrollTop;
     box.replaceChildren();
-    if (lsel.kind === 'route' && !lib.some((r) => r.id === lsel.id)) lsel.kind = null;
-    if (!lib.length) box.innerHTML = '<p class="muted center">עדיין אין מסלולים שמורים. מסלול שתתכננו יישמר כאן, בתיקייה לפי האזור.</p>';
-    const groups = {};
-    for (const r of lib) (groups[r.folder || 'כללי'] ||= []).push(r);
-    const folders = Object.keys(groups).sort(byName);
-    // עריכה: הטקסט עצמו נהיה שדה, עם קו דק מתחתיו
-    const editField = (value, onSave) => {
-      const inp = Object.assign(document.createElement('input'), { className: 'edit-in', value, maxLength: 50 });
-      let done = false;
-      const commit = () => { if (done) return; done = true; lsel.editing = false; const v = inp.value.trim(); v && v !== value ? onSave(v) : renderLibrary(); };
-      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { done = true; lsel.editing = false; renderLibrary(); } });
-      inp.addEventListener('blur', commit);
-      inp.addEventListener('click', (e) => e.stopPropagation());
-      setTimeout(() => { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); inp.scrollIntoView({ block: 'nearest' }); });
-      return inp;
-    };
-    for (const folder of folders) {
-      const open = !libClosed.has(folder);
-      const fsel = lsel.kind === 'folder' && lsel.folder === folder;
-      const fh = document.createElement('div');
-      fh.className = 'lib-folder' + (fsel ? ' sel' : '') + (open ? ' open' : '');
-      const chev = Object.assign(document.createElement('span'), { className: 'chev', textContent: open ? '⌄' : '‹' });
-      const count = Object.assign(document.createElement('span'), { className: 'count', textContent: groups[folder].length });
-      fh.append(chev, fsel && lsel.editing ? editField(folder, (v) => renameFolder(folder, v)) : Object.assign(document.createElement('b'), { textContent: folder }), count);
-      // החץ – פותח/סוגר בלבד. נגיעה בשם – בוחרת את התיקייה (ופותחת אותה); נגיעה נוספת – מבטלת את הבחירה
-      chev.addEventListener('click', (e) => {
-        e.stopPropagation();
-        open ? libClosed.add(folder) : libClosed.delete(folder);
-        keepClosed();
-        renderLibrary();
-      });
-      fh.addEventListener('click', () => {
-        if (fsel && lsel.editing) return;
-        if (fsel) lsel.kind = null;
-        else { Object.assign(lsel, { kind: 'folder', id: null, folder, editing: false, moving: false }); libClosed.delete(folder); keepClosed(); }
-        renderLibrary();
-      });
-      box.appendChild(fh);
-      if (!open) continue;
-      const kids = document.createElement('div');
-      kids.className = 'lib-kids';
-      for (const r of groups[folder].sort((a, b) => byName(a.name, b.name))) {
-        const sel = lsel.kind === 'route' && lsel.id === r.id;
-        const row = document.createElement('div');
-        row.className = 'lib-row' + (sel ? ' sel' : '');
-        if (sel && lsel.editing) row.appendChild(editField(r.name, (v) => renameRoute(r.id, v)));
-        else row.appendChild(Object.assign(document.createElement('b'), { textContent: r.name }));
-        row.appendChild(Object.assign(document.createElement('span'), { className: 'muted small',
-          textContent: [Geo.fmtDist(r.len), r.gain != null ? `↑${r.gain} ↓${r.loss ?? 0} מ'` : ''].filter(Boolean).join(' · ') }));
-        row.addEventListener('click', () => { if (!(sel && lsel.editing)) libSelect('route', r.id); });
-        kids.appendChild(row);
+    if (!lib.length && !cats.length) {
+      box.innerHTML = '<p class="muted center">עדיין אין מסלולים שמורים. מסלול שתתכננו יישמר כאן.</p>';
+    } else {
+      const cols = el('div', 'lib-cols');
+      cols.append(el('span'), el('span', 'c-name', 'מסלול'), el('span', 'c-len', 'אורך'), el('span', 'c-ele', '˄ ˅'));
+      box.appendChild(cols);
+      // בלי קטגוריה – בחוץ, בלי כותרת (בזמן גרירה יש כאן מקום להוציא מקטגוריה)
+      const loose = el('div', 'lib-loose');
+      for (const r of lib.filter((x) => !x.folder).sort((a, b) => byName(a.name, b.name))) loose.appendChild(rowEl(r));
+      box.appendChild(loose);
+      for (const c of cats) {
+        const items = lib.filter((x) => x.folder === c).sort((a, b) => byName(a.name, b.name));
+        const fsel = lsel.kind === 'folder' && lsel.folder === c;
+        const sec = el('section', 'cat' + (libOpen.has(c) ? ' open' : '') + (fsel ? ' sel' : ''));
+        sec.dataset.cat = c;
+        const head = el('div', 'cat-head');
+        const g = gripEl();
+        head.append(g, fsel && lsel.editing ? editField(c, (v) => renameCat(c, v)) : el('span', 'cat-name', c), el('span', 'cat-count', items.length || ''));
+        // נגיעה בכותרת – פותחת/סוגרת ברכות (בלי לצייר מחדש)
+        head.addEventListener('click', () => {
+          if (fsel && lsel.editing) return;
+          const open = !libOpen.has(c);
+          open ? libOpen.add(c) : libOpen.delete(c);
+          sec.classList.toggle('open', open);
+        });
+        g.addEventListener('pointerdown', (e) => startDrag(e, sec, 'cat', c));
+        const body = el('div', 'cat-body');
+        const inner = el('div');
+        for (const r of items) inner.appendChild(rowEl(r));
+        if (!items.length) inner.appendChild(el('p', 'cat-empty', 'ריקה – גררו לכאן מסלולים'));
+        body.appendChild(inner);
+        sec.append(head, body);
+        box.appendChild(sec);
       }
-      box.appendChild(kids);
     }
-    renderLibTools(lib, folders);
+    box.scrollTop = scroll;
+    renderLibTools(lib, cats);
   }
-  // התיקייה של מה שנבחר (תיקייה, או התיקייה של מסלול) – אליה ייכנס מסלול חדש
-  function ctxFolder(lib) {
-    if (lsel.kind === 'folder') return lsel.folder;
-    if (lsel.kind === 'route') return lib.find((x) => x.id === lsel.id)?.folder || 'כללי';
-    return null;
+
+  // ---------- גרירה: מסלול לקטגוריה (או החוצה), קטגוריה למקום אחר ----------
+  function startDrag(e, src, kind, key) {
+    e.preventDefault(); e.stopPropagation();
+    const box = $('lib-list');
+    const handle = e.currentTarget;
+    const sx = e.clientX, sy = e.clientY;
+    let ghost = null, moved = false, dropCat, before = null, raf = 0, lastY = sy;
+    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const clearMarks = () => box.querySelectorAll('.drop, .drop-before, .drop-after').forEach((x) => x.classList.remove('drop', 'drop-before', 'drop-after'));
+    const autoScroll = () => {
+      const r = box.getBoundingClientRect();
+      if (lastY < r.top + 36) box.scrollTop -= 10; else if (lastY > r.bottom - 36) box.scrollTop += 10;
+      raf = requestAnimationFrame(autoScroll);
+    };
+    const move = (ev) => {
+      if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
+      lastY = ev.clientY;
+      if (!moved) {
+        moved = true;
+        const r = src.getBoundingClientRect();
+        ghost = src.cloneNode(true);
+        ghost.classList.add('ghost');
+        Object.assign(ghost.style, { left: r.left + 'px', width: r.width + 'px', top: r.top + 'px' });
+        ghost.dataset.dy = sy - r.top;
+        document.body.appendChild(ghost);
+        src.classList.add('dragging');
+        box.classList.add(kind === 'route' ? 'drag-route' : 'drag-cat');
+        raf = requestAnimationFrame(autoScroll);
+      }
+      ghost.style.top = ev.clientY - ghost.dataset.dy + 'px';
+      clearMarks();
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      if (kind === 'route') {
+        const cat = under?.closest('.cat');
+        dropCat = cat ? cat.dataset.cat : under?.closest('#lib-list') ? '' : undefined;
+        (cat || (dropCat === '' ? box.querySelector('.lib-loose') : null))?.classList.add('drop');
+      } else {
+        // מקום חדש לקטגוריה: לפני הקטגוריה שמרכזה מתחת לאצבע
+        const secs = [...box.querySelectorAll('.cat')].filter((s) => s !== src);
+        before = secs.find((s) => { const r = s.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) || null;
+        if (before) before.classList.add('drop-before'); else secs[secs.length - 1]?.classList.add('drop-after');
+      }
+    };
+    const up = async () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
+      cancelAnimationFrame(raf);
+      ghost?.remove(); src.classList.remove('dragging'); box.classList.remove('drag-route', 'drag-cat'); clearMarks();
+      if (!moved) {
+        // נגיעה בידית בלי גרירה: מסלול – בחירה; קטגוריה – בחירה / ביטול בחירה
+        if (kind === 'route') return libSelect(key);
+        if (lsel.kind === 'folder' && lsel.folder === key) clearSel(); else Object.assign(lsel, { kind: 'folder', id: null, folder: key, editing: false });
+        return renderLibrary();
+      }
+      if (kind === 'route') {
+        if (dropCat === undefined) return;
+        const lib = await libLoad();
+        const r = lib.find((x) => x.id === key);
+        if (!r || (r.folder || '') === dropCat) return;
+        r.folder = dropCat;
+        await db.set('library', lib);
+        if (active?.libId === key) { active.folder = dropCat; db.set('active', active); }
+        if (dropCat) libOpen.add(dropCat);
+        toast(dropCat ? `הועבר ל"${dropCat}"` : 'הוצא מהקטגוריה', 1800);
+        renderLibrary();
+      } else {
+        const cats = catOrder(await catLoad(), await libLoad()).filter((c) => c !== key);
+        const i = before ? cats.indexOf(before.dataset.cat) : cats.length;
+        cats.splice(i, 0, key);
+        await db.set('folders', cats);
+        renderLibrary();
+      }
+    };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
   }
-  function renderLibTools(lib, folders) {
-    const cf = ctxFolder(lib);
-    $('lib-new').textContent = cf ? `+ מסלול חדש ב"${cf}"` : '+ מסלול חדש';
+
+  // ---------- הכלים: פועלים על מה שנבחר ----------
+  const ICON = {
+    open: '<path d="M8 5l11 7-11 7z"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>',
+    route: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3.5 3.5 0 0 0 0-7H8a3.5 3.5 0 0 1 0-7h8"/>',
+    del: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+    add: '<path d="M12 5v14M5 12h14"/>',
+    cat: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/>',
+  };
+  // התיקייה של מה שנבחר – אליה ייכנס מסלול חדש
+  const ctxFolder = (lib) => (lsel.kind === 'folder' ? lsel.folder : lsel.kind === 'route' ? lib.find((x) => x.id === lsel.id)?.folder || '' : '');
+  function renderLibTools(lib, cats) {
     const tools = $('lib-tools');
     tools.replaceChildren();
-    const btn = (txt, fn, cls = '') => { const b = Object.assign(document.createElement('button'), { textContent: txt, className: cls }); b.addEventListener('click', fn); tools.appendChild(b); return b; };
     const r = lsel.kind === 'route' ? lib.find((x) => x.id === lsel.id) : null;
-    if (r) {
-      btn('פתח', () => openFromLib(r.id), 'primary');
-      btn('שם', () => { lsel.editing = true; lsel.moving = false; renderLibrary(); });
-      if (r.kind === 'plan') btn('מסלול', () => { dock.panel = 'lib'; Object.assign(lsel, { kind: null }); startPlan({ ...r, libId: r.id }); });
-      btn('העבר', () => { lsel.moving = !lsel.moving; lsel.editing = false; renderLibrary(); }, lsel.moving ? 'on' : '');
-      const del = btn('🗑', async () => {
-        if (!del.classList.contains('armed')) { del.classList.add('armed'); del.textContent = 'בטוח?'; setTimeout(() => { del.classList.remove('armed'); del.textContent = '🗑'; }, 3000); return; }
-        await db.set('library', (await libLoad()).filter((x) => x.id !== r.id));
-        toast(`"${r.name}" נמחק`);
-        lsel.kind = null; renderLibrary();
-      }, 'danger');
-    } else if (lsel.kind === 'folder') {
-      btn('שם התיקייה', () => { lsel.editing = true; libClosed.delete(lsel.folder); renderLibrary(); });
-    } else if (lib.length) {
-      tools.innerHTML = '<p class="muted small center">נגיעה בוחרת · נגיעה נוספת במסלול פותחת אותו</p>';
-    }
-    // העברה לתיקייה: התיקיות הקיימות, או שם חדש
-    const mv = $('lib-move');
-    mv.hidden = !(r && lsel.moving);
-    if (!mv.hidden) {
-      mv.innerHTML = '<div class="chips"></div><form class="new-folder"><input placeholder="תיקייה חדשה" maxlength="40"><button>העבר</button></form>';
-      for (const f of folders.filter((f) => f !== (r.folder || 'כללי'))) {
-        const c = Object.assign(document.createElement('button'), { type: 'button', textContent: f });
-        c.addEventListener('click', () => moveRoute(r.id, f));
-        mv.querySelector('.chips').appendChild(c);
+    const c = lsel.kind === 'folder' ? lsel.folder : null;
+    const grp = () => tools.appendChild(el('div', 'tgrp'));
+    const btn = (g, ico, label, fn, { on = true, cls = '' } = {}) => {
+      const b = el('button', cls);
+      b.innerHTML = `<svg viewBox="0 0 24 24">${ICON[ico]}</svg><span></span>`;
+      b.querySelector('span').textContent = label;
+      b.disabled = !on;
+      b.addEventListener('click', fn);
+      g.appendChild(b);
+      return b;
+    };
+    const g1 = grp();
+    btn(g1, 'open', 'פתח', () => openFromLib(r.id), { on: !!r });
+    btn(g1, 'edit', 'עריכה', () => { lsel.editing = true; if (c) libOpen.add(c); renderLibrary(); }, { on: !!(r || c) });
+    btn(g1, 'route', 'מסלול', () => { dock.panel = 'lib'; clearSel(); startPlan({ ...r, libId: r.id }); }, { on: r?.kind === 'plan' });
+    const del = btn(g1, 'del', 'מחיקה', async () => {
+      if (!del.classList.contains('armed')) {
+        del.classList.add('armed'); del.querySelector('span').textContent = 'בטוח?';
+        setTimeout(() => { del.classList.remove('armed'); del.querySelector('span').textContent = 'מחיקה'; }, 3000);
+        return;
       }
-      mv.querySelector('form').addEventListener('submit', (e) => { e.preventDefault(); const f = mv.querySelector('input').value.trim(); if (f) moveRoute(r.id, f); });
-    }
+      if (r) { await db.set('library', (await libLoad()).filter((x) => x.id !== r.id)); toast(`"${r.name}" נמחק`); }
+      if (c) await deleteCat(c);
+      clearSel(); renderLibrary();
+    }, { on: !!(r || c), cls: 'danger' });
+    const g2 = grp();
+    const cf = ctxFolder(lib);
+    btn(g2, 'add', 'מסלול', () => { dock.panel = 'lib'; clearSel(); startPlan(cf ? { folder: cf } : undefined); })
+      .title = cf ? `מסלול חדש ב"${cf}"` : 'מסלול חדש';
+    btn(g2, 'cat', 'קטגוריה', () => addCat(cats));
   }
   async function libEdit(fn) {
     const lib = await libLoad();
@@ -1012,20 +1103,41 @@
     await db.set('library', lib);
     renderLibrary();
   }
-  const renameRoute = (id, name) => libEdit((lib) => { const r = lib.find((x) => x.id === id); if (r) r.name = name; });
-  const moveRoute = (id, folder) => { lsel.moving = false; toast(`הועבר ל"${folder}"`); return libEdit((lib) => { const r = lib.find((x) => x.id === id); if (r) r.folder = folder; }); };
-  // שינוי שם של תיקייה = כל המסלולים שבה עוברים לשם החדש (שם קיים – התיקיות מתאחדות)
-  const renameFolder = (from, to) => { lsel.folder = to; if (libClosed.delete(from)) { libClosed.add(to); keepClosed(); } return libEdit((lib) => { for (const r of lib) if ((r.folder || 'כללי') === from) r.folder = to; }); };
-  $('lib-new').addEventListener('click', async () => {
-    const folder = ctxFolder(await libLoad());
-    dock.panel = 'lib'; lsel.kind = null;
-    startPlan(folder ? { folder } : undefined);
-  });
+  const renameRoute = (id, name) => libEdit((lib) => { const r = lib.find((x) => x.id === id); if (r) r.name = name; if (active?.libId === id) { active.name = name; db.set('active', active); } });
+  // שינוי שם של קטגוריה: גם המסלולים שבה עוברים (שם קיים – הקטגוריות מתאחדות)
+  async function renameCat(from, to) {
+    const cats = catOrder(await catLoad(), await libLoad());
+    const i = cats.indexOf(from);
+    if (cats.includes(to)) cats.splice(i, 1); else cats[i] = to;
+    await db.set('folders', cats);
+    if (libOpen.delete(from)) libOpen.add(to);
+    lsel.folder = to;
+    if (active?.folder === from) { active.folder = to; db.set('active', active); }
+    await libEdit((lib) => { for (const r of lib) if (r.folder === from) r.folder = to; });
+  }
+  // מחיקת קטגוריה: המסלולים שבה יוצאים החוצה (לא נמחקים)
+  async function deleteCat(c) {
+    await db.set('folders', (await catLoad()).filter((x) => x !== c));
+    const lib = await libLoad();
+    for (const r of lib) if (r.folder === c) r.folder = '';
+    await db.set('library', lib);
+    if (active?.folder === c) { active.folder = ''; db.set('active', active); }
+    toast(`הקטגוריה "${c}" נמחקה; המסלולים שבה נשארו`, 3000);
+  }
+  async function addCat(cats) {
+    let name = 'קטגוריה חדשה', n = 2;
+    while (cats.includes(name)) name = `קטגוריה חדשה ${n++}`;
+    await db.set('folders', [...cats, name]);
+    Object.assign(lsel, { kind: 'folder', id: null, folder: name, editing: true });
+    libOpen.add(name);
+    await renderLibrary();
+    $('lib-list').lastElementChild?.scrollIntoView({ block: 'nearest' });
+  }
   // נגיעה ברקע הרשימה – מבטלת את הבחירה
   $('lib-list').addEventListener('click', (e) => {
-    if (e.target === $('lib-list') || e.target.classList.contains('lib-kids')) { if (lsel.kind && !lsel.editing) { lsel.kind = null; renderLibrary(); } }
+    if ((e.target === $('lib-list') || e.target.classList.contains('lib-loose') || e.target.classList.contains('lib-cols')) && lsel.kind && !lsel.editing) { clearSel(); renderLibrary(); }
   });
-  $('dl-close').addEventListener('click', () => { dock.panel = null; Object.assign(lsel, { kind: null, editing: false, moving: false }); renderDock(); });
+  $('dl-close').addEventListener('click', () => { dock.panel = null; clearSel(); renderDock(); });
 
   // ---------- GPS ----------
   let watchId = null;
@@ -1489,9 +1601,12 @@
     if (dock.panel) return dock.panel;
     return active && route?.pts.length > 1 ? 'route' : 'home';
   }
+  let lastMode = null;
   function renderDock() {
     const m = dockMode();
-    for (const sec of dockEl.children) sec.hidden = sec.dataset.mode !== m;
+    if (m === 'lib' && lastMode !== 'lib' && lastMode !== 'plan') libOpen.clear(); // קטגוריות תמיד מתחילות סגורות
+    lastMode = m;
+    for (const sec of $('dock-in').children) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
@@ -1558,8 +1673,14 @@
   attachDockDrag(document.querySelector('#dock .r-title'));
   attachDockDrag($('ri-stats'));
 
-  // גובה הדוק -> משתנה CSS, כדי שקנה המידה וזכויות היוצרים יישבו מעליו
-  new ResizeObserver(() => document.documentElement.style.setProperty('--dock-h', dockEl.offsetHeight + 'px')).observe(dockEl);
+  // גובה הדוק נקבע לפי התוכן ועובר ברכות (בזמן גרירת פרטי המסלול – צמוד, בלי השהיה).
+  // גם משתנה CSS, כדי שקנה המידה וזכויות היוצרים יישבו מעליו
+  const dockIn = $('dock-in');
+  new ResizeObserver(() => {
+    const h = dockIn.offsetHeight;
+    dockEl.style.height = h + 'px';
+    document.documentElement.style.setProperty('--dock-h', h + 'px');
+  }).observe(dockIn);
   renderDock();
 
   // ---------- עמודת הכלים ("אולר"): סגורה = רק ☰; פותחים לרגע, ונסגרת אחרי פעולה ----------

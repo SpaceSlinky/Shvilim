@@ -47,7 +47,7 @@
   <div id="toast" hidden></div>
 
   <!-- הדוק התחתון: משתנה לפי מה שעושים – בית (חיפוש / מסלולים / חדש), רשימת מסלולים, מסלול, תכנון -->
-  <div id="dock" data-mode="home">
+  <div id="dock" data-mode="home"><div id="dock-in">
     <section data-mode="home" class="dock-home">
       <button id="d-search"><span class="ico">🔍</span>חיפוש מקום</button>
       <button id="d-lib"><span class="ico">📚</span>מסלולים</button>
@@ -56,9 +56,7 @@
     <!-- מסלולים: נגיעה בוחרת מסלול או תיקייה; הכלים למטה פועלים על מה שנבחר -->
     <section data-mode="lib" hidden>
       <div class="dock-head three"><button id="dl-close" class="back">› ראשי</button><b class="d-title">מסלולים</b><span></span></div>
-      <button id="lib-new" class="lib-new">+ מסלול חדש</button>
       <div id="lib-list" class="dock-scroll"></div>
-      <div id="lib-move" class="lib-move" hidden></div>
       <div id="lib-tools" class="lib-tools"></div>
     </section>
 
@@ -103,7 +101,7 @@
         <button id="pl-cancel">ביטול</button>
       </div>
     </section>
-  </div>
+  </div></div>
 
   <dialog id="plan-dlg">
     <form method="dialog">

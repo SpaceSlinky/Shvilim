@@ -149,14 +149,6 @@ body.night .scrub { background: rgba(255,109,0,.12); }
 body.night .scrub-head { color: #ffab40; }
 
 /* העברה לתיקייה */
-.lib-move { margin-top: 8px; }
-.lib-move p { margin: 0 0 6px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.chips button { width: auto; margin: 0; padding: 7px 10px; font-size: 14px; }
-.new-folder { display: flex; gap: 6px; }
-.new-folder input { flex: 1; min-width: 0; font-size: 15px; padding: 8px 10px; border-radius: 10px; border: 1px solid #ccc; }
-.new-folder button { width: auto; margin: 0; padding: 8px 14px; font-size: 14px; }
-body.night .new-folder input { background: #1d2227; color: #eee; border-color: #444; }
 
 /* ===== משטח הכלים ("אולר"): סגור – רק ☰; נפתח במשיכה למטה או בהקשה, ונסגר אחרי פעולה ===== */
 #controls.open { --k: 1; }
@@ -191,9 +183,10 @@ body.night .vs-fill, body.night .vs-thumb { background: #4caf50; }
 body.night .vs-thumb { border-color: #23282e; }
 
 /* ===== הדוק התחתון: צר, ומשתנה לפי מה שעושים ===== */
-#dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; margin: 0 auto; max-width: 560px; padding-bottom: var(--safe-b);
+#dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; margin: 0 auto; max-width: 560px; overflow: hidden;
+  transition: height .32s cubic-bezier(.22,1,.36,1);
   background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 14px rgba(0,0,0,.22); }
-#dock > section { padding: 8px 10px; }
+#dock-in > section { padding: 8px 10px; }
 .dock-home { display: flex; gap: 6px; }
 .dock-home button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border: 0; border-radius: 12px;
   background: #f2f4f3; color: #222; font: inherit; font-size: 13px; }
@@ -231,20 +224,8 @@ body.night .grip::before { background: #555; }
 .offroute { margin-top: 6px; padding: 8px 10px; border-radius: 10px; background: #e67e00; color: #fff; font-weight: 700; text-align: center; }
 
 /* רשימת המסלולים: בחירה, ואז כלים */
-.lib-tools { display: flex; gap: 6px; margin-top: 8px; }
-.lib-tools:empty { display: none; }
-.lib-tools p { flex: 1; margin: 2px 0; }
-.lib-tools button { flex: 1; padding: 10px 4px; font: inherit; font-size: 14px; border-radius: 10px; border: 1px solid #ccc; background: #f7f7f7; color: inherit; white-space: nowrap; }
-.lib-tools button.primary { background: var(--green); border-color: var(--green); color: #fff; }
-.lib-tools button.on { border-color: var(--green); color: var(--green); }
-.lib-tools button.danger { flex: 0 0 auto; padding-inline: 12px; color: #c62828; }
-.lib-tools button.armed { background: #c62828; color: #fff; border-color: #c62828; }
-#lib-move { margin-top: 8px; }
 
 body.night #ri-stats.hot .v, body.night #ri-stats.hot .lbl { color: #ffab40; }
-body.night .lib-tools button { background: #2a3036; border-color: #444; }
-body.night .lib-tools button.primary { background: #2e7d4f; border-color: #2e7d4f; }
-body.night .lib-tools button.danger { color: #ef5350; }
 
 /* שכבות: שלושה רקעים, והשאר תחת "עוד" */
 .seg { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 10px; overflow: hidden; margin: 6px 0 4px; }
@@ -271,26 +252,67 @@ body.night .more-layers summary { color: #aaa; }
 body.night .back { color: #81c784; }
 body.night .stop { color: #ef5350; border-color: #ef5350; }
 
-/* מסלולים: "+ מסלול חדש" קבוע למעלה */
-.lib-new { display: block; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 6px 0 2px; padding: 10px; border: 1px dashed var(--green); border-radius: 10px; background: none;
-  font: inherit; font-size: 15px; font-weight: 700; color: var(--green); }
-body.night .lib-new { color: #81c784; border-color: #4caf50; }
 
-/* עץ: תיקייה – שורה מודגשת עם חץ ומספר; המסלולים בתוכה מוזחים, עם קו דק שמחבר אותם אליה */
-.lib-folder { display: flex; align-items: center; gap: 8px; padding: 10px 6px; border-radius: 8px; cursor: pointer; font-size: 16px; }
-.lib-folder b { flex: 1; min-width: 0; }
-.lib-folder .chev { width: 34px; height: 30px; margin: -8px -6px -8px 0; display: grid; place-items: center; color: #888; font-size: 15px; line-height: 1; }
-.lib-folder .count { font-size: 13px; color: #888; }
-.lib-kids { margin-inline-start: 13px; padding-inline-start: 10px; border-inline-start: 2px solid #ddd; margin-bottom: 4px; }
-.lib-row { padding: 7px 6px; border-radius: 8px; cursor: pointer; }
-.lib-row b { display: block; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
-.lib-row span { display: block; margin-top: 1px; }
-.lib-folder.sel, .lib-row.sel { background: rgba(46,125,79,.12); }
 /* עריכת שם: אותו טקסט, רק קו דק מתחתיו */
 .edit-in { width: 100%; font: inherit; font-weight: inherit; color: inherit; background: none; border: 0; border-bottom: 1.5px solid var(--green);
   border-radius: 0; padding: 0 0 1px; outline: none; }
-.lib-folder .edit-in { flex: 1; min-width: 0; font-weight: 700; }
-.lib-row .edit-in { font-size: 15px; font-weight: 600; }
-body.night .lib-kids { border-color: #3a3f45; }
-body.night .lib-folder.sel, body.night .lib-row.sel { background: rgba(76,175,80,.18); }
 body.night .edit-in { border-color: #4caf50; }
+
+/* הגובה עובר ברכות בין מצבים; בפרטי המסלול – צמוד לאצבע */
+#dock[data-mode="route"] { transition: none; }
+#dock-in { padding-bottom: var(--safe-b); }
+
+/* ===== מסלולים: טבלה לפי קטגוריות ===== */
+.lib-cols, .lib-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 64px 78px; align-items: center; gap: 6px; }
+.lib-cols { font-size: 12px; color: #888; padding: 4px 4px 6px; border-bottom: 1px solid #e3e3e3; }
+.c-len, .c-ele { text-align: end; font-size: 14px; color: #555; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lib-cols .c-len, .lib-cols .c-ele { color: #888; font-size: 12px; }
+.c-ele { unicode-bidi: isolate; }
+.lib-row { padding: 9px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+.lib-row .c-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
+.dh { display: grid; place-items: center; height: 30px; margin: -6px 0; touch-action: none; cursor: grab; color: #aaa; }
+.dh svg { width: 10px; height: 16px; fill: currentColor; }
+/* קטגוריה: כותרת ממורכזת; נגיעה פותחת/סוגרת ברכות */
+.cat { margin-top: 6px; }
+.cat-head { display: grid; grid-template-columns: 22px minmax(0, 1fr) 22px; align-items: center; gap: 6px; padding: 12px 4px 8px; cursor: pointer; }
+.cat-name { text-align: center; font-size: 19px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .2s; }
+.cat-count { font-size: 12px; color: #999; text-align: center; }
+.cat.open .cat-name { color: var(--green); }
+.cat.sel .cat-head { background: rgba(46,125,79,.12); border-radius: 8px; }
+.cat-head .edit-in { text-align: center; font-size: 19px; font-weight: 800; }
+.cat-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1); }
+.cat-body > div { overflow: hidden; min-height: 0; }
+.cat.open .cat-body { grid-template-rows: 1fr; }
+.cat-empty { margin: 6px 0 10px; text-align: center; font-size: 13px; color: #999; }
+.lib-row .edit-in { font-size: 15px; font-weight: 600; }
+/* גרירה */
+.ghost { position: fixed; z-index: 30; pointer-events: none; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.3); border-radius: 10px; opacity: .95; }
+.dragging { opacity: .3; }
+.lib-loose:empty { min-height: 0; }
+#lib-list.drag-route .lib-loose { min-height: 38px; border: 1.5px dashed transparent; border-radius: 8px; margin: 4px 0; }
+#lib-list.drag-route .lib-loose:empty::after { content: "להוצאה מהקטגוריה – גררו לכאן"; display: block; text-align: center; font-size: 13px; color: #999; padding: 9px; }
+.drop { outline: 2px dashed var(--green); outline-offset: 2px; border-radius: 8px; background: rgba(46,125,79,.06); }
+.drop-before { box-shadow: 0 -3px 0 var(--green); }
+.drop-after { box-shadow: 0 3px 0 var(--green); }
+/* כלים: קבוצות תאים עם אייקון ותווית */
+.lib-tools { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
+.tgrp { display: flex; gap: 1px; border-radius: 12px; overflow: hidden; border: 1px solid #ddd; background: #ddd; }
+.tgrp button { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 58px; padding: 7px 0 6px; border: 0; background: #f7f7f7;
+  color: var(--green); font: inherit; font-size: 12px; }
+.tgrp button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tgrp button:disabled { color: #bbb; }
+.tgrp button.danger:not(:disabled) { color: #c62828; }
+.tgrp button.armed { background: #c62828; color: #fff; }
+.tgrp button:active:not(:disabled) { background: #e7efe9; }
+
+body.night .lib-cols { border-color: #333; }
+body.night .lib-row { border-color: #2c3136; }
+body.night .c-len, body.night .c-ele { color: #aaa; }
+body.night .lib-row.sel, body.night .cat.sel .cat-head { background: rgba(76,175,80,.18); }
+body.night .cat.open .cat-name { color: #81c784; }
+body.night .ghost { background: #252b31; }
+body.night .tgrp { border-color: #3a3f45; background: #3a3f45; }
+body.night .tgrp button { background: #2a3036; color: #81c784; }
+body.night .tgrp button:disabled { color: #555; }
+body.night .tgrp button.danger:not(:disabled) { color: #ef5350; }
