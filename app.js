@@ -1450,7 +1450,7 @@
         sec.dataset.cat = c;
         const head = el('div', 'cat-head');
         const g = gripEl();
-        head.append(g, fsel && lsel.editing ? editField(c, (v) => renameCat(c, v)) : el('span', 'cat-name', c), el('span', 'cat-count', items.length || ''));
+        head.append(g, fsel && lsel.editing ? editField(c, (v) => renameCat(c, v)) : el('span', 'cat-name', c), el('span', 'cat-count'));
         // נגיעה בכותרת: בוחרת את הקטגוריה (כמו מסלול) ופותחת/סוגרת אותה ברכות
         head.addEventListener('click', () => {
           if (dragJustEnded || (fsel && lsel.editing)) return;
@@ -2233,8 +2233,8 @@
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
-    $('search').hidden = m !== 'lib'; // חיפוש – רק כשלא בתוך מסלול או בתכנון
-    $('controls').classList.toggle('alone', m !== 'lib'); // בלי שורת חיפוש – ה-☰ עיגול לבד, באותו מקום
+    // חיפוש – רק כשלא בתוך מסלול או בתכנון: בכניסה למסלול השורה מתכנסת לתוך ה-☰ (משמאל לימין), וביציאה נפתחת ממנו
+    $('search').classList.toggle('collapsed', m !== 'lib');
     layoutTools();
     if (m !== 'lib') closeSearch();
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
