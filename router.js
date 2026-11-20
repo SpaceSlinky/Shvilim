@@ -160,9 +160,10 @@
   }
 
   /**
-   * מסלול בין שתי נקודות מוצמדות. מחזיר { coords, segs:[{coords, c, h}], len } או null.
+   * מסלול בין שתי נקודות מוצמדות. מחזיר { coords, segs:[{coords, c, h}], len, edges } או null.
+   * avoid – קטעים (אינדקסים) שעדיף לא לעבור בהם (פי 5), למשל הדרך שבה באת.
    */
-  function route(g, s, t) {
+  function route(g, s, t, { avoid } = {}) {
     const { X, Y, adj, E } = g;
     const N = X.length;
     const S = N, T = N + 1; // צמתים וירטואליים
@@ -194,15 +195,15 @@
       if (u === T) break;
       done.add(u);
       const gu = gs.get(u);
-      const relax = (v, len, f, c, hw) => {
-        const ng = gu + len * f;
+      const relax = (v, len, f, c, hw, ei) => {
+        const ng = gu + len * f * (ei != null && avoid?.has(ei) ? 5 : 1);
         if (ng < (gs.get(v) ?? Infinity)) {
           gs.set(v, ng);
-          prev.set(v, { u, c, hw });
+          prev.set(v, { u, c, hw, ei });
           open.push(ng + h(v), v);
         }
       };
-      if (u < N) for (const ei of adj[u]) { const e = E[ei]; relax(e.a === u ? e.b : e.a, e.len, e.f, e.c, e.h); }
+      if (u < N) for (const ei of adj[u]) { const e = E[ei]; relax(e.a === u ? e.b : e.a, e.len, e.f, e.c, e.h, ei); }
       for (const ve of vEdges.get(u) || []) relax(ve.to, ve.len, ve.f, ve.c, ve.hw ?? ve.h);
     }
     if (!prev.has(T)) return null;
@@ -221,7 +222,8 @@
       if (last && last.c === c && (c || last.h === hw)) last.coords.push(b);
       else segs.push({ coords: [a, b], c, h: hw });
     }
-    return { coords, segs, len };
+    const edges = info.map((x) => x.ei).filter((x) => x != null).concat([s.e, t.e]);
+    return { coords, segs, len, edges };
   }
 
   const Router = { buildGraph, snap, route };

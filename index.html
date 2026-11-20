@@ -91,6 +91,13 @@
       <div class="r-more">
         <canvas id="ri-profile" class="profile"></canvas>
       </div>
+      <!-- תוספת למסלול (לחיצה ארוכה על המפה): הלוך וחזור / להמשיך משם -->
+      <div id="dt-box" class="dt-box" hidden>
+        <div id="dt-title" class="dt-title"></div>
+        <div id="dt-info" class="dt-info"></div>
+        <div id="dt-modes" class="dt-modes"><button data-m="back">הלוך וחזור</button><button data-m="on">להמשיך משם</button></div>
+        <div class="dt-btns"><button id="dt-cancel">ביטול</button><button id="dt-ok" class="go primary">הוספה למסלול</button></div>
+      </div>
       <button id="ri-go" class="go primary">▶ יוצאים לדרך</button>
     </section>
 
@@ -163,9 +170,17 @@
       <!-- מפות שמורות: נגיעה בשם – המפה עוברת לאזור; מחיקה – עם אישור -->
       <h3>מפות שמורות</h3>
       <div id="areas-list"></div>
+      <button id="ls-open" class="ls-open">עיצוב רשימת המסלולים</button>
     </details>
     <p class="credits">נתוני המפה © תורמי OpenStreetMap · גובה: Mapzen/AWS · טופו © OpenTopoMap · תצלום אוויר © Esri · מפת ישראל להליכה</p>
     <button id="layers-close" class="primary">סגור</button>
+  </dialog>
+
+  <!-- עיצוב רשימת המסלולים: גודל ומשקל לכל סוג טקסט, ומרווח השורות -->
+  <dialog id="style-dlg">
+    <h2>עיצוב רשימת המסלולים</h2>
+    <div id="ls-list"></div>
+    <div class="ls-btns"><button id="ls-reset">ברירת מחדל</button><button id="ls-close" class="primary">סגור</button></div>
   </dialog>
 
   <!-- אישור מחיקה: מה יקרה, ביטול / מחיקה -->

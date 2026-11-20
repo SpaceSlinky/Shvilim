@@ -79,6 +79,7 @@
       ihm: { type: 'raster', tileSize: 256, maxzoom: 16, attribution: '© Israel Hiking Map',
         tiles: ['https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png'] },
       scrub: { type: 'geojson', data: empty },
+      detour: { type: 'geojson', data: empty },
       walked: { type: 'geojson', data: empty },
     },
     layers: [
@@ -169,6 +170,13 @@
           'circle-color': ['match', ['get', 'kind'], 'start', '#1a9b3c', '#c62828'] } },
       { id: 'wpts', type: 'circle', source: 'wpts',
         paint: { 'circle-radius': 6, 'circle-color': '#f39c12', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
+      // תוספת למסלול (לפני האישור): מה שמדלגים עליו – אפור; הקטע החדש – מקווקו; והנקודה
+      { id: 'detour-skip', type: 'line', source: 'detour', filter: ['==', ['get', 'k'], 'skip'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#9e9e9e', 'line-width': 9, 'line-opacity': 0.75 } },
+      { id: 'detour-line', type: 'line', source: 'detour', filter: ['==', ['get', 'k'], 'new'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d81b60', 'line-width': 5, 'line-dasharray': [1.6, 1.2] } },
+      { id: 'detour-pt', type: 'circle', source: 'detour', filter: ['==', '$type', 'Point'],
+        paint: { 'circle-radius': 8, 'circle-color': '#d81b60', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
       // האצבע על הגרף: הקטע על המסלול והנקודה (כתום ביום, אפור בהיר בלילה)
       { id: 'scrub-line', type: 'line', source: 'scrub', filter: ['==', '$type', 'LineString'],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
@@ -456,7 +464,9 @@
     return g.getImageData(0, 0, s, s);
   }
 
+  let longPressAt = 0; // אחרי לחיצה ארוכה (תוספת למסלול) – לא פותחים מידע על מה שמתחת
   map.on('click', 'wpts', (e) => {
+    if (Date.now() - longPressAt < 800) return;
     const f = e.features[0];
     if (!f.properties.name) return;
     const el = document.createElement('div');
@@ -471,7 +481,7 @@
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
   const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
   map.on('click', (e) => {
-    if (plan) return;
+    if (plan || Date.now() - longPressAt < 800) return;
     const { x, y } = e.point;
     const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
     if (!feats.length) return;
@@ -549,7 +559,7 @@
     Elev.profile(route.pts, 15, route.breaks).then((p) => {
       if (active !== a) return;
       prof = p; updateStatus(); renderRouteInfo();
-      if (p) { a.gain = Math.round(p.gain); a.loss = Math.round(p.loss); if (a.libId) libUpdateStats(a.libId, p); }
+      if (p) { a.gain = Math.round(p.gain); a.loss = Math.round(p.loss); if (a.libId && !a.edits?.length) libUpdateStats(a.libId, p); }
     });
   }
 
@@ -785,7 +795,8 @@
     // לפני היציאה: יוצאים מכל נקודה על המסלול, רק כשקרובים אליו
     $('ri-go').textContent = goMsg || '▶ יוצאים לדרך';
     $('ri-go').classList.toggle('warn', !!goMsg && !goWait);
-    $('ri-go').hidden = nav;
+    $('ri-go').hidden = nav || !!detour;
+    $('dt-box').hidden = !detour;
     const wait = '…';
     if (scrub && prof && scrub.a != null) {
       // שתי אצבעות: הטווח שביניהן
@@ -818,6 +829,14 @@
 
   // יציאה – מכותרת הדוק: בניווט – עוצרים את הניווט; אחרת – חוזרים לרשימה, כמו שהייתה
   async function exitRoute() {
+    if (detour) cancelDetour();
+    // הוספת קטעים למסלול: שומרים כמסלול חדש? המקורי נשאר כמו שהוא
+    if (active?.edits?.length) {
+      const name = [active.baseName || active.name, ...(active.adds || [])].join(' + ');
+      if (await confirmDlg('לשמור את השינויים כמסלול חדש?', `"${name}". המסלול המקורי נשאר כמו שהוא.`, { ok: 'שמירה', cancel: 'לא לשמור', danger: false })) {
+        await libPut({ ...active, libId: Date.now(), name, nav: false });
+      }
+    }
     dock.libOpen = true;
     await clearRoute();
   }
@@ -877,6 +896,170 @@
     const i = idxAt(route.cum, along);
     const coords = route.pts.slice(0, i + 1).concat([pointAt(route, along)]);
     map.getSource('walked')?.setData(coords.length > 1 ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } } : empty);
+  }
+
+  // ---------- תוספת למסלול קיים: לחיצה ארוכה על המפה ----------
+  // מהנקודה הקרובה במסלול (בניווט – שעוד לפניך) אל הנקודה שנבחרה, לאורך השבילים.
+  // "הלוך וחזור" – חוזרים באותה דרך; "להמשיך משם" – הדרך הקצרה חזרה למסלול, בהמשך (מה שמדלגים עליו – אפור).
+  let detour = null; // { target, dep, opts:{back, on}, mode }
+  const segsLen = (segs) => segs.reduce((a, sg) => a + sg.coords.reduce((x, p, j) => (j ? x + Geo.haversine(sg.coords[j - 1], p) : 0), 0), 0);
+  const colorLeg = (segs) => segs.map((sg) => ({ ...sg, c: sg.c || (sg.h === 'free' ? null
+    : ['path', 'footway', 'track', 'steps', 'bridleway', 'cycleway'].includes(sg.h) ? '#7a6a58' : '#9e9e9e') }));
+  const reverseSegs = (segs) => segs.slice().reverse().map((sg) => ({ ...sg, coords: sg.coords.slice().reverse() }));
+  // הקטעים שבין שני מרחקים לאורך המסלול
+  function cutSegs(segs, from, to) {
+    const out = [];
+    let acc = 0;
+    for (const sg of segs) {
+      const c = sg.coords;
+      let piece = null;
+      for (let j = 1; j < c.length; j++) {
+        const d = Geo.haversine(c[j - 1], c[j]), a0 = acc, a1 = acc + d;
+        acc = a1;
+        if (a1 <= from || a0 >= to) continue;
+        const at = (x) => { const t = d ? (x - a0) / d : 0; return [c[j - 1][0] + (c[j][0] - c[j - 1][0]) * t, c[j - 1][1] + (c[j][1] - c[j - 1][1]) * t]; };
+        if (!piece) piece = [a0 >= from ? c[j - 1] : at(from)];
+        piece.push(a1 <= to ? c[j] : at(to));
+      }
+      if (piece?.length > 1) out.push({ ...sg, coords: piece });
+    }
+    return out;
+  }
+  function placeNear(p) {
+    let best = null, bd = 150;
+    for (const f of mapFC?.features || []) {
+      if (f.geometry.type !== 'Point' || !f.properties.n) continue;
+      const d = Geo.haversine(p, f.geometry.coordinates);
+      if (d < bd) { bd = d; best = f.properties.n; }
+    }
+    return best;
+  }
+  function proposeDetour(target) {
+    if (!showingRoute() || !mapFC) return;
+    const opts = { snap: true, bike: !!active.opts?.bike };
+    const g = getGraph(opts.bike), sn = g && Router.snap(g, target, 200);
+    if (sn) target = sn.p;
+    const lo = active.nav && prevAlong != null ? prevAlong : 0;
+    // יציאה: הנקודה הקרובה במסלול (שעוד לפניך)
+    let di = -1, dd = Infinity;
+    route.pts.forEach((p, i) => { if (route.cum[i] >= lo) { const d = Geo.haversine(p, target); if (d < dd) { dd = d; di = i; } } });
+    if (di < 0 || dd < 15) return toast('הנקודה כבר על המסלול', 2000);
+    const dep = route.cum[di];
+    const depPt = route.pts[di];
+    const sDep = g && Router.snap(g, depPt), outR = sDep && sn ? Router.route(g, sDep, sn) : null;
+    const out = colorLeg(outR ? outR.segs : computeLeg(depPt, target, opts).segs);
+    const outLen = segsLen(out);
+    const choices = { back: { segs: [...out, ...reverseSegs(out)], rejoin: dep, add: 2 * outLen } };
+    // חזרה למסלול בהמשך: הנקודות הקרובות ביותר (בקו אווירי) שאחרי היציאה, ומהן – הדרך הקצרה ביותר
+    const cands = [];
+    route.pts.forEach((p, i) => { if (route.cum[i] > dep + 60) cands.push({ i, d: Geo.haversine(p, target) }); });
+    cands.sort((a, b) => a.d - b.d);
+    const picked = [];
+    for (const c of cands) {
+      if (c.d > 2500 || picked.length >= 10) break;
+      if (picked.every((x) => Math.abs(route.cum[x.i] - route.cum[c.i]) > 40)) picked.push(c);
+    }
+    let best = null;
+    const avoid = new Set(outR?.edges || []); // לא לחזור באותה דרך
+    for (const c of outR ? picked : []) {
+      const sc = Router.snap(g, route.pts[c.i]);
+      const leg = sc && Router.route(g, sn, sc, { avoid });
+      if (!leg) continue;
+      // דרך חזרה שעוברת בנקודת היציאה – זה בעצם הלוך וחזור
+      if (leg.segs.some((sg) => sg.coords.some((q) => Geo.haversine(q, depPt) < 25))) continue;
+      const len = segsLen(leg.segs);
+      if (!best || len < best.len) best = { i: c.i, len, segs: leg.segs };
+    }
+    if (best && best.len < outLen * 3) {
+      const rejoin = route.cum[best.i];
+      choices.on = { segs: [...out, ...colorLeg(best.segs)], rejoin, add: outLen + best.len - (rejoin - dep) };
+    }
+    detour = { target, dep, choices, mode: 'back', name: placeNear(target) };
+    longPressAt = Date.now();
+    navigator.vibrate?.(25);
+    showDetour();
+  }
+  function showDetour() {
+    const ch = detour.choices[detour.mode];
+    const feats = ch.segs.map((sg) => ({ type: 'Feature', properties: { k: 'new' }, geometry: { type: 'LineString', coordinates: sg.coords } }));
+    if (detour.mode === 'on') for (const sg of cutSegs(active.segs, detour.dep, ch.rejoin))
+      feats.unshift({ type: 'Feature', properties: { k: 'skip' }, geometry: { type: 'LineString', coordinates: sg.coords } });
+    feats.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: detour.target } });
+    map.getSource('detour')?.setData({ type: 'FeatureCollection', features: feats });
+    for (const b of document.querySelectorAll('#dt-modes button')) {
+      b.hidden = !detour.choices[b.dataset.m];
+      b.classList.toggle('on', b.dataset.m === detour.mode);
+    }
+    $('dt-title').textContent = detour.name ? `תוספת: ${detour.name}` : 'תוספת למסלול';
+    // במילים ולא +/− (סימנים מתהפכים בטקסט עברי)
+    const more = (txt, neg) => (neg ? `${txt} פחות` : `עוד ${txt}`);
+    const lenTxt = more(Geo.fmtDist(Math.abs(ch.add)), ch.add < 0);
+    $('dt-info').textContent = `${lenTxt} · מחשב גובה…`;
+    renderRouteInfo();
+    // עלייה וזמן – אחרי חישוב הגובה של המסלול החדש
+    const mine = detour, mode = detour.mode;
+    const r = Geo.buildRoute(segsToLines(buildDetourSegs()));
+    Elev.profile(r.pts, 15, r.breaks).then((p) => {
+      if (detour !== mine || detour.mode !== mode) return;
+      const bike = !!active.opts?.bike;
+      const oldT = estTime(route.total, prof?.gain || 0, bike), newT = p ? estTime(r.total, p.gain, bike) : null;
+      $('dt-info').textContent = lenTxt
+        + (p && prof ? ` · ↗ עוד ${Math.max(0, Math.round(p.gain - prof.gain))} מ'` : '')
+        + (newT != null ? ` · ⏱ ${more(fmtTime(Math.abs(newT - oldT)), newT < oldT)}` : '');
+    });
+  }
+  function buildDetourSegs() {
+    const ch = detour.choices[detour.mode];
+    return [...cutSegs(active.segs, 0, detour.dep), ...ch.segs, ...cutSegs(active.segs, ch.rejoin, Infinity)];
+  }
+  function cancelDetour() {
+    detour = null;
+    map.getSource('detour')?.setData(empty);
+    renderRouteInfo();
+  }
+  async function acceptDetour() {
+    if (!detour || !active) return;
+    const segs = buildDetourSegs();
+    const a = active;
+    a.edits = [...(a.edits || []), { segs: a.segs, adds: a.adds || [] }];
+    a.baseName ||= a.name;
+    a.adds = [...(a.adds || []), detour.name || 'תוספת'];
+    a.segs = segs;
+    cancelDetour();
+    await setActive(a, { save: true });
+    toast('נוסף למסלול · "חזור" מבטל', 2500);
+  }
+  async function undoDetour() {
+    const a = active;
+    const last = a?.edits?.pop();
+    if (!last) return;
+    a.segs = last.segs; a.adds = last.adds;
+    await setActive(a, { save: true });
+    toast('התוספת בוטלה', 2000);
+  }
+  for (const b of document.querySelectorAll('#dt-modes button')) b.addEventListener('click', () => { detour.mode = b.dataset.m; showDetour(); });
+  $('dt-ok').addEventListener('click', acceptDetour);
+  $('dt-cancel').addEventListener('click', cancelDetour);
+  // לחיצה ארוכה (בלי לזוז) על המפה, כשמסלול מוצג
+  {
+    let lpTimer = 0, lpStart = null;
+    const cancel = () => { clearTimeout(lpTimer); lpStart = null; };
+    const mapBox = map.getContainer();
+    mapBox.addEventListener('touchstart', (e) => {
+      cancel();
+      if (e.touches.length !== 1 || !showingRoute()) return;
+      lpStart = [e.touches[0].clientX, e.touches[0].clientY];
+      lpTimer = setTimeout(() => {
+        const r = mapBox.getBoundingClientRect(), ll = map.unproject([lpStart[0] - r.left, lpStart[1] - r.top]);
+        lpStart = null;
+        proposeDetour([ll.lng, ll.lat]);
+      }, 550);
+    }, { passive: true });
+    mapBox.addEventListener('touchmove', (e) => {
+      if (lpStart && (e.touches.length > 1 || Math.hypot(e.touches[0].clientX - lpStart[0], e.touches[0].clientY - lpStart[1]) > 10)) cancel();
+    }, { passive: true });
+    for (const t of ['touchend', 'touchcancel']) mapBox.addEventListener(t, cancel, { passive: true });
+    map.on('contextmenu', (e) => { if (!matchMedia('(pointer: coarse)').matches) proposeDetour([e.lngLat.lng, e.lngLat.lat]); });
   }
 
   // ---------- תכנון מסלול ----------
@@ -1361,10 +1544,13 @@
   }
 
   // חלון אישור: כותרת, מה יקרה, ביטול / מחיקה
-  function confirmDlg(title, text) {
+  function confirmDlg(title, text, { ok = 'מחיקה', cancel = 'ביטול', danger = true } = {}) {
     const d = $('confirm-dlg');
     $('cf-title').textContent = title;
     $('cf-text').textContent = text;
+    const [bc, bo] = d.querySelectorAll('.cf-btns button');
+    bc.textContent = cancel; bo.textContent = ok;
+    bo.className = danger ? 'danger-btn' : 'primary';
     d.returnValue = '';
     d.showModal();
     return new Promise((res) => d.addEventListener('close', () => res(d.returnValue === 'ok'), { once: true }));
@@ -1435,7 +1621,6 @@
     updateMarkerHeading();
     el.classList.toggle('poor', accuracy > 50);
     map.getSource('acc')?.setData({ type: 'Feature', geometry: Geo.circle(p, accuracy), properties: {} });
-    if (active?.nav) applyEnvelope();
     if (follow && first) map.easeTo({ center: p, zoom: Math.max(map.getZoom(), 15.5), duration: 600 });
     else if (follow) startCamera();
     updateStatus();
@@ -1574,22 +1759,28 @@
     if (moving) map.jumpTo(opts);
     if (moving || compassMode) startCamera();
   }
-  // ---------- בתוך מסלול: המפה נשארת בתוך המעטפת שלו, ובניווט חוזרת לבד למיקום ----------
-  function applyEnvelope() {
-    let b = null;
-    if (active && !plan && dockMode() === 'route') {
-      const all = active.segs.flatMap((sg) => sg.coords);
-      if (active.nav && lastPos) all.push(lastPos.p); // סטית מהמסלול – המעטפת גדלה איתך
-      const [[w, so], [e, n]] = Geo.bounds(all);
-      // ריפוד: רבע מגודל המסלול, ולפחות כ-600 מ'
-      const px = Math.max(0.0065, (e - w) * 0.25), py = Math.max(0.0055, (n - so) * 0.25);
-      b = [[w - px, so - py], [e + px, n + py]];
-    }
-    const key = b ? b.flat().map((v) => v.toFixed(4)).join() : '';
-    if (key === applyEnvelope.key) return; // (מאפיין ולא let – נקרא גם לפני שהשורה הזו רצה)
-    applyEnvelope.key = key;
-    map.setMaxBounds(b);
+  // ---------- מסלול מוצג (לא בניווט): התרחקת מדי – המפה חוזרת לכל המסלול (כמו כפתור המירכוז) ----------
+  let farTimer = 0;
+  const showingRoute = () => active && !plan && dockMode() === 'route';
+  function routeTooFar() {
+    const [[w, so], [e, n]] = Geo.bounds(active.segs.flatMap((sg) => sg.coords));
+    const v = map.getBounds();
+    const vw = v.getWest(), ve = v.getEast(), vs = v.getSouth(), vn = v.getNorth();
+    const off = e < vw || w > ve || n < vs || so > vn; // המסלול כולו מחוץ למסך
+    const tiny = (e - w) < (ve - vw) * 0.12 && (n - so) < (vn - vs) * 0.12; // התרחקת בזום – המסלול קטנטן
+    return off || tiny;
   }
+  function checkFar() {
+    clearTimeout(farTimer);
+    if (!showingRoute() || active.nav) return;
+    farTimer = setTimeout(() => {
+      if (!showingRoute() || active.nav) return;
+      if (touching || map.isMoving?.()) return checkFar();
+      if (routeTooFar()) fitRoute();
+    }, 1200);
+  }
+  map.on('moveend', checkFar);
+  mapEl.addEventListener('touchend', checkFar, { passive: true });
   // הזזת את המפה בניווט – אחרי כמה שניות בלי נגיעה היא חוזרת למיקום שלך
   const RETURN_MS = 8000;
   let returnTimer = 0;
@@ -1894,7 +2085,6 @@
   let lastMode = null;
   function renderDock() {
     const m = dockMode();
-    applyEnvelope();
     if (lastMode && lastMode !== m) { dockEl.classList.add('morph'); clearTimeout(renderDock.t); renderDock.t = setTimeout(() => dockEl.classList.remove('morph'), 400); }
     lastMode = m;
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
@@ -1986,7 +2176,9 @@
   function dockBack() {
     const m = dockMode();
     if (m === 'route') {
+      if (detour) return cancelDetour(); // תוספת שעוד לא אושרה
       if (dock.open) return setDockOpen(false); // הגרף
+      if (active?.edits?.length) return undoDetour(); // התוספת האחרונה
       if (active?.nav) return ask('לעצור את הניווט?', 'עצור', stopNav); // שומרים מעצירה בטעות
       return exitRoute(); // לרשימה, כמו שהייתה
     }
@@ -2003,6 +2195,70 @@
       if (dock.libOpen) return setLibOpen(false);
     }
   }
+
+  // ---------- עיצוב רשימת המסלולים (localStorage `libStyle`) – משתני CSS על :root ----------
+  const LS = [
+    { k: 'head', name: 'כותרת "מסלולים"', min: 14, max: 30, s: 20, w: 800 },
+    { k: 'cat', name: 'כותרת קטגוריה', min: 12, max: 26, s: 16, w: 700 },
+    { k: 'row', name: 'שם מסלול', min: 12, max: 24, s: 16, w: 600 },
+    { k: 'len', name: 'אורך (ק"מ)', min: 11, max: 22, s: 15, w: 700 },
+  ];
+  const LS_W = [[400, 'רגיל'], [500, 'בינוני'], [700, 'מודגש'], [800, 'כבד']];
+  const LS_PAD = { min: 4, max: 22, def: 11 };
+  let libStyle = {};
+  try { libStyle = JSON.parse(localStorage.getItem('libStyle')) || {}; } catch { /* ignore */ }
+  function applyLibStyle() {
+    const r = document.documentElement.style;
+    for (const it of LS) {
+      const v = libStyle[it.k] || {};
+      r.setProperty(`--ls-${it.k}-s`, (v.s ?? it.s) + 'px');
+      r.setProperty(`--ls-${it.k}-w`, v.w ?? it.w);
+    }
+    r.setProperty('--ls-pad', (libStyle.pad ?? LS_PAD.def) + 'px');
+  }
+  applyLibStyle();
+  function saveLibStyle() {
+    try { localStorage.setItem('libStyle', JSON.stringify(libStyle)); } catch { /* ignore */ }
+    applyLibStyle();
+  }
+  function renderStyleDlg() {
+    const box = $('ls-list');
+    box.textContent = '';
+    const slider = (title, min, max, val, onInput) => {
+      const item = el('div', 'ls-item');
+      const top = el('div', 'ls-top', title);
+      const out = document.createElement('output');
+      out.textContent = val;
+      top.append(out);
+      const rng = document.createElement('input');
+      Object.assign(rng, { type: 'range', min, max, step: 1, value: val });
+      rng.addEventListener('input', () => { out.textContent = rng.value; onInput(+rng.value); });
+      item.append(top, rng);
+      return item;
+    };
+    for (const it of LS) {
+      const v = (libStyle[it.k] ||= {});
+      const item = slider(it.name, it.min, it.max, v.s ?? it.s, (x) => { v.s = x; saveLibStyle(); });
+      const seg = el('div', 'ls-w');
+      for (const [w, label] of LS_W) {
+        const b = el('button', (v.w ?? it.w) === w ? 'on' : '', label);
+        b.style.fontWeight = w;
+        b.addEventListener('click', () => { v.w = w; saveLibStyle(); seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); });
+        seg.append(b);
+      }
+      item.append(seg);
+      box.append(item);
+    }
+    box.append(slider('מרווח בין שורות', LS_PAD.min, LS_PAD.max, libStyle.pad ?? LS_PAD.def, (x) => { libStyle.pad = x; saveLibStyle(); }));
+  }
+  $('ls-open').addEventListener('click', () => {
+    $('layers-dlg').close();
+    if (dockMode() === 'lib' && !dock.libOpen) setLibOpen(true); // כדי לראות את השינויים על הרשימה עצמה
+    renderStyleDlg();
+    $('style-dlg').showModal();
+  });
+  $('ls-reset').addEventListener('click', () => { libStyle = {}; saveLibStyle(); renderStyleDlg(); });
+  $('ls-close').addEventListener('click', () => $('style-dlg').close());
 
   // ---------- כפתור "חזור" של הטלפון ----------
   // כשיש לאן לחזור, יש בהיסטוריה רשומה אחת שלנו; "חזור" מוריד אותה (popstate), ואנחנו עושים צעד אחד אחורה.

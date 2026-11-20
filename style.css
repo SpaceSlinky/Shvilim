@@ -279,17 +279,17 @@ body.night .edit-in { border-color: #4caf50; }
 
 /* ===== מסלולים: טבלה לפי קטגוריות ===== */
 #lib-list { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-.lib-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
-.c-len { font-size: 15px; font-weight: 700; color: #444; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lib-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: var(--ls-pad, 11px) 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+.c-len { font-size: var(--ls-len-s, 15px); font-weight: var(--ls-len-w, 700); color: #444; white-space: nowrap; font-variant-numeric: tabular-nums; }
 body.night .c-len { color: #ccc; }
-.c-name { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-name { font-size: var(--ls-row-s, 16px); font-weight: var(--ls-row-w, 600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
 .dh { display: grid; place-items: center; width: 34px; height: 40px; margin: -10px -6px; touch-action: none; cursor: grab; color: #aaa; }
 .dh svg { width: 10px; height: 16px; fill: currentColor; }
 /* קטגוריה: כותרת ממורכזת; נגיעה פותחת/סוגרת ברכות */
 .cat { margin-top: 6px; }
 .cat-head { display: grid; grid-template-columns: 26px minmax(0, 1fr) 26px; align-items: center; gap: 6px; padding: 10px 4px 6px; cursor: pointer; }
-.cat-name { text-align: center; font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .2s; }
+.cat-name { text-align: center; font-size: var(--ls-cat-s, 16px); font-weight: var(--ls-cat-w, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .2s; }
 .cat-count { font-size: 12px; color: #999; text-align: center; }
 .cat.open .cat-name { color: var(--green); }
 .cat.sel .cat-head { background: rgba(46,125,79,.12); border-radius: 8px; }
@@ -341,7 +341,7 @@ body.night .dock-ask .no { background: #2a3036; color: #eee; }
 /* ראשי = המסלולים: סגור – חיפוש ושורת "מסלולים"; פתוח – הרשימה נפתחת במקום ברכות */
 section[data-mode="lib"] > .grip { margin-bottom: 2px; }
 .lib-head { display: block; width: 100%; margin-top: 2px; padding: 10px 6px 8px; border: 0; background: none; text-align: center;
-  font: inherit; font-size: 20px; font-weight: 800; color: inherit; touch-action: none; cursor: pointer; }
+  font: inherit; font-size: var(--ls-head-s, 20px); font-weight: var(--ls-head-w, 800); color: inherit; touch-action: none; cursor: pointer; }
 .lib-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1); }
 .lib-body > div { overflow: hidden; min-height: 0; }
 section.open .lib-body { grid-template-rows: 1fr; }
@@ -364,3 +364,37 @@ section.open .lib-body { grid-template-rows: 1fr; }
 .dl-here:disabled { color: #666; font-weight: 500; }
 body.night .dl-here { background: #23282e; color: #81c784; }
 body.night .dl-here:disabled { color: #aaa; }
+
+/* עיצוב רשימת המסלולים: חלון למעלה, הרשימה נראית מתחתיו ומשתנה בזמן אמת */
+#style-dlg { margin: 12px auto auto; max-height: 52vh; overflow: auto; padding: 14px 16px; }
+#style-dlg::backdrop { background: transparent; }
+.ls-item { padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.08); }
+.ls-item:last-of-type { border-bottom: 0; }
+.ls-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 600; }
+.ls-top output { font-size: 13px; color: #777; font-weight: 400; font-variant-numeric: tabular-nums; }
+.ls-item input[type=range] { width: 100%; margin: 4px 0 2px; accent-color: var(--green); }
+.ls-w { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
+#style-dlg .ls-w button { flex: 1; margin: 0; padding: 6px 0; border: 0; border-radius: 0; background: none; color: inherit; font-size: 13px; }
+#style-dlg .ls-w button + button { border-inline-start: 1px solid #ccc; }
+#style-dlg .ls-w button.on { background: var(--green); color: #fff; }
+.ls-btns { display: flex; gap: 8px; margin-top: 8px; }
+#style-dlg .ls-btns button { margin: 0; }
+body.night .ls-item { border-color: rgba(255,255,255,.1); }
+body.night .ls-w, body.night #style-dlg .ls-w button + button { border-color: #444; }
+body.night .ls-top output { color: #aaa; }
+#layers-dlg .ls-open { margin: 10px 0 0; padding: 10px; font-size: 15px; background: none; border: 1px solid #ccc; border-radius: 10px; color: inherit; }
+
+/* תוספת למסלול */
+.dt-box { margin-top: 8px; text-align: center; }
+.dt-title { font-size: 16px; font-weight: 700; color: #d81b60; }
+.dt-info { margin: 2px 0 8px; font-size: 14px; color: #555; }
+.dt-modes { display: flex; border: 1px solid #ccc; border-radius: 10px; overflow: hidden; }
+.dt-modes button { flex: 1; padding: 9px 0; border: 0; background: none; font: inherit; font-size: 15px; color: inherit; }
+.dt-modes button + button:not([hidden]) { border-inline-start: 1px solid #ccc; }
+.dt-modes button.on { background: #d81b60; color: #fff; font-weight: 700; }
+.dt-btns { display: flex; gap: 8px; align-items: stretch; }
+.dt-btns #dt-cancel { flex: 0 0 30%; margin-top: 8px; border: 1px solid #ccc; border-radius: 12px; background: none; font: inherit; font-size: 16px; color: inherit; }
+.dt-btns .go { flex: 1; }
+body.night .dt-title { color: #f06292; }
+body.night .dt-info { color: #bbb; }
+body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.night .dt-btns #dt-cancel { border-color: #444; }
