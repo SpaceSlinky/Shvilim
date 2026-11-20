@@ -275,13 +275,13 @@
       if (area) toast(fresh.features.length ? 'מפות האזור נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓' : 'אין שבילים או דרכים באזור הזה', 3000);
       else say(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
     } catch (e) {
+      // עדכון שקט שנכשל או שפינה את הדרך – ינסה שוב מחר, לא בכל פתיחה
+      if (quiet) markArea(bbox, Date.now() - REFRESH_MS + 864e5);
       if (signal.aborted) return; // פינה את הדרך להורדה שהמשתמש ביקש
       console.error(e);
       const msg = e.message || String(e);
       if (area) dlErr = msg;
       else if (!quiet) toast('ההורדה נכשלה: ' + msg + '. נסו שוב.', 6000);
-      // עדכון שקט שנכשל – ינסה שוב מחר, לא בכל פתיחה
-      if (quiet) markArea(bbox, Date.now() - REFRESH_MS + 864e5);
       if (!(await db.get('mapdata').catch(() => null))) $('nodata').hidden = false;
     } finally {
       if (area) { dlMsg = ''; checkArea(); }
@@ -333,7 +333,9 @@
   Promise.all([db.get('mapdata').catch(() => null), mapReady]).then(([fc]) => {
     if (fc) {
       setMapData(fc);
-      if (!dlAreas().length) try { localStorage.setItem('dlAreas', JSON.stringify([{ b: CARMEL, t: 0 }])); } catch { /* ignore */ }
+      // מפה מגרסה ישנה (בלי תאריך) – נחשבת עדכנית; העדכון הבא בעוד שבועיים
+      const list = dlAreas().length ? dlAreas() : [{ b: CARMEL, t: 0 }];
+      if (list.some((a) => !a.t)) try { localStorage.setItem('dlAreas', JSON.stringify(list.map((a) => ({ ...a, t: a.t || Date.now() })))); } catch { /* ignore */ }
       // עדכון שקט של האזור הישן ביותר
       const old = dlAreas().sort((a, b) => a.t - b.t)[0];
       if (old && Date.now() - old.t > REFRESH_MS && netOk()) setTimeout(() => downloadArea(old.b, { quiet: true }), 8000);
