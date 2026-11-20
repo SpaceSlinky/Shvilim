@@ -1990,6 +1990,8 @@
  { base: 'vector', labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
   layerPrefs.route = true; // המסלול תמיד מוצג (אין לו יותר תיבה בשכבות)
+  // הסתרת הרקע – ערך אחד ליום וללילה (פעם היו שניים: ממשיכים מהערך של המצב הנוכחי)
+  if (layerPrefs.dim == null) layerPrefs.dim = (localStorage.getItem('theme') === 'dark' ? layerPrefs.dimNight : layerPrefs.dimDay) ?? 0.55;
 
   function applyLayers() {
     const vis = (on) => (on ? 'visible' : 'none');
@@ -2196,9 +2198,9 @@
   $('search-form').addEventListener('submit', (e) => { e.preventDefault(); if ($('search-input').value.trim()) onlineSearch($('search-input').value.trim()); });
 
   // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה) בשקיפות שבוחרים ----------
-  function dimValue() { return document.body.classList.contains('night') ? layerPrefs.dimNight : layerPrefs.dimDay; }
+  function dimValue() { return layerPrefs.dim; }
   function setDim(v) {
-    layerPrefs[document.body.classList.contains('night') ? 'dimNight' : 'dimDay'] = v;
+    layerPrefs.dim = v;
     applyLayers();
   }
   // הסליידר האנכי במשטח הכלים: למעלה – בלי הסתרה, למטה – הכי מוסתר
