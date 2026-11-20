@@ -1924,6 +1924,8 @@
   // בניווט: הזזת את המפה – אחרי 8 שניות בלי נגיעה היא חוזרת למיקום שלך (ולא לכל המסלול).
   // בזמן הוספת נקודה למסלול (לפני האישור) – אין חזרה בכלל, כדי שאפשר יהיה להסתכל מסביב.
   const RETURN_MS = 8000;
+  // תנועה אוטומטית של המפה: מתחילה רך ונגמרת רך (ease-in-out קובי)
+  const SOFT = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
   function checkFar() {
     clearTimeout(farTimer);
     if (!showingRoute() || follow || detour) return; // במעקב – המפה ממילא עליך
@@ -1933,10 +1935,10 @@
       if (touching || map.isMoving?.()) return checkFar();
       if (nav) {
         // חזרה למיקום שמתחילה רך ונגמרת רך (ולא קפיצה מהירה בהתחלה); אחרי זה – מעקב רגיל
-        if (lastPos) map.easeTo({ center: lastPos.p, duration: 1400, easing: (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2) });
+        if (lastPos) map.easeTo({ center: lastPos.p, duration: 1800, easing: SOFT });
         setFollow(true);
       }
-      else if (outOfEnvelope()) fitRoute({ duration: 900 });
+      else if (outOfEnvelope()) fitRoute({ duration: 1600, easing: SOFT });
     }, nav ? RETURN_MS : 1000);
   }
   map.on('moveend', checkFar);
