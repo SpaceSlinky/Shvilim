@@ -91,10 +91,13 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
    במסלול / בתכנון – מתכנסת לתוך ה-☰ משמאל לימין (left גדל עד שנשאר רק העיגול), וביציאה נפתחת ממנו */
 #search { position: fixed; top: calc(8px + var(--safe-t)); left: 10px; right: 10px; z-index: 9; transition: left .3s cubic-bezier(.22,1,.36,1); }
 #search.collapsed { left: calc(100% - 10px - var(--kb)); pointer-events: none; }
-#search.collapsed #search-input, #search.collapsed #search-results { opacity: 0; }
+#search.collapsed #search-results { opacity: 0; }
 #search-form { overflow: hidden; transition: padding .3s cubic-bezier(.22,1,.36,1); }
 #search.collapsed #search-form { padding: 0; } /* בלי הריפוד – השורה מתכנסת עד גודל העיגול */
-#search-input { transition: opacity .15s; }
+/* "חיפוש מקום" לא זז עם השורה: קבוע במקומו על המסך, ורק מופיע (פייד + סקייל מהיר, אחרי שהשורה נפתחה) ונעלם */
+#search-input { position: fixed; top: calc(8px + var(--safe-t)); left: calc(18px + var(--kb)); right: calc(18px + var(--kb)); height: var(--kb);
+  transition: opacity .14s ease-out .16s, transform .14s ease-out .16s; }
+#search.collapsed #search-input { opacity: 0; transform: scale(.85); transition-duration: .08s; transition-delay: 0s; }
 #search-form { position: relative; display: flex; align-items: center; height: var(--kb); padding: 0 calc(var(--kb) + 8px); background: #fff; border-radius: 999px; box-shadow: 0 2px 10px rgba(0,0,0,.22); color: #888; }
 #search-input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 16px; padding: 12px 0; color: #222; outline: none; text-align: center; }
 #search-input::-webkit-search-cancel-button { display: none; }
