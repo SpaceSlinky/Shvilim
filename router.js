@@ -55,8 +55,10 @@
         if (e !== undefined) {
           const ed = E[e];
           if (p.k === 'trail' && !ed.c) ed.c = p.c;
+          // קטע של כמה שבילים מסומנים (למשל ירוק וכחול על אותה דרך) – שומרים את כל הצבעים
+          if (p.k === 'trail' && !(ed.cs ||= []).includes(p.c)) ed.cs.push(p.c);
           if (p.k === 'trail') ed.f = Math.min(ed.f, TRAIL_FACTOR);
-        } else if (p.k === 'trail') addEdge(a, b, TRAIL_FACTOR, p.c, 'path');
+        } else if (p.k === 'trail') { addEdge(a, b, TRAIL_FACTOR, p.c, 'path'); E[E.length - 1].cs = [p.c]; }
       }
     }
     function addLine(c, fac, color, h) {
@@ -174,8 +176,8 @@
     const addV = (u, v, len, e) => {
       if (!vEdges.has(u)) vEdges.set(u, []);
       if (!vEdges.has(v)) vEdges.set(v, []);
-      vEdges.get(u).push({ to: v, len, f: e.f, c: e.c, h: e.h });
-      vEdges.get(v).push({ to: u, len, f: e.f, c: e.c, h: e.h });
+      vEdges.get(u).push({ to: v, len, f: e.f, c: e.c, h: e.h, cs: e.cs });
+      vEdges.get(v).push({ to: u, len, f: e.f, c: e.c, h: e.h, cs: e.cs });
     };
     const es = E[s.e], et = E[t.e];
     addV(S, es.a, es.len * s.t, es); addV(S, es.b, es.len * (1 - s.t), es);
@@ -195,16 +197,16 @@
       if (u === T) break;
       done.add(u);
       const gu = gs.get(u);
-      const relax = (v, len, f, c, hw, ei) => {
+      const relax = (v, len, f, c, hw, ei, cs) => {
         const ng = gu + len * f * (ei != null && avoid?.has(ei) ? 5 : 1);
         if (ng < (gs.get(v) ?? Infinity)) {
           gs.set(v, ng);
-          prev.set(v, { u, c, hw, ei });
+          prev.set(v, { u, c, hw, ei, cs });
           open.push(ng + h(v), v);
         }
       };
-      if (u < N) for (const ei of adj[u]) { const e = E[ei]; relax(e.a === u ? e.b : e.a, e.len, e.f, e.c, e.h, ei); }
-      for (const ve of vEdges.get(u) || []) relax(ve.to, ve.len, ve.f, ve.c, ve.hw ?? ve.h);
+      if (u < N) for (const ei of adj[u]) { const e = E[ei]; relax(e.a === u ? e.b : e.a, e.len, e.f, e.c, e.h, ei, e.cs); }
+      for (const ve of vEdges.get(u) || []) relax(ve.to, ve.len, ve.f, ve.c, ve.hw ?? ve.h, null, ve.cs);
     }
     if (!prev.has(T)) return null;
     // שחזור המסלול
@@ -217,16 +219,43 @@
     for (let i = 0; i < info.length; i++) {
       const a = coords[i], b = coords[i + 1];
       len += Math.hypot((b[0] - a[0]) * KX(a[1]), (b[1] - a[1]) * KY);
-      const c = info[i].c || null, hw = info[i].hw || null;
+      const c = info[i].c || null, hw = info[i].hw || null, cs = info[i].cs?.length > 1 ? info[i].cs : null;
       const last = segs[segs.length - 1];
-      if (last && last.c === c && (c || last.h === hw)) last.coords.push(b);
-      else segs.push({ coords: [a, b], c, h: hw });
+      if (last && last.c === c && (c || last.h === hw) && String(last.cs) === String(cs)) last.coords.push(b);
+      else segs.push(cs ? { coords: [a, b], c, h: hw, cs } : { coords: [a, b], c, h: hw });
     }
     const edges = info.map((x) => x.ei).filter((x) => x != null).concat([s.e, t.e]);
     return { coords, segs, len, edges };
   }
 
-  const Router = { buildGraph, snap, route };
+  /**
+   * קטע שמסומן בכמה צבעים (cs): מקבל את הצבע של השביל שהולכים בו – כמו הקטע שלפניו,
+   * ואם אין – הצבע שממשיך הכי רחוק קדימה. משנה את segs במקום ומחזיר אותם.
+   */
+  function pickColors(segs) {
+    const L = (sg) => sg.coords.reduce((a, p, j) => (j ? a + Math.hypot((p[0] - sg.coords[j - 1][0]) * KX(p[1]), (p[1] - sg.coords[j - 1][1]) * KY) : 0), 0);
+    const has = (sg, c) => (sg.cs ? sg.cs.includes(c) : sg.c === c);
+    let prev = null;
+    for (let i = 0; i < segs.length; i++) {
+      const sg = segs[i];
+      if (sg.cs?.length > 1) {
+        if (prev && sg.cs.includes(prev)) sg.c = prev;
+        else {
+          let best = sg.c, run = -1;
+          for (const c of sg.cs) {
+            let r = 0;
+            for (let j = i; j < segs.length && has(segs[j], c); j++) r += L(segs[j]);
+            if (r > run) { run = r; best = c; }
+          }
+          sg.c = best;
+        }
+      }
+      if (sg.c && sg.h !== 'free') prev = sg.c;
+    }
+    return segs;
+  }
+
+  const Router = { buildGraph, snap, route, pickColors };
   if (typeof module !== 'undefined' && module.exports) module.exports = Router;
   root.Router = Router;
 })(typeof self !== 'undefined' ? self : globalThis);

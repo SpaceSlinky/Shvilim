@@ -949,7 +949,7 @@
     const sDep = g && Router.snap(g, depPt), outR = sDep && sn ? Router.route(g, sDep, sn) : null;
     const out = colorLeg(outR ? outR.segs : computeLeg(depPt, target, opts).segs);
     const outLen = segsLen(out);
-    const choices = { back: { segs: [...out, ...reverseSegs(out)], rejoin: dep, add: 2 * outLen } };
+    const choices = { back: { segs: Router.pickColors([...out, ...reverseSegs(out)]), rejoin: dep, add: 2 * outLen } };
     // חזרה למסלול בהמשך: הנקודות הקרובות ביותר (בקו אווירי) שאחרי היציאה, ומהן – הדרך הקצרה ביותר
     const cands = [];
     route.pts.forEach((p, i) => { if (route.cum[i] > dep + 60) cands.push({ i, d: Geo.haversine(p, target) }); });
@@ -972,7 +972,7 @@
     }
     if (best && best.len < outLen * 3) {
       const rejoin = route.cum[best.i];
-      choices.on = { segs: [...out, ...colorLeg(best.segs)], rejoin, add: outLen + best.len - (rejoin - dep) };
+      choices.on = { segs: Router.pickColors([...out, ...colorLeg(best.segs)]), rejoin, add: outLen + best.len - (rejoin - dep) };
     }
     detour = { target, dep, choices, mode: 'back', name: placeNear(target) };
     longPressAt = Date.now();
@@ -1102,6 +1102,7 @@
       free ||= leg.free;
       segs.push(...leg.segs.map((sg) => ({ ...sg, coords: sg.coords })));
     }
+    Router.pickColors(segs); // קטע משותף לכמה שבילים – בצבע השביל שהולכים בו
     // צבע לקטעי שביל לא מסומן / דרך
     for (const sg of segs) if (!sg.c && sg.h !== 'free') sg.c = ['path', 'footway', 'track', 'steps', 'bridleway', 'cycleway'].includes(sg.h) ? '#7a6a58' : '#9e9e9e';
     return { segs, free };
