@@ -178,7 +178,23 @@ out center tags;`;
       bbox: [Math.min(ob[0], w), Math.min(ob[1], s), Math.max(ob[2], e), Math.max(ob[3], n)] };
   }
 
-  const OSM = { query, convert, glyphRanges, download, trailColor, merge };
+  /** צבע קרוב לאחד מצבעי הסימון (למשל #ff0000 ו"אדום") – אותו צבע. אחרת – כמו שהוא */
+  function canonColor(c) {
+    if (!c || Object.values(TRAIL_COLORS).includes(c)) return c;
+    const m = /^#([0-9a-f]{6})$/i.exec(c);
+    if (!m) return c;
+    const rgb = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const [r, g, b] = rgb(m[1]);
+    let best = c, bd = 180; // מרחק מקסימלי (RGB)
+    for (const v of new Set(Object.values(TRAIL_COLORS))) {
+      const [r2, g2, b2] = rgb(v.slice(1));
+      const d = Math.hypot(r - r2, g - g2, b - b2);
+      if (d < bd) { bd = d; best = v; }
+    }
+    return best;
+  }
+
+  const OSM = { query, convert, glyphRanges, download, trailColor, merge, canonColor };
   if (typeof module !== 'undefined' && module.exports) module.exports = OSM;
   root.OSM = OSM;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -330,6 +330,7 @@
     for (const f of fc.features) {
       if (f.properties.k !== 'trail') continue;
       delete f.properties.si; delete f.properties.sn;
+      f.properties.c = OSM.canonColor(f.properties.c); // גוני אדום שונים לאותו שביל – צבע אחד (לא שני קווים)
       const key = JSON.stringify(f.geometry.coordinates);
       let g = groups.get(key);
       if (!g) groups.set(key, (g = []));
@@ -558,7 +559,8 @@
       for (let i = 1; i < c.length; i++) sharedIdx.push({ c: p.c, si: p.si, sn: p.sn, a: c[i - 1], b: c[i] });
     }
   }
-  function sharedOffset(color, m) {
+  // dir – כיוון ההליכה בקטע. line-offset נמדד ימינה מכיוון הקו: מסלול שהולך הפוך לכיוון השביל צריך את הצד ההפוך
+  function sharedOffset(color, m, dir) {
     if (!sharedIdx.length || !color) return null;
     const kx = Math.cos((m[1] * Math.PI) / 180) * 111320, ky = 110540;
     let best = null, bd = 7; // מטרים
@@ -571,17 +573,20 @@
       const d = Math.hypot(ax + t * dx, ay + t * dy);
       if (d < bd) { bd = d; best = e; }
     }
-    return best && { si: best.si, sn: best.sn };
+    if (!best) return null;
+    const same = (best.b[0] - best.a[0]) * dir[0] * kx * kx + (best.b[1] - best.a[1]) * dir[1] * ky * ky >= 0;
+    return { si: same ? best.si : best.sn - 1 - best.si, sn: best.sn };
   }
   // מחלק כל קטע של המסלול לפי המקום שלו בקטע משותף (או בלי)
   function splitShared(sg) {
-    const props = { ...(sg.c ? { c: sg.c } : {}), ...(sg.h ? { h: sg.h } : {}) };
-    if (!sharedIdx.length || !sg.c || sg.h === 'free') return [{ coords: sg.coords, props }];
+    const col = OSM.canonColor(sg.c);
+    const props = { ...(col ? { c: col } : {}), ...(sg.h ? { h: sg.h } : {}) };
+    if (!sharedIdx.length || !col || sg.h === 'free') return [{ coords: sg.coords, props }];
     const out = [];
     let cur = null;
     const c = sg.coords;
     for (let i = 1; i < c.length; i++) {
-      const o = sharedOffset(sg.c, [(c[i - 1][0] + c[i][0]) / 2, (c[i - 1][1] + c[i][1]) / 2]);
+      const o = sharedOffset(col, [(c[i - 1][0] + c[i][0]) / 2, (c[i - 1][1] + c[i][1]) / 2], [c[i][0] - c[i - 1][0], c[i][1] - c[i - 1][1]]);
       const key = o ? o.si + '/' + o.sn : '';
       if (cur && cur.key === key) cur.coords.push(c[i]);
       else { cur = { key, coords: [c[i - 1], c[i]], props: o ? { ...props, ...o } : props }; out.push(cur); }
