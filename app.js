@@ -563,11 +563,11 @@
     });
   }
 
-  function fitRoute() {
+  function fitRoute(anim = {}) {
     const src = plan?.wps.length > 1 ? plan : active; // בתכנון – המסלול שמתכננים
     if (!src) return;
     const all = (src.segs || []).flatMap((sg) => sg.coords).concat((src.waypoints || []).map((w) => w.coord));
-    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 40, bottom: $('dock').offsetHeight + 30, left: 40, right: 76 }, maxZoom: 16 });
+    if (all.length) map.fitBounds(Geo.bounds(all), { padding: { top: 40, bottom: $('dock').offsetHeight + 30, left: 40, right: 76 }, maxZoom: 16, ...anim });
   }
 
   async function showGpx(text, fit, save = true) {
@@ -1759,41 +1759,30 @@
     if (moving) map.jumpTo(opts);
     if (moving || compassMode) startCamera();
   }
-  // ---------- מסלול מוצג (לא בניווט): התרחקת מדי – המפה חוזרת לכל המסלול (כמו כפתור המירכוז) ----------
+  // ---------- מסלול מוצג (תצוגה וניווט): המעטפת = כל המסלול ----------
+  // בתוך המעטפת (מתקרבים, זזים לאורך המסלול) – אין חזרה. יוצאים ממנה (המרכז מחוץ למסלול,
+  // או מתרחקים בזום מעבר לכל המסלול) – אחרי רגע בלי נגיעה המפה חוזרת ברכות לכל המסלול.
   let farTimer = 0;
   const showingRoute = () => active && !plan && dockMode() === 'route';
-  function routeTooFar() {
+  function outOfEnvelope() {
     const [[w, so], [e, n]] = Geo.bounds(active.segs.flatMap((sg) => sg.coords));
-    const v = map.getBounds();
-    const vw = v.getWest(), ve = v.getEast(), vs = v.getSouth(), vn = v.getNorth();
-    const off = e < vw || w > ve || n < vs || so > vn; // המסלול כולו מחוץ למסך
-    const tiny = (e - w) < (ve - vw) * 0.12 && (n - so) < (vn - vs) * 0.12; // התרחקת בזום – המסלול קטנטן
-    return off || tiny;
+    const px = Math.max((e - w) * 0.15, 0.0015), py = Math.max((n - so) * 0.15, 0.0013); // ריפוד (~150 מ' לפחות)
+    const c = map.getCenter(), v = map.getBounds();
+    const outside = c.lng < w - px || c.lng > e + px || c.lat < so - py || c.lat > n + py;
+    const zoomedOut = (e - w) < (v.getEast() - v.getWest()) * 0.4 && (n - so) < (v.getNorth() - v.getSouth()) * 0.4;
+    return outside || zoomedOut;
   }
   function checkFar() {
     clearTimeout(farTimer);
-    if (!showingRoute() || active.nav) return;
+    if (!showingRoute() || follow) return; // במעקב אחרי המיקום – המפה ממילא עליך
     farTimer = setTimeout(() => {
-      if (!showingRoute() || active.nav) return;
+      if (!showingRoute() || follow) return;
       if (touching || map.isMoving?.()) return checkFar();
-      if (routeTooFar()) fitRoute();
-    }, 1200);
+      if (outOfEnvelope()) fitRoute({ duration: 900 });
+    }, 1000);
   }
   map.on('moveend', checkFar);
   mapEl.addEventListener('touchend', checkFar, { passive: true });
-  // הזזת את המפה בניווט – אחרי כמה שניות בלי נגיעה היא חוזרת למיקום שלך
-  const RETURN_MS = 8000;
-  let returnTimer = 0;
-  function scheduleReturn() {
-    clearTimeout(returnTimer);
-    if (!active?.nav || follow || watchId == null) return;
-    returnTimer = setTimeout(() => {
-      if (!active?.nav || follow || watchId == null) return;
-      if (touching || map.isMoving?.()) scheduleReturn(); else setFollow(true);
-    }, RETURN_MS);
-  }
-  map.on('moveend', scheduleReturn);
-  mapEl.addEventListener('touchend', scheduleReturn, { passive: true });
 
   let orientationOn = false;
   async function enableOrientation() {
