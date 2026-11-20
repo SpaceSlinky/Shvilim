@@ -238,8 +238,8 @@
     if (!navigator.onLine) return quiet || area ? undefined : toast('אין חיבור לאינטרנט');
     downloading = true;
     $('nodata').hidden = true;
-    const say = (m, ms) => { if (!quiet && !area) toast(m, ms); };
-    if (area) toast('מוריד את האזור לשימוש בלי אינטרנט…', 3000);
+    const say = (m, ms) => { if (area) { dlMsg = m; checkArea(); } else if (!quiet) toast(m, ms); };
+    if (area) say('מוריד את מפות האזור…');
     try {
       const fresh = await OSM.download(bbox, (m) => say(m, 120000));
       if (!fresh.features.length) throw new Error('לא נמצאו נתונים באזור');
@@ -257,14 +257,15 @@
       if (navigator.storage?.persist) navigator.storage.persist();
       const trails = fc.features.filter((f) => f.properties.k === 'trail').length;
       markArea(bbox);
-      if (area) toast('האזור נשמר לשימוש בלי אינטרנט ✓', 2500);
+      if (area) toast('מפות האזור נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓', 3000);
       else say(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
     } catch (e) {
       console.error(e);
-      if (!quiet && !area) toast('ההורדה נכשלה: ' + (e.message || e) + '. נסו שוב.', 6000);
+      if (!quiet) toast('ההורדה נכשלה: ' + (e.message || e) + '. נסו שוב.', 6000);
       if (!(await db.get('mapdata').catch(() => null))) $('nodata').hidden = false;
     } finally {
       downloading = false;
+      if (area) { dlMsg = ''; checkArea(); }
     }
   }
 
@@ -320,22 +321,32 @@
     } else if (navigator.onLine) downloadArea(CARMEL); // פעם ראשונה – מורידים לבד
     else $('nodata').hidden = false;
   });
-  // אזור חדש: כשהמפה נעצרת מחוץ לאזורים שהורדו
-  let areaTimer = 0;
-  map.on('moveend', () => {
-    clearTimeout(areaTimer);
-    areaTimer = setTimeout(() => {
-      if (!mapFC || downloading || !netOk() || map.getZoom() < 12) return;
-      const c = map.getCenter();
-      if (dlAreas().some(({ b }) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3])) return;
-      const v = map.getBounds();
-      const bb = [v.getWest(), v.getSouth(), v.getEast(), v.getNorth()];
-      const pad = 0.01; // קצת מעבר למסך
-      const big = [bb[0] - pad, bb[1] - pad, bb[2] + pad, bb[3] + pad].map((x) => +x.toFixed(4));
-      if ((big[2] - big[0]) * (big[3] - big[1]) > 0.12) return; // רחוק מדי – לא מורידים
-      downloadArea(big, { area: true });
-    }, 1500);
+  // אזור בלי מפה שמורה (למשל אחרי חיפוש): במרכז המסך – "להורדת מפות האזור" (לחיץ)
+  const dlHere = $('dl-here');
+  let dlMsg = '';
+  function viewBox() {
+    const v = map.getBounds(), pad = 0.01; // קצת מעבר למסך
+    return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
+  }
+  function checkArea() {
+    if (!mapFC && !downloading) return (dlHere.hidden = true); // עוד אין מפה בכלל – המסך הראשון מטפל בזה
+    const c = map.getCenter();
+    const inside = dlAreas().some(({ b }) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3]);
+    if (inside && !dlMsg) return (dlHere.hidden = true);
+    dlHere.hidden = false;
+    const b = viewBox();
+    const big = (b[2] - b[0]) * (b[3] - b[1]) > 0.12;
+    dlHere.disabled = !!dlMsg || !navigator.onLine || big;
+    dlHere.textContent = dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
+      : big ? 'התקרבו כדי להוריד את מפות האזור' : '⬇ להורדת מפות האזור');
+  }
+  dlHere.addEventListener('click', () => {
+    if (dlHere.disabled) return;
+    downloadArea(viewBox(), { area: true });
   });
+  map.on('moveend', checkArea);
+  addEventListener('online', checkArea);
+  addEventListener('offline', checkArea);
   mapReady.then(() => !map.hasImage('arrow') && map.addImage('arrow', arrowImage(), { pixelRatio: 2 }));
 
   function arrowImage() {
@@ -692,6 +703,7 @@
     setFollow(false);
     if (compassMode) { compassMode = false; map.rotateTo(0, { duration: 400 }); updateCompassIcon(); }
     setWalked(null);
+    stopGps(); // ה-GPS פועל רק בניווט (או אחרי לחיצה על "מיקום")
     renderRouteInfo();
   }
 
@@ -1324,7 +1336,10 @@
     } catch { /* לא נתמך / נדחה */ }
   }
   function releaseWake() { wakeLock?.release(); wakeLock = null; }
-  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && requestWake());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestWake();
+    else if (!active?.nav && watchId != null) stopGps(); // לא בניווט – לא צורכים סוללה ברקע
+  });
 
   // ---------- מיקום ביחס למסלול ----------
   function updateStatus() {
@@ -1517,15 +1532,50 @@
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
     for (const b of ['sat', 'topo', 'ihm']) map.setPaintProperty('base-' + b, 'raster-brightness-max', night ? 0.7 : 1);
   }
-  const nightPref = localStorage.getItem('night');
-  let isNight = nightPref ? nightPref === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
-  document.body.classList.toggle('night', isNight);
-  mapReady.then(() => applyTheme(isNight));
-  $('btn-theme').addEventListener('click', () => {
-    isNight = !isNight;
-    localStorage.setItem('night', isNight ? '1' : '0');
-    applyTheme(isNight);
+  // זריחה ושקיעה (נוסחת SunCalc), לפי המיקום או מרכז המפה
+  function sunTimes(date, lat, lon) {
+    const rad = Math.PI / 180, J1970 = 2440588, J2000 = 2451545, J0 = 0.0009;
+    const days = date.getTime() / 864e5 - 0.5 + J1970 - J2000;
+    const lw = -lon * rad, phi = lat * rad;
+    const n = Math.round(days - J0 - lw / (2 * Math.PI));
+    const ds = J0 + lw / (2 * Math.PI) + n;
+    const M = rad * (357.5291 + 0.98560028 * ds);
+    const L = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+    const dec = Math.asin(Math.sin(rad * 23.4397) * Math.sin(L));
+    const noon = J2000 + ds + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    const w = Math.acos((Math.sin(-0.833 * rad) - Math.sin(phi) * Math.sin(dec)) / (Math.cos(phi) * Math.cos(dec)));
+    const set = J2000 + J0 + (w + lw) / (2 * Math.PI) + n + 0.0053 * Math.sin(M) - 0.0069 * Math.sin(2 * L);
+    const toMs = (j) => (j + 0.5 - J1970) * 864e5;
+    return { rise: toMs(noon - (set - noon)), set: toMs(set) };
+  }
+  // מצב: auto (ברירת מחדל – כהה מהשקיעה עד הזריחה) / dark / light. הכפתור מחליף בסבב
+  const THEMES = ['auto', 'dark', 'light'];
+  const THEME_NAME = { auto: 'אוטומטי – לפי השקיעה', dark: 'כהה', light: 'בהיר' };
+  let themeMode = THEMES.includes(localStorage.getItem('theme')) ? localStorage.getItem('theme') : 'auto';
+  let isNight = false;
+  function nowNight() {
+    if (themeMode !== 'auto') return themeMode === 'dark';
+    const p = lastPos?.p || [map.getCenter().lng, map.getCenter().lat];
+    const { rise, set } = sunTimes(new Date(), p[1], p[0]);
+    const t = Date.now();
+    return t < rise || t > set;
+  }
+  function syncTheme(force) {
+    const n = nowNight();
+    $('btn-theme').dataset.mode = themeMode;
+    if (n === isNight && !force) return;
+    isNight = n;
+    applyTheme(n);
     applyLayers(); renderRouteInfo();
+  }
+  document.body.classList.toggle('night', nowNight());
+  mapReady.then(() => syncTheme(true));
+  setInterval(syncTheme, 60000);
+  $('btn-theme').addEventListener('click', () => {
+    themeMode = THEMES[(THEMES.indexOf(themeMode) + 1) % THEMES.length];
+    try { localStorage.setItem('theme', themeMode); } catch { /* ignore */ }
+    syncTheme();
+    toast('תצוגה: ' + THEME_NAME[themeMode], 1800);
   });
 
   // אזורים מוכרים (לחיפוש ולהצעת תיקייה)
@@ -1937,7 +1987,4 @@
     else if (t) showGpx(t, false);
   }).catch(console.error);
   if (navigator.storage?.persist) navigator.storage.persist();
-  navigator.permissions?.query({ name: 'geolocation' }).then((s) => {
-    if (s.state === 'granted') startGps();
-  }).catch(() => {});
 })();

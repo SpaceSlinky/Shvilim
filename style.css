@@ -332,9 +332,9 @@ section.open .lib-body { grid-template-rows: 1fr; }
 .lib-pull { touch-action: none; }
 
 /* בהיר / כהה: אייקון לפי המצב */
-#btn-theme .i-sun { display: none; }
-body.night #btn-theme .i-sun { display: block; }
-body.night #btn-theme .i-moon { display: none; }
+#btn-theme svg { display: none; }
+#btn-theme[data-mode="auto"] .i-auto, #btn-theme[data-mode="dark"] .i-moon, #btn-theme[data-mode="light"] .i-sun { display: block; }
+#btn-theme .i-auto path { fill: currentColor; stroke: none; }
 /* קצה משטח הכלים במסלול: יציאה, בשתי שורות מודגשות */
 #controls .kexit { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 2px 0 8px; border: 0; background: none;
   font: inherit; font-size: 12px; line-height: 1.2; color: #c62828; cursor: pointer; }
@@ -347,3 +347,10 @@ body.night #controls .kexit { color: #ef5350; }
 .cf-btns { display: flex; gap: 8px; margin-top: 14px; }
 .cf-btns button { flex: 1; margin: 0; }
 .danger-btn { background: #c62828 !important; border-color: #c62828 !important; color: #fff !important; font-weight: 700; }
+
+/* אזור בלי מפה שמורה: טקסט לחיץ במרכז המסך */
+.dl-here { position: fixed; left: 50%; top: 42%; translate: -50% -50%; z-index: 6; max-width: 80vw; padding: 12px 18px; border: 0; border-radius: 22px;
+  background: #fff; color: var(--green); font: inherit; font-size: 16px; font-weight: 700; box-shadow: 0 2px 12px rgba(0,0,0,.25); }
+.dl-here:disabled { color: #666; font-weight: 500; }
+body.night .dl-here { background: #23282e; color: #81c784; }
+body.night .dl-here:disabled { color: #aaa; }
