@@ -917,17 +917,9 @@
     const row = el('div', 'lib-row' + (sel ? ' sel' : ''));
     row.dataset.id = r.id;
     const g = gripEl();
-    // שתי שורות: השם, ומתחתיו הנתונים באותו סדר כמו בכרטיס המסלול – אורך · ↑עלייה ↓ירידה · זמן
+    // שורה אחת: מימין שם המסלול, משמאל האורך בק"מ
     const name = sel && lsel.editing ? editField(r.name, (v) => renameRoute(r.id, v)) : el('div', 'c-name', r.name);
-    const meta = el('div', 'c-meta');
-    meta.appendChild(el('b', null, Geo.fmtDist(r.len)));
-    if (r.gain != null) {
-      const ud = el('span', 'ud', `↑${r.gain} ↓${r.loss ?? 0}`); ud.dir = 'ltr';
-      meta.append(el('span', 'dot', ' · '), ud, ' מ\'', el('span', 'dot', ' · '), fmtTime(estTime(r.len, r.gain, !!r.opts?.bike)));
-    }
-    const main = el('div', 'c-main');
-    main.append(name, meta);
-    row.append(g, main);
+    row.append(g, name, el('span', 'c-len', (r.len / 1000).toFixed(1) + ' ק"מ'));
     row.addEventListener('click', () => { if (dragJustEnded) return; if (!(sel && lsel.editing)) libSelect(r.id); });
     g.addEventListener('pointerdown', (e) => startDrag(e, row, 'route', r.id, true));
     // לחיצה ארוכה בכל מקום בשורה – גם מתחילה גרירה
@@ -937,7 +929,6 @@
   async function renderLibrary() {
     const lib = await libLoad();
     const cats = catOrder(await catLoad(), lib);
-    $('lib-count').textContent = lib.length || '';
     if (lsel.kind === 'route' && !lib.some((r) => r.id === lsel.id)) clearSel();
     if (lsel.kind === 'folder' && !cats.includes(lsel.folder)) clearSel();
     const box = $('lib-list');

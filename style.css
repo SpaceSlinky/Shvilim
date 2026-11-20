@@ -260,13 +260,10 @@ body.night .edit-in { border-color: #4caf50; }
 
 /* ===== מסלולים: טבלה לפי קטגוריות ===== */
 #lib-list { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-.lib-row { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 6px; padding: 8px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
-.c-main { min-width: 0; }
-.c-name { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.c-meta { margin-top: 2px; font-size: 13px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.c-meta b { color: #333; font-weight: 700; }
-.c-meta .dot { color: #aaa; }
-.c-meta .ud { unicode-bidi: isolate; }
+.lib-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+.c-len { font-size: 15px; font-weight: 700; color: #444; white-space: nowrap; font-variant-numeric: tabular-nums; }
+body.night .c-len { color: #ccc; }
+.c-name { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
 .dh { display: grid; place-items: center; width: 34px; height: 40px; margin: -10px -6px; touch-action: none; cursor: grab; color: #aaa; }
 .dh svg { width: 10px; height: 16px; fill: currentColor; }
@@ -326,23 +323,15 @@ section > .grip.pull { display: block; width: 44px; height: 14px; margin: -6px a
 .dock-ask button { border: 0; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 14px; }
 .dock-ask .yes { background: #c62828; color: #fff; font-weight: 700; }
 .dock-ask .no { background: #eee; color: #222; }
-body.night .c-meta { color: #aaa; }
-body.night .c-meta b { color: #eee; }
 body.night .dock-ask { background: #3a3220; border-color: #333; }
 body.night .dock-ask .no { background: #2a3036; color: #eee; }
 body.night #dock::before { color: #81c784; }
 
 /* ראשי = המסלולים: סגור – חיפוש ושורת "מסלולים"; פתוח – הרשימה נפתחת במקום ברכות */
 section[data-mode="lib"] > .grip { margin-bottom: 2px; }
-.lib-head { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 4px; padding: 10px 6px 8px; border: 0; background: none;
-  font: inherit; color: inherit; touch-action: none; cursor: pointer; }
-.lib-head b { font-size: 20px; font-weight: 800; }
-.lib-head .count { font-size: 14px; color: #888; }
-.lib-head .chev { margin-inline-start: auto; width: 10px; height: 10px; border-left: 2.5px solid #999; border-top: 2.5px solid #999; /* סגור ⌃ · פתוח ⌄ */
-  transform: rotate(45deg); translate: 0 3px; transition: transform .3s cubic-bezier(.22,1,.36,1), translate .3s; }
-section.open .lib-head .chev { transform: rotate(225deg); translate: 0 -3px; }
+.lib-head { display: block; width: 100%; margin-top: 2px; padding: 10px 6px 8px; border: 0; background: none; text-align: center;
+  font: inherit; font-size: 20px; font-weight: 800; color: inherit; touch-action: none; cursor: pointer; }
 .lib-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1); }
 .lib-body > div { overflow: hidden; min-height: 0; }
 section.open .lib-body { grid-template-rows: 1fr; }
 .lib-pull { touch-action: none; }
-body.night .lib-head .chev { border-color: #777; }
