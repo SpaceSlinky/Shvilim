@@ -169,7 +169,11 @@
           'circle-color': ['match', ['get', 'kind'], 'start', '#1a9b3c', '#c62828'] } },
       { id: 'wpts', type: 'circle', source: 'wpts',
         paint: { 'circle-radius': 6, 'circle-color': '#f39c12', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
-      { id: 'scrub', type: 'circle', source: 'scrub',
+      // האצבע על הגרף: הקטע על המסלול והנקודה (כתום ביום, אפור בהיר בלילה)
+      { id: 'scrub-line', type: 'line', source: 'scrub', filter: ['==', '$type', 'LineString'],
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': '#ff6d00', 'line-width': 7, 'line-opacity': 0.9 } },
+      { id: 'scrub', type: 'circle', source: 'scrub', filter: ['==', '$type', 'Point'],
         paint: { 'circle-radius': 8, 'circle-color': '#ff6d00', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
       { id: 'acc', type: 'fill', source: 'acc',
         paint: { 'fill-color': '#1e88e5', 'fill-opacity': 0.12, 'fill-outline-color': '#1e88e5' } },
@@ -657,32 +661,47 @@
       area(); g.fillStyle = night ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)'; g.fill();
       line(); g.strokeStyle = night ? 'rgba(255,255,255,.3)' : 'rgba(0,0,0,.25)'; g.stroke();
     });
-    // הקטע עד האצבע: כתום
-    if (marks.touch != null) {
-      const base = marks.at != null && marks.at <= marks.touch ? marks.at : 0;
-      band(X(base), X(marks.touch), () => { area(); g.fillStyle = 'rgba(255,109,0,.35)'; g.fill(); });
-    }
+    // הקטע עד האצבע (או בין שתי אצבעות): כתום ביום, אפור בהיר בלילה
+    const hot = night ? '#d9d9d9' : '#ff6d00';
+    const base = marks.from != null ? marks.from : marks.at != null && marks.touch != null && marks.at <= marks.touch ? marks.at : 0;
+    if (marks.touch != null) band(X(base), X(marks.touch), () => { area(); g.fillStyle = night ? 'rgba(217,217,217,.3)' : 'rgba(255,109,0,.35)'; g.fill(); });
     const dot = (d, color) => {
       g.fillStyle = color; g.strokeStyle = night ? '#1d2227' : '#fff'; g.lineWidth = 2;
       g.beginPath(); g.arc(X(d), Y(eleAt(p, clampD(d))), 5, 0, 7); g.fill(); g.stroke();
     };
     if (marks.at != null) dot(marks.at, '#1e88e5');
     if (marks.touch != null) {
-      const x = X(marks.touch), e = eleAt(p, clampD(marks.touch));
-      g.strokeStyle = '#ff6d00'; g.lineWidth = 1.5; g.setLineDash([4, 3]);
-      g.beginPath(); g.moveTo(x, pad.t - 2); g.lineTo(x, H); g.stroke(); g.setLineDash([]);
-      dot(marks.touch, '#ff6d00');
-      // הגובה בנקודה, מעל האצבע
-      g.font = 'bold 12px sans-serif'; g.fillStyle = night ? '#ffab40' : '#e65100';
-      g.textAlign = x < 30 ? 'left' : x > W - 30 ? 'right' : 'center';
-      g.fillText(Math.round(e) + " מ'", x, 12);
+      const ends = marks.from != null ? [marks.from, marks.touch] : [marks.touch];
+      for (const d of ends) {
+        const x = X(d);
+        g.strokeStyle = hot; g.lineWidth = 1.5; g.setLineDash([4, 3]);
+        g.beginPath(); g.moveTo(x, pad.t - 2); g.lineTo(x, H); g.stroke(); g.setLineDash([]);
+        dot(d, hot);
+      }
+      g.font = 'bold 12px sans-serif'; g.fillStyle = night ? '#e0e0e0' : '#e65100';
+      if (marks.from != null) {
+        // שתי אצבעות: הפרש הגובה, באמצע
+        const dh = Math.round(eleAt(p, clampD(marks.touch)) - eleAt(p, clampD(marks.from)));
+        g.textAlign = 'center';
+        g.fillText(signed(dh), (X(marks.from) + X(marks.touch)) / 2, 12);
+      } else {
+        // הגובה בנקודה, מעל האצבע
+        const x = X(marks.touch);
+        g.textAlign = x < 30 ? 'left' : x > W - 30 ? 'right' : 'center';
+        g.fillText(Math.round(eleAt(p, clampD(marks.touch))) + " מ'", x, 12);
+      }
     }
   }
 
-  // נגיעה בגרף: גרירת האצבע בוחרת נקודה לאורך המסלול; בעזיבה – onEnd
+  // נגיעה בגרף: גרירת האצבע בוחרת נקודה לאורך המסלול; שתי אצבעות – טווח (onPick(a, b)); בעזיבה – onEnd
   function attachScrub(canvas, getProfile, onPick, onEnd) {
     canvas.style.touchAction = 'none';
-    let down = false;
+    const fingers = new Map();
+    const emit = () => {
+      const v = [...fingers.values()];
+      if (v.length >= 2) onPick(Math.min(v[0], v[1]), Math.max(v[0], v[1]));
+      else if (v.length) onPick(v[0]);
+    };
     const toD = (e) => {
       const p = getProfile();
       if (!p) return null;
@@ -693,12 +712,19 @@
     canvas.addEventListener('pointerdown', (e) => {
       const d = toD(e);
       if (d == null) return;
-      down = true;
+      fingers.set(e.pointerId, d);
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-      onPick(d);
+      emit();
     });
-    canvas.addEventListener('pointermove', (e) => { if (down) { const d = toD(e); if (d != null) onPick(d); } });
-    for (const t of ['pointerup', 'pointercancel']) canvas.addEventListener(t, () => { if (down) { down = false; onEnd?.(); } });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!fingers.has(e.pointerId)) return;
+      const d = toD(e);
+      if (d != null) { fingers.set(e.pointerId, d); emit(); }
+    });
+    for (const t of ['pointerup', 'pointercancel']) canvas.addEventListener(t, (e) => {
+      if (!fingers.delete(e.pointerId)) return;
+      if (fingers.size) emit(); else onEnd?.();
+    });
   }
 
   // מה יש בין נקודה אחת לשנייה לאורך המסלול
@@ -708,11 +734,22 @@
     return { len, ele: eleAt(p, to), gain: st.gain, loss: st.loss, time: estTime(len, st.gain, bike) };
   }
 
-  let scrubAt = null; // מרחק (בגרף של המסלול הפעיל) של נקודת הנגיעה
-  function setScrubPoint(pt) {
-    map.getSource('scrub')?.setData(pt ? { type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: pt } } : empty);
+  let scrub = null; // האצבע על הגרף של המסלול הפעיל: { b } – נקודה, { a, b } – שתי אצבעות (מרחקים בגרף)
+  // על המפה: הקטע a→b של המסלול והנקודה (או שתי הנקודות)
+  function setScrubMap(r, p, a, b, both) {
+    if (!r) return map.getSource('scrub')?.setData(empty);
+    const ra = profToRoute(p, r, a), rb = profToRoute(p, r, b);
+    const i = idxAt(r.cum, ra), j = idxAt(r.cum, rb);
+    const line = [pointAt(r, ra), ...r.pts.slice(i + 1, j + 1), pointAt(r, rb)];
+    const pt = (c) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: c } });
+    const feats = [pt(line[line.length - 1])];
+    if (both) feats.push(pt(line[0]));
+    if (rb - ra > 1) feats.unshift({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: line } });
+    map.getSource('scrub')?.setData({ type: 'FeatureCollection', features: feats });
   }
-  function clearScrub() { scrubAt = null; setScrubPoint(null); }
+  function clearScrub() { scrub = null; setScrubMap(null); }
+  // הפרש גובה: חץ במקום סימן (+/− מתהפך בטקסט עברי)
+  const signed = (v) => (Math.round(v) > 0 ? '↗ ' : Math.round(v) < 0 ? '↘ ' : '') + Math.abs(Math.round(v)) + " מ'";
 
   // מרחק בגרף -> מרחק על המסלול (כמעט זהים; מתקן הבדלים קטנים בשיטת החישוב)
   const profToRoute = (p, r, d) => (p.total ? (d * r.total) / p.total : 0);
@@ -722,9 +759,17 @@
   // בתצוגה – של כל המסלול; בניווט – מה שנשאר; בגרירה על הגרף – עד האצבע (בכתום), וחוזרת בעזיבה.
   const fmtClock = (min) => { const t = new Date(Date.now() + min * 60000); return `\u2066~${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}\u2069`; }; // בידוד LTR בתוך טקסט עברי
   const mtr = (v) => Math.round(v) + " מ'";
+  // חץ בתחילת התווית (↗ ↘) – גדול יותר
+  function setLabel(el, l) {
+    const m = /^([↗↘])\s*(.*)$/.exec(l);
+    if (!m) return void (el.textContent = l);
+    const a = document.createElement('span');
+    a.className = 'arr'; a.textContent = m[1];
+    el.replaceChildren(a, ' ' + m[2]);
+  }
   function setStats(cells, hot) {
     cells.forEach(([l, v], i) => {
-      $('st-l' + (i + 1)).textContent = l;
+      setLabel($('st-l' + (i + 1)), l);
       $('st-v' + (i + 1)).textContent = v;
     });
     $('ri-stats').classList.toggle('hot', !!hot);
@@ -737,32 +782,37 @@
     $('ri-name').textContent = active.name || 'מסלול';
     // התקדמות על הגרף (רק בניווט)
     const atP = nav && prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
-    // שורת משנה: תיקייה; בתצוגה – גם המרחק להתחלה כשרחוקים ממנה
-    const toStart = !nav && lastPos ? Geo.haversine(lastPos.p, route.pts[0]) : 0;
-    // לפני היציאה, כשרחוקים מההתחלה – המרחק אליה על הכפתור
-    $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
+    // לפני היציאה: יוצאים מכל נקודה על המסלול, רק כשקרובים אליו
+    $('ri-go').textContent = goMsg || '▶ יוצאים לדרך';
+    $('ri-go').classList.toggle('warn', !!goMsg && !goWait);
     $('ri-go').hidden = nav;
     const wait = '…';
-    if (scrubAt != null && prof) {
+    if (scrub && prof && scrub.a != null) {
+      // שתי אצבעות: הטווח שביניהן
+      const L = legInfo(prof, scrub.a, scrub.b, bike);
+      setStats([['בין האצבעות', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
+        ['הפרש גובה', signed(eleAt(prof, scrub.b) - eleAt(prof, scrub.a))]], true);
+      setScrubMap(route, prof, scrub.a, scrub.b, true);
+    } else if (scrub && prof) {
       // האצבע על הגרף: מהמיקום שלך (בניווט, אם הנקודה לפניך) או מתחילת המסלול
-      const from = atP != null && atP <= scrubAt ? atP : 0;
-      const L = legInfo(prof, from, scrubAt, bike);
-      setStats([[from > 0 ? 'ממך עד כאן' : 'עד כאן', Geo.fmtDist(L.len)], ['↑ עלייה', mtr(L.gain)], ['↓ ירידה', mtr(L.loss)],
+      const from = atP != null && atP <= scrub.b ? atP : 0;
+      const L = legInfo(prof, from, scrub.b, bike);
+      setStats([[from > 0 ? 'ממך עד כאן' : 'עד כאן', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
         ['מגיעים', fmtClock(L.time)]], true);
+      setScrubMap(route, prof, from, scrub.b);
     } else if (nav && atP != null) {
       const rem = profileStats(prof, atP), left = total - prevAlong;
       const t = estTime(left, rem.gain, bike);
-      setStats([['נותרו', Geo.fmtDist(left)], ['↑ לעלות', mtr(rem.gain)], ['↓ לרדת', mtr(rem.loss)], ['🏁 סיום', fmtClock(t)]]);
+      setStats([['נותרו', Geo.fmtDist(left)], ['↗ לעלות', mtr(rem.gain)], ['↘ לרדת', mtr(rem.loss)], ['🏁 סיום', fmtClock(t)]]);
     } else {
       const t = prof ? estTime(total, prof.gain, bike) : null;
-      setStats([['אורך', Geo.fmtDist(total)], ['↑ עלייה', prof ? mtr(prof.gain) : wait], ['↓ ירידה', prof ? mtr(prof.loss) : wait],
+      setStats([['אורך', Geo.fmtDist(total)], ['↗ עלייה', prof ? mtr(prof.gain) : wait], ['↘ ירידה', prof ? mtr(prof.loss) : wait],
         ['⏱ זמן', t != null ? fmtTime(t) : wait]]);
     }
-    drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
+    drawProfile($('ri-profile'), prof, { at: atP, touch: scrub?.b, from: scrub?.a });
   }
-  attachScrub($('ri-profile'), () => prof, (d) => {
-    scrubAt = d;
-    setScrubPoint(pointAt(route, profToRoute(prof, route, d)));
+  attachScrub($('ri-profile'), () => prof, (a, b) => {
+    scrub = b == null ? { b: a } : { a, b };
     renderRouteInfo();
   }, () => { clearScrub(); renderRouteInfo(); });
 
@@ -773,10 +823,33 @@
   }
   $('r-exit').addEventListener('click', () => (active?.nav ? stopNav() : exitRoute()));
 
-  // יוצאים לדרך: מעקב אחרי המיקום, מסך דולק, והמפה מסתובבת לפי הטלפון
+  // יוצאים לדרך: רק ליד המסלול; ההתקדמות מתחילה מאיפה שנמצאים. מעקב, מסך דולק, והמפה מסתובבת לפי הטלפון
+  const NEAR_ROUTE = 200; // מטרים
+  let goMsg = '', goWait = false, goTimer = 0;
+  const goSay = (m, wait = false) => {
+    goMsg = m; goWait = wait; clearTimeout(goTimer);
+    if (m && !wait) goTimer = setTimeout(() => { goMsg = ''; renderRouteInfo(); }, 5000);
+    renderRouteInfo();
+  };
+  const waitFix = (ms) => new Promise((res) => {
+    const t0 = Date.now();
+    const iv = setInterval(() => { if (lastPos || watchId == null || Date.now() - t0 > ms) { clearInterval(iv); res(lastPos); } }, 250);
+  });
   $('ri-go').addEventListener('click', async () => {
+    if (!active || goWait) return;
+    const hadGps = watchId != null;
+    startGps();
+    if (!lastPos) goSay('מחפש מיקום…', true);
+    const pos = await waitFix(20000);
     if (!active) return;
-    active.nav = true;
+    const r = pos && Geo.locate(route, pos.p, null);
+    const lim = Math.max(NEAR_ROUTE, pos?.accuracy || 0);
+    if (!r || r.off > lim) {
+      if (!hadGps) stopGps();
+      return goSay(!pos ? 'לא נמצא מיקום · נסו שוב' : `רחוק מהמסלול (${Geo.fmtDist(r.off)}) · יוצאים לדרך רק ממנו`);
+    }
+    goSay('');
+    active.nav = true; prevAlong = null;
     db.set('active', active);
     startGps(); setFollow(true);
     if (lastPos) map.easeTo({ center: lastPos.p, zoom: Math.max(map.getZoom(), 16) });
@@ -786,7 +859,7 @@
   });
   function stopNav() {
     if (!active) return;
-    active.nav = false;
+    active.nav = false; prevAlong = null;
     db.set('active', active);
     setFollow(false);
     if (compassMode) { compassMode = false; map.rotateTo(0, { duration: 400 }); updateCompassIcon(); }
@@ -879,7 +952,7 @@
     $('pl-done').disabled = plan.wps.length < 2;
     $('pl-undo').disabled = !plan.wps.length;
     clearTimeout(profTimer);
-    plan.prof = null; plan.scrubAt = null; setScrubPoint(null);
+    plan.prof = null; plan.scrubAt = null; setScrubMap(null);
     $('pl-up').textContent = $('pl-down').textContent = $('pl-time').textContent = '–';
     if (plan.wps.length > 1) {
       profTimer = setTimeout(async () => {
@@ -896,17 +969,20 @@
     } else drawProfile($('pl-profile'), null);
   }
 
-  attachScrub($('pl-profile'), () => plan?.prof, (d) => {
-    plan.scrubAt = d;
-    setScrubPoint(pointAt(plan.route, profToRoute(plan.prof, plan.route, d)));
-    const L = legInfo(plan.prof, 0, d, plan.opts.bike);
+  attachScrub($('pl-profile'), () => plan?.prof, (a, b) => {
+    const range = b != null, from = range ? a : 0, to = range ? b : a;
+    plan.scrubAt = to;
+    setScrubMap(plan.route, plan.prof, from, to, range);
+    const L = legInfo(plan.prof, from, to, plan.opts.bike);
     if (plan.hint == null) plan.hint = $('pl-hint').textContent;
-    $('pl-hint').textContent = `עד כאן: ${Geo.fmtDist(L.len)} · ↑${Math.round(L.gain)} ↓${Math.round(L.loss)} · ${fmtTime(L.time)}`;
-    drawProfile($('pl-profile'), plan.prof, { touch: d });
+    $('pl-hint').textContent = range
+      ? `בין האצבעות: ${Geo.fmtDist(L.len)} · ↗${Math.round(L.gain)} ↘${Math.round(L.loss)} · הפרש ${signed(eleAt(plan.prof, to) - eleAt(plan.prof, from))}`
+      : `עד כאן: ${Geo.fmtDist(L.len)} · ↗${Math.round(L.gain)} ↘${Math.round(L.loss)} · ${fmtTime(L.time)}`;
+    drawProfile($('pl-profile'), plan.prof, { touch: to, from: range ? from : null });
   }, () => {
     // בעזיבה – חוזרים להנחיה ולגרף הרגיל
     if (!plan) return;
-    plan.scrubAt = null; setScrubPoint(null);
+    plan.scrubAt = null; setScrubMap(null);
     if (plan.hint != null) { $('pl-hint').textContent = plan.hint; plan.hint = null; }
     drawProfile($('pl-profile'), plan.prof);
   });
@@ -930,7 +1006,7 @@
 
   function endPlan() {
     plan?.markers.forEach((m) => m.remove());
-    setScrubPoint(null);
+    setScrubMap(null);
     plan = null;
     document.body.classList.remove('planning');
     renderDock();
@@ -1425,10 +1501,11 @@
   // ---------- מיקום ביחס למסלול ----------
   function updateStatus() {
     if (!route || route.pts.length < 2) return;
-    if (lastPos) {
+    // ההתקדמות נמדדת רק בניווט – מתחילה מהמקום שבו יצאת לדרך
+    if (lastPos && active?.nav) {
       const r = Geo.locate(route, lastPos.p, prevAlong);
       prevAlong = r.along;
-      if (active?.nav) setWalked(r.along);
+      setWalked(r.along);
     }
     renderRouteInfo();
   }
@@ -1445,7 +1522,8 @@
 
   function updateMarkerHeading() {
     if (!marker) return;
-    const h = compassMode && devHeading != null ? devHeading : gpsHeading;
+    // החץ מראה לאן הטלפון מכוון (מצפן), ואם אין – את כיוון ההליכה
+    const h = devHeading != null ? devHeading : gpsHeading;
     marker.getElement().classList.toggle('has-heading', h != null);
     if (h != null) marker.setRotation(h);
   }
@@ -1579,6 +1657,9 @@
   // ---------- מצב לילה ----------
   const DARK = ['#222222', '#000000', '#000', '#111111', '#111', '#1a1a1a', '#333333', '#333'];
   const THEME = [ // [שכבה, מאפיין, יום, לילה]
+    ['scrub', 'circle-color', '#ff6d00', '#d9d9d9'],
+    ['scrub', 'circle-stroke-color', '#ffffff', '#5f6368'],
+    ['scrub-line', 'line-color', '#ff6d00', '#d9d9d9'],
     ['bg', 'background-color', '#e6e1d1', '#15191e'],
     ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
     ['major-casing', 'line-color', '#b8742a', '#4d3215'],

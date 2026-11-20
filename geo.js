@@ -83,11 +83,11 @@
       cands.push({ d, along, i, t });
       if (d < best) best = d;
     }
-    let pick = cands.reduce((a, b) => (b.d < a.d ? b : a));
-    if (prevAlong != null) {
-      const near = cands.filter((c) => c.d <= best + 25);
-      pick = near.reduce((a, b) => (Math.abs(b.along - prevAlong) < Math.abs(a.along - prevAlong) ? b : a));
-    }
+    // כמה מקומות במסלול קרובים (מסלול שחוזר לאותה נקודה): בהתחלה – המוקדם שבהם; אחר כך – הקרוב להתקדמות הקודמת
+    const near = cands.filter((c) => c.d <= best + 25);
+    const pick = prevAlong == null
+      ? near.reduce((a, b) => (b.along < a.along ? b : a))
+      : near.reduce((a, b) => (Math.abs(b.along - prevAlong) < Math.abs(a.along - prevAlong) ? b : a));
     const a = pts[pick.i - 1], b = pts[pick.i];
     return {
       off: pick.d,

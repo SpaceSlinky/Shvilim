@@ -223,10 +223,14 @@ body.night .grip::before { background: #555; }
 #ri-stats.hot .v, #ri-stats.hot .lbl { color: #e65100; }
 .go { display: block; width: 100%; margin-top: 8px; padding: 12px; font: inherit; font-size: 17px; font-weight: 700; border: 0; border-radius: 12px;
   background: var(--green); color: #fff; }
+.go.warn { background: #b26a00; font-size: 15px; }
+body.night .go.warn { background: #6d4c1a; }
 
 /* רשימת המסלולים: בחירה, ואז כלים */
 
-body.night #ri-stats.hot .v, body.night #ri-stats.hot .lbl { color: #ffab40; }
+body.night #ri-stats.hot .v, body.night #ri-stats.hot .lbl { color: #e0e0e0; }
+/* חיצי עלייה/ירידה – גדולים, באלכסון */
+.lbl .arr { font-size: 1.45em; line-height: 0; vertical-align: -0.12em; font-weight: 700; }
 
 /* שכבות: שלושה רקעים, והשאר תחת "עוד" */
 .seg { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 10px; overflow: hidden; margin: 6px 0 4px; }
