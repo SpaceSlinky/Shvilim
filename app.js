@@ -877,6 +877,8 @@
   const lsel = { kind: null, id: null, folder: null, editing: false };
   const libOpen = new Set(); // קטגוריות פתוחות – מתאפס בכל כניסה לרשימה
   const byName = (a, b) => a.localeCompare(b, 'he');
+  // סדר המסלולים: מה שסודר בגרירה, ואחריו לפי א"ב
+  const byOrder = (a, b) => (a.order ?? 1e9) - (b.order ?? 1e9) || byName(a.name, b.name);
   const catLoad = async () => (await db.get('folders').catch(() => null)) || [];
   // סדר הקטגוריות: מה שנשמר (גרירה), ואחריו קטגוריות שעוד לא נשמרו – לפי א"ב
   function catOrder(saved, lib) {
@@ -921,8 +923,10 @@
     const ele = el('span', 'c-ele', r.gain != null ? `˄${r.gain} ˅${r.loss ?? 0}` : '');
     ele.dir = 'ltr';
     row.append(g, name, el('span', 'c-len', Geo.fmtDist(r.len)), ele);
-    row.addEventListener('click', () => { if (!(sel && lsel.editing)) libSelect(r.id); });
-    g.addEventListener('pointerdown', (e) => startDrag(e, row, 'route', r.id));
+    row.addEventListener('click', () => { if (dragJustEnded) return; if (!(sel && lsel.editing)) libSelect(r.id); });
+    g.addEventListener('pointerdown', (e) => startDrag(e, row, 'route', r.id, true));
+    // לחיצה ארוכה בכל מקום בשורה – גם מתחילה גרירה
+    row.addEventListener('pointerdown', (e) => { if (!e.target.closest('.dh, input')) startDrag(e, row, 'route', r.id, false); });
     return row;
   }
   async function renderLibrary() {
@@ -941,10 +945,10 @@
       box.appendChild(cols);
       // בלי קטגוריה – בחוץ, בלי כותרת (בזמן גרירה יש כאן מקום להוציא מקטגוריה)
       const loose = el('div', 'lib-loose');
-      for (const r of lib.filter((x) => !x.folder).sort((a, b) => byName(a.name, b.name))) loose.appendChild(rowEl(r));
+      for (const r of lib.filter((x) => !x.folder).sort(byOrder)) loose.appendChild(rowEl(r));
       box.appendChild(loose);
       for (const c of cats) {
-        const items = lib.filter((x) => x.folder === c).sort((a, b) => byName(a.name, b.name));
+        const items = lib.filter((x) => x.folder === c).sort(byOrder);
         const fsel = lsel.kind === 'folder' && lsel.folder === c;
         const sec = el('section', 'cat' + (libOpen.has(c) ? ' open' : '') + (fsel ? ' sel' : ''));
         sec.dataset.cat = c;
@@ -953,12 +957,13 @@
         head.append(g, fsel && lsel.editing ? editField(c, (v) => renameCat(c, v)) : el('span', 'cat-name', c), el('span', 'cat-count', items.length || ''));
         // נגיעה בכותרת – פותחת/סוגרת ברכות (בלי לצייר מחדש)
         head.addEventListener('click', () => {
-          if (fsel && lsel.editing) return;
+          if (dragJustEnded || (fsel && lsel.editing)) return;
           const open = !libOpen.has(c);
           open ? libOpen.add(c) : libOpen.delete(c);
           sec.classList.toggle('open', open);
         });
-        g.addEventListener('pointerdown', (e) => startDrag(e, sec, 'cat', c));
+        g.addEventListener('pointerdown', (e) => startDrag(e, sec, 'cat', c, true));
+        head.addEventListener('pointerdown', (e) => { if (!e.target.closest('.dh, input')) startDrag(e, sec, 'cat', c, false); });
         const body = el('div', 'cat-body');
         const inner = el('div');
         for (const r of items) inner.appendChild(rowEl(r));
@@ -972,83 +977,120 @@
     renderLibTools(lib, cats);
   }
 
-  // ---------- גרירה: מסלול לקטגוריה (או החוצה), קטגוריה למקום אחר ----------
-  function startDrag(e, src, kind, key) {
-    e.preventDefault(); e.stopPropagation();
+  // ---------- גרירה: מסלולים בין מקומות וקטגוריות, קטגוריות בסדר אחר ----------
+  // מהידית ⋮⋮ – מיד עם התזוזה; מכל מקום אחר בשורה – בלחיצה ארוכה (כדי שגלילה רגילה תמשיך לעבוד)
+  let dragJustEnded = false; // הלחיצה שמגיעה אחרי גרירה לא בוחרת ולא פותחת
+  let dragActive = false;
+  $('lib-list').addEventListener('touchmove', (e) => { if (dragActive) e.preventDefault(); }, { passive: false });
+  function startDrag(e, src, kind, key, fromHandle) {
+    if (e.button > 0 || lsel.editing) return;
+    if (fromHandle) { e.preventDefault(); e.stopPropagation(); }
     const box = $('lib-list');
-    const handle = e.currentTarget;
-    const sx = e.clientX, sy = e.clientY;
-    let ghost = null, moved = false, dropCat, before = null, raf = 0, lastY = sy;
-    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const target = e.currentTarget;
+    const id = e.pointerId, sx = e.clientX, sy = e.clientY;
+    let ghost = null, active = false, drop = null, raf = 0, lastY = sy, timer = 0;
     const clearMarks = () => box.querySelectorAll('.drop, .drop-before, .drop-after').forEach((x) => x.classList.remove('drop', 'drop-before', 'drop-after'));
     const autoScroll = () => {
       const r = box.getBoundingClientRect();
-      if (lastY < r.top + 36) box.scrollTop -= 10; else if (lastY > r.bottom - 36) box.scrollTop += 10;
+      if (lastY < r.top + 40) box.scrollTop -= 9; else if (lastY > r.bottom - 40) box.scrollTop += 9;
       raf = requestAnimationFrame(autoScroll);
     };
+    const begin = () => {
+      active = dragActive = true;
+      try { target.setPointerCapture(id); } catch { /* ignore */ }
+      navigator.vibrate?.(15);
+      const r = src.getBoundingClientRect();
+      ghost = src.cloneNode(true);
+      ghost.classList.add('ghost', 'lift');
+      Object.assign(ghost.style, { left: r.left + 'px', width: r.width + 'px', top: r.top + 'px' });
+      ghost.dataset.dy = sy - r.top;
+      document.body.appendChild(ghost);
+      src.classList.add('dragging');
+      box.classList.add(kind === 'route' ? 'drag-route' : 'drag-cat');
+      raf = requestAnimationFrame(autoScroll);
+    };
+    if (!fromHandle) timer = setTimeout(begin, 380); // לחיצה ארוכה
     const move = (ev) => {
-      if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 6) return;
-      lastY = ev.clientY;
-      if (!moved) {
-        moved = true;
-        const r = src.getBoundingClientRect();
-        ghost = src.cloneNode(true);
-        ghost.classList.add('ghost');
-        Object.assign(ghost.style, { left: r.left + 'px', width: r.width + 'px', top: r.top + 'px' });
-        ghost.dataset.dy = sy - r.top;
-        document.body.appendChild(ghost);
-        src.classList.add('dragging');
-        box.classList.add(kind === 'route' ? 'drag-route' : 'drag-cat');
-        raf = requestAnimationFrame(autoScroll);
+      if (ev.pointerId !== id) return;
+      if (!active) {
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 7) return;
+        if (!fromHandle) { clearTimeout(timer); return finish(true); } // זזו לפני הלחיצה הארוכה – זו גלילה
+        begin();
       }
+      lastY = ev.clientY;
       ghost.style.top = ev.clientY - ghost.dataset.dy + 'px';
       clearMarks();
       const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      drop = null;
       if (kind === 'route') {
-        const cat = under?.closest('.cat');
-        dropCat = cat ? cat.dataset.cat : under?.closest('#lib-list') ? '' : undefined;
-        (cat || (dropCat === '' ? box.querySelector('.lib-loose') : null))?.classList.add('drop');
+        const row = under?.closest('.lib-row');
+        if (row && row !== src && box.contains(row)) {
+          const r = row.getBoundingClientRect();
+          const after = ev.clientY > r.top + r.height / 2;
+          row.classList.add(after ? 'drop-after' : 'drop-before');
+          drop = { folder: row.closest('.cat')?.dataset.cat || '', row, after };
+        } else {
+          const cat = under?.closest('.cat');
+          if (cat) { cat.classList.add('drop'); drop = { folder: cat.dataset.cat }; }
+          else if (under?.closest('#lib-list')) { box.querySelector('.lib-loose').classList.add('drop'); drop = { folder: '' }; }
+        }
       } else {
-        // מקום חדש לקטגוריה: לפני הקטגוריה שמרכזה מתחת לאצבע
-        const secs = [...box.querySelectorAll('.cat')].filter((s) => s !== src);
-        before = secs.find((s) => { const r = s.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) || null;
+        // קטגוריה: לפני הקטגוריה שמרכזה מתחת לאצבע
+        const secs = [...box.querySelectorAll('.cat')].filter((x) => x !== src);
+        const before = secs.find((x) => { const r = x.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; }) || null;
         if (before) before.classList.add('drop-before'); else secs[secs.length - 1]?.classList.add('drop-after');
+        drop = { before };
       }
     };
-    const up = async () => {
-      handle.removeEventListener('pointermove', move);
-      handle.removeEventListener('pointerup', up);
-      handle.removeEventListener('pointercancel', up);
+    const finish = (cancelled) => {
+      clearTimeout(timer);
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', cancel);
       cancelAnimationFrame(raf);
+      dragActive = false;
       ghost?.remove(); src.classList.remove('dragging'); box.classList.remove('drag-route', 'drag-cat'); clearMarks();
-      if (!moved) {
-        // נגיעה בידית בלי גרירה: מסלול – בחירה; קטגוריה – בחירה / ביטול בחירה
+      if (active) { dragJustEnded = true; setTimeout(() => (dragJustEnded = false), 350); }
+      return !cancelled && active;
+    };
+    const cancel = () => finish(true);
+    const up = async (ev) => {
+      if (ev.pointerId !== id) return;
+      const wasActive = active;
+      finish(false);
+      if (!wasActive) {
+        // נגיעה בידית בלי גרירה: מסלול – בחירה; קטגוריה – בחירה / ביטול בחירה (נגיעה בשורה מטופלת ב-click)
+        if (!fromHandle) return;
         if (kind === 'route') return libSelect(key);
         if (lsel.kind === 'folder' && lsel.folder === key) clearSel(); else Object.assign(lsel, { kind: 'folder', id: null, folder: key, editing: false });
         return renderLibrary();
       }
-      if (kind === 'route') {
-        if (dropCat === undefined) return;
-        const lib = await libLoad();
-        const r = lib.find((x) => x.id === key);
-        if (!r || (r.folder || '') === dropCat) return;
-        r.folder = dropCat;
-        await db.set('library', lib);
-        if (active?.libId === key) { active.folder = dropCat; db.set('active', active); }
-        if (dropCat) libOpen.add(dropCat);
-        toast(dropCat ? `הועבר ל"${dropCat}"` : 'הוצא מהקטגוריה', 1800);
-        renderLibrary();
-      } else {
+      if (!drop) return;
+      if (kind === 'route') await dropRoute(key, drop);
+      else {
         const cats = catOrder(await catLoad(), await libLoad()).filter((c) => c !== key);
-        const i = before ? cats.indexOf(before.dataset.cat) : cats.length;
-        cats.splice(i, 0, key);
+        cats.splice(drop.before ? cats.indexOf(drop.before.dataset.cat) : cats.length, 0, key);
         await db.set('folders', cats);
-        renderLibrary();
       }
+      renderLibrary();
     };
-    handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up);
-    handle.addEventListener('pointercancel', up);
+    // על החלון: האירועים מגיעים לכאן גם מהאלמנט שתפס את האצבע
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', cancel);
+  }
+  // מסלול שנגרר: לקטגוריה (או החוצה), ובמקום שבו שוחרר – הסדר בקטגוריה נשמר
+  async function dropRoute(id, drop) {
+    const lib = await libLoad();
+    const r = lib.find((x) => x.id === id);
+    if (!r) return;
+    const moved = (r.folder || '') !== drop.folder;
+    r.folder = drop.folder;
+    const ids = lib.filter((x) => x.folder === drop.folder && x.id !== id).sort(byOrder).map((x) => x.id);
+    let at = ids.length;
+    if (drop.row) { const k = ids.indexOf(+drop.row.dataset.id); if (k >= 0) at = k + (drop.after ? 1 : 0); }
+    ids.splice(at, 0, id);
+    ids.forEach((x, n) => { lib.find((y) => y.id === x).order = n; });
+    await db.set('library', lib);
+    if (active?.libId === id) { active.folder = drop.folder; db.set('active', active); }
+    if (drop.folder) libOpen.add(drop.folder);
+    if (moved) toast(drop.folder ? `הועבר ל"${drop.folder}"` : 'הוצא מהקטגוריה', 1800);
   }
 
   // ---------- הכלים: פועלים על מה שנבחר ----------
@@ -1277,7 +1319,7 @@
     if (h != null) marker.setRotation(h);
   }
   function updateCompassIcon() {
-    $('compass-needle').style.transform = `rotate(${-map.getBearing()}deg)`;
+    for (const n of document.querySelectorAll('.needle')) n.style.transform = `rotate(${-map.getBearing()}deg)`;
     $('btn-compass').classList.toggle('active', compassMode);
     $('btn-compass').classList.toggle('rotated', Math.abs(map.getBearing()) > 0.5);
   }
@@ -1683,46 +1725,55 @@
   }).observe(dockIn);
   renderDock();
 
-  // ---------- עמודת הכלים ("אולר"): סגורה = רק ☰; פותחים לרגע, ונסגרת אחרי פעולה ----------
+  // ---------- משטח הכלים ("אולר"): נשלף מלמעלה; סגור – רק ☰; פותחים לרגע, ונסגר אחרי פעולה ----------
+  // המשטח זז באמת: --k בין 0 (סגור) ל-1 (פתוח), ו---off הוא גובה הכלים שמעל ה-☰
   const knife = $('controls');
+  const knifeItems = knife.querySelector('.knife');
   let knifeOpen = false;
+  new ResizeObserver(() => knife.style.setProperty('--off', knifeItems.offsetHeight + 'px')).observe(knifeItems);
   function setKnife(on) {
     knifeOpen = on;
     knife.classList.toggle('open', on);
     knife.style.removeProperty('--k');
     $('btn-menu').setAttribute('aria-expanded', on);
   }
-  // כפתורים שנשארים בחוץ גם כשהעמודה סגורה: צפון (כשהמפה מסובבת) ומרכוז (כש-GPS פועל והמפה זזה ממך)
+  // מתחת ל-☰ כשהמשטח סגור: צפון (כשהמפה מסובבת) ומרכוז (כש-GPS פועל והמפה זזה ממך אחרי מעקב)
   function updatePins() {
-    $('btn-compass').classList.toggle('pin', compassMode || Math.abs(map.getBearing()) > 0.5);
-    $('btn-locate').classList.toggle('pin', watchId != null && !follow && followedOnce);
+    $('pin-north').hidden = !(compassMode || Math.abs(map.getBearing()) > 0.5);
+    $('pin-center').hidden = !(watchId != null && !follow && followedOnce);
   }
   map.on('rotate', updatePins);
   setInterval(updatePins, 1000); // מצב ה-GPS והמעקב משתנים בכמה מקומות; בדיקה זולה
-  // משיכת ☰ למטה פותחת את העמודה בהדרגה; למעלה סוגרת; הקשה מחליפה
+  $('pin-north').addEventListener('click', () => $('btn-compass').click());
+  $('pin-center').addEventListener('click', () => $('btn-locate').click());
+  // גרירת ☰: כל המשטח זז עם האצבע; בעזיבה – פתוח או סגור לפי המקום ולפי מהירות התנועה. הקשה מחליפה
   (() => {
     const h = $('btn-menu');
-    let y0 = null, moved = false, base = 0;
-    const full = () => knife.querySelectorAll('.knife > button:not([hidden])').length * 46;
-    h.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; base = knifeOpen ? 1 : 0; h.setPointerCapture(e.pointerId); });
+    let y0 = null, moved = false, base = 0, k = 0, track = [];
+    h.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; base = knifeOpen ? 1 : 0; track = [[e.clientY, e.timeStamp]]; h.setPointerCapture(e.pointerId); });
     h.addEventListener('pointermove', (e) => {
       if (y0 == null) return;
       const dy = e.clientY - y0;
       if (!moved && Math.abs(dy) < 6) return;
       moved = true;
+      track.push([e.clientY, e.timeStamp]); if (track.length > 6) track.shift();
       knife.classList.add('dragging');
-      knife.style.setProperty('--k', Math.max(0, Math.min(1, base + dy / full())));
+      k = Math.max(0, Math.min(1, base + dy / Math.max(1, knifeItems.offsetHeight)));
+      knife.style.setProperty('--k', k);
     });
-    h.addEventListener('pointerup', (e) => {
+    const end = () => {
       if (y0 == null) return;
-      knife.classList.remove('dragging');
-      const k = moved ? parseFloat(knife.style.getPropertyValue('--k')) : null;
       y0 = null;
-      setKnife(k == null ? !knifeOpen : k > 0.4);
-    });
-    h.addEventListener('pointercancel', () => { y0 = null; knife.classList.remove('dragging'); setKnife(knifeOpen); });
+      knife.classList.remove('dragging');
+      if (!moved) return setKnife(!knifeOpen);
+      const [ya, ta] = track[0], [yb, tb] = track[track.length - 1];
+      const v = (yb - ya) / Math.max(1, tb - ta);
+      setKnife(Math.abs(v) > 0.3 ? v > 0 : k > 0.5);
+    };
+    h.addEventListener('pointerup', end);
+    h.addEventListener('pointercancel', end);
   })();
-  // אחרי פעולה בעמודה – היא נסגרת
+  // אחרי פעולה בכלים – המשטח נסגר
   for (const b of knife.querySelectorAll('.knife > button')) b.addEventListener('click', () => setTimeout(() => setKnife(false), 250));
   map.on('click', () => knifeOpen && setKnife(false));
   map.on('dragstart', () => knifeOpen && setKnife(false));

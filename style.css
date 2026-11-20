@@ -11,9 +11,12 @@ html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: non
 #map { position: fixed; inset: 0; }
 
 /* כפתורים צפים */
-/* משטח הכלים: יורד מלמעלה, אייקונים בלי עיגולים */
-#controls { position: fixed; top: var(--safe-t); right: 10px; z-index: 8; --k: 0; display: flex; flex-direction: column; align-items: center;
-  width: 50px; padding: 2px 0 4px; background: #fff; border-radius: 0 0 14px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+/* משטח הכלים: נשלף מלמעלה, אייקונים בלי עיגולים */
+#controls { position: fixed; top: var(--safe-t); right: 10px; z-index: 8; --k: 0; --off: 0px; }
+.kpanel { position: relative; width: 50px; display: flex; flex-direction: column; align-items: center; padding: 2px 0 4px;
+  background: #fff; border-radius: 0 0 14px 14px; box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  transform: translateY(calc(var(--off) * (var(--k) - 1))); transition: transform .3s cubic-bezier(.22,1,.36,1); }
+#controls.dragging .kpanel { transition: none; }
 #controls button { width: 46px; height: 44px; border: none; border-radius: 10px; background: none; display: grid; place-items: center; padding: 0; }
 #controls button:active { background: rgba(0,0,0,.07); }
 #controls svg { width: 24px; height: 24px; stroke: #333; stroke-width: 2; fill: #333; stroke-linecap: round; stroke-linejoin: round; }
@@ -68,7 +71,7 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 
 /* מצב לילה */
 body.night { color-scheme: dark; }
-body.night #controls { background: #23282e; }
+body.night .kpanel { background: #23282e; }
 body.night #search-close { background: #23282e; }
 body.night #controls button:active { background: rgba(255,255,255,.08); }
 body.night #controls svg { stroke: #ddd; fill: #ddd; }
@@ -150,25 +153,19 @@ body.night .scrub-head { color: #ffab40; }
 
 /* העברה לתיקייה */
 
-/* ===== משטח הכלים ("אולר"): סגור – רק ☰; נפתח במשיכה למטה או בהקשה, ונסגר אחרי פעולה ===== */
+/* ===== משטח הכלים ("אולר"): הכלים מעל ה-☰; סגור – הם מחוץ למסך ===== */
 #controls.open { --k: 1; }
-#btn-menu svg { transition: transform .2s; }
-#controls.open #btn-menu svg { transform: rotate(90deg); }
-.knife { display: flex; flex-direction: column; }
-#controls .knife > button { overflow: hidden; opacity: var(--k); transform: scaleY(var(--k)); transform-origin: top center; pointer-events: none;
-  transition: height .22s cubic-bezier(.22,1,.36,1), opacity .18s, transform .22s cubic-bezier(.22,1,.36,1); }
-#controls .knife > button { height: calc(44px * var(--k)); margin-top: calc(2px * var(--k)); }
-#controls.open .knife > button, #controls.open #dim-v { pointer-events: auto; }
-#controls.dragging .knife > button, #controls.dragging #dim-v, #controls.dragging { transition: none; }
-/* צפון ומרכוז נשארים בחוץ כשצריך אותם */
-#controls .knife > button.pin { height: 44px; margin-top: 2px; opacity: 1; transform: none; pointer-events: auto; }
-
+#btn-menu { touch-action: none; } /* הגרירה של ☰ שלנו, לא של הדפדפן */
+.knife { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#controls.open .pins { display: none; }
+.pins { display: flex; flex-direction: column; align-items: center; }
+.pins button { margin-top: 2px; }
+#pin-north .s { fill: #9e9e9e; stroke: none; } #pin-north .n { fill: #d32f2f; stroke: none; }
+.needle { transition: transform .15s linear; }
 /* הסתרת הרקע: סליידר אנכי בצד שמאל של הכפתורים, לכל אורך המשטח (למעלה – בלי, למטה – הכי מוסתר) */
-/* המשטח מקבל תוספת משמאל; הכפתורים נשארים במקומם */
-#controls.with-dim.open { border-bottom-left-radius: 0; }
-#dim-v { position: absolute; right: 100%; top: 0; bottom: 0; width: 32px; display: flex; flex-direction: column; align-items: center; --f: .6;
-  background: #fff; border-radius: 0 0 0 14px; box-shadow: -3px 3px 8px -2px rgba(0,0,0,.2);
-  opacity: var(--k); pointer-events: none; transition: opacity .18s; }
+/* הסתרת הרקע: תוספת צמודה משמאל למשטח, לאורך הכלים; זזה יחד איתו */
+#dim-v { position: absolute; right: 100%; top: 0; height: calc(var(--off) + 4px); width: 32px; display: flex; flex-direction: column; align-items: center; --f: .6;
+  background: #fff; border-radius: 0 0 0 14px; box-shadow: -3px 3px 8px -2px rgba(0,0,0,.2); }
 body.night #dim-v { background: #23282e; }
 #dim-v .vs-ico { width: 20px; height: 20px; margin: 6px 0 4px; flex: none; }
 #dim-v .vs-ico .half { fill: #333; stroke: none; }
@@ -184,6 +181,7 @@ body.night .vs-thumb { border-color: #23282e; }
 
 /* ===== הדוק התחתון: צר, ומשתנה לפי מה שעושים ===== */
 #dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; margin: 0 auto; max-width: 560px; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: flex-end; /* התוכן צמוד לתחתית: כשהגובה משתנה – הקצה העליון זז, והכפתורים נשארים במקום */
   transition: height .32s cubic-bezier(.22,1,.36,1);
   background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 14px rgba(0,0,0,.22); }
 #dock-in > section { padding: 8px 10px; }
@@ -241,9 +239,13 @@ body.night .seg input:checked + span { background: #2e7d4f; }
 body.night .more-layers summary { color: #aaa; }
 
 /* כותרות הדוק: חזרה בפינה, כותרת ממורכזת למסך, ומקום זהה בצד השני */
-.dock-head.three { display: grid; grid-template-columns: 84px minmax(0, 1fr) 84px; align-items: center; gap: 4px; }
+.dock-head.three { display: grid; grid-template-columns: 78px minmax(0, 1fr) 78px; align-items: center; gap: 4px; }
 .d-title { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 16px; line-height: 1.6; padding: 2px 0; }
-.r-title { touch-action: none; cursor: pointer; }
+.r-title { touch-action: none; cursor: pointer; display: flex; justify-content: center; align-items: baseline; min-width: 0; }
+/* כשאין מקום – שם התיקייה מתקצר קודם, ושם המסלול נשאר */
+#ri-folder { flex: 0 10 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.r-title .sep { flex: none; white-space: pre; }
+#ri-name { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .r-title b { font-weight: 700; }
 .back { justify-self: start; border: 0; background: none; padding: 6px 2px; font: inherit; font-size: 14px; color: var(--green); white-space: nowrap; }
 .stop { justify-self: end; grid-column: 3; font: inherit; font-size: 14px; font-weight: 700; color: #c62828; background: none;
@@ -260,9 +262,10 @@ body.night .edit-in { border-color: #4caf50; }
 
 /* הגובה עובר ברכות בין מצבים; בפרטי המסלול – צמוד לאצבע */
 #dock[data-mode="route"] { transition: none; }
-#dock-in { padding-bottom: var(--safe-b); }
+#dock-in { flex: none; padding-bottom: var(--safe-b); }
 
 /* ===== מסלולים: טבלה לפי קטגוריות ===== */
+#lib-list { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .lib-cols, .lib-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 64px 78px; align-items: center; gap: 6px; }
 .lib-cols { font-size: 12px; color: #888; padding: 4px 4px 6px; border-bottom: 1px solid #e3e3e3; }
 .c-len, .c-ele { text-align: end; font-size: 14px; color: #555; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -271,7 +274,7 @@ body.night .edit-in { border-color: #4caf50; }
 .lib-row { padding: 9px 4px; border-bottom: 1px solid #eee; cursor: pointer; }
 .lib-row .c-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
-.dh { display: grid; place-items: center; height: 30px; margin: -6px 0; touch-action: none; cursor: grab; color: #aaa; }
+.dh { display: grid; place-items: center; width: 34px; height: 40px; margin: -10px -6px; touch-action: none; cursor: grab; color: #aaa; }
 .dh svg { width: 10px; height: 16px; fill: currentColor; }
 /* קטגוריה: כותרת ממורכזת; נגיעה פותחת/סוגרת ברכות */
 .cat { margin-top: 6px; }
@@ -293,8 +296,11 @@ body.night .edit-in { border-color: #4caf50; }
 #lib-list.drag-route .lib-loose { min-height: 38px; border: 1.5px dashed transparent; border-radius: 8px; margin: 4px 0; }
 #lib-list.drag-route .lib-loose:empty::after { content: "להוצאה מהקטגוריה – גררו לכאן"; display: block; text-align: center; font-size: 13px; color: #999; padding: 9px; }
 .drop { outline: 2px dashed var(--green); outline-offset: 2px; border-radius: 8px; background: rgba(46,125,79,.06); }
-.drop-before { box-shadow: 0 -3px 0 var(--green); }
-.drop-after { box-shadow: 0 3px 0 var(--green); }
+.drop-before { box-shadow: inset 0 3px 0 var(--green); }
+.lib-row.drop-after { box-shadow: inset 0 -3px 0 var(--green); }
+.cat.drop-before { box-shadow: 0 -3px 0 var(--green); }
+.cat.drop-after { box-shadow: 0 3px 0 var(--green); }
+.lift { transform: scale(1.02); }
 /* כלים: קבוצות תאים עם אייקון ותווית */
 .lib-tools { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
 .tgrp { display: flex; gap: 1px; border-radius: 12px; overflow: hidden; border: 1px solid #ddd; background: #ddd; }

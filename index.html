@@ -16,32 +16,41 @@
   <div id="map"></div>
 
   <!-- עמודת הכלים ("אולר"): סגורה = רק ☰. משיכה למטה או הקשה פותחת; פעולה או הקשה על המפה סוגרת -->
+  <!-- משטח הכלים ("אולר"): נשלף מלמעלה. סגור – רואים רק את ☰ בתחתית המשטח; משיכה למטה מורידה את כל המשטח -->
   <div id="controls">
-    <button id="btn-menu" title="כלים" aria-label="כלים" aria-expanded="false">
-      <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none"/></svg>
-    </button>
-    <div class="knife">
-      <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
+    <div class="kpanel">
+      <div class="knife">
+        <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
+        </button>
+        <button id="btn-fit" title="כל המסלול על המסך" aria-label="כל המסלול על המסך" hidden>
+          <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none"/><path d="M8 15c2-1 2-5 4-6s3 1 4-1" fill="none"/></svg>
+        </button>
+        <button id="btn-compass" title="מצפן: הקשה – סיבוב לפי כיוון הטלפון / צפון למעלה" aria-label="מצפן">
+          <svg viewBox="0 0 24 24" id="compass-needle" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg>
+        </button>
+        <button id="btn-layers" title="שכבות" aria-label="שכבות">
+          <svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5" fill="none"/></svg>
+        </button>
+        <button id="btn-settings" title="הגדרות" aria-label="הגדרות">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" fill="none"/></svg>
+        </button>
+      </div>
+      <!-- הסתרת הרקע: סליידר אנכי לאורך המשטח, רק כשיש מסלול או בתכנון. למעלה – בלי, למטה – הכי מוסתר -->
+      <div id="dim-v" class="vslider" hidden aria-label="הסתרת הרקע" role="slider" aria-valuemin="0" aria-valuemax="0.9">
+        <svg viewBox="0 0 24 24" class="vs-ico"><circle cx="12" cy="12" r="8" fill="none"/><path d="M12 4a8 8 0 0 1 0 16z" class="half"/></svg>
+        <div class="vs-track"><div class="vs-fill"></div><div class="vs-thumb"></div></div>
+      </div>
+      <button id="btn-menu" title="כלים" aria-label="כלים" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" fill="none"/></svg>
       </button>
-      <button id="btn-fit" title="כל המסלול על המסך" aria-label="כל המסלול על המסך" hidden>
-        <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none"/><path d="M8 15c2-1 2-5 4-6s3 1 4-1" fill="none"/></svg>
-      </button>
-      <button id="btn-compass" title="מצפן: הקשה – סיבוב לפי כיוון הטלפון / צפון למעלה" aria-label="מצפן">
-        <svg viewBox="0 0 24 24" id="compass-needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg>
-      </button>
-      <button id="btn-layers" title="שכבות" aria-label="שכבות">
-        <svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5" fill="none"/></svg>
-      </button>
-      <button id="btn-settings" title="הגדרות" aria-label="הגדרות">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" fill="none"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" fill="none"/></svg>
-      </button>
+      <!-- כשהמשטח סגור: צפון (כשהמפה מסובבת) ומרכוז (אחרי שהמעקב נשבר) מתחת ל-☰ -->
+      <div class="pins">
+        <button id="pin-north" aria-label="צפון למעלה" hidden><svg viewBox="0 0 24 24" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg></button>
+        <button id="pin-center" aria-label="חזרה למיקום שלי" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg></button>
+      </div>
     </div>
-    <!-- הסתרת הרקע: סליידר אנכי לאורך המשטח, רק כשיש מסלול או בתכנון. למעלה – בלי, למטה – הכי מוסתר -->
-    <div id="dim-v" class="vslider" hidden aria-label="הסתרת הרקע" role="slider" aria-valuemin="0" aria-valuemax="0.9">
-      <svg viewBox="0 0 24 24" class="vs-ico"><circle cx="12" cy="12" r="8" fill="none"/><path d="M12 4a8 8 0 0 1 0 16z" class="half"/></svg>
-      <div class="vs-track"><div class="vs-fill"></div><div class="vs-thumb"></div></div>
-    </div>
+  </div>
   </div>
 
   <div id="toast" hidden></div>
