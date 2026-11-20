@@ -455,7 +455,7 @@ body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.n
 #dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); }
 #dim-v .vs-track::before { background: #5f5f5f; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
 body.night #dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000); }
-body.night #dim-v .vs-track::before { background: #b4b9be; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85); }
+body.night #dim-v .vs-track::before { background: #6f777f; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85); }
 body.night #controls button { background: #2c333a; box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 2px 10px rgba(0,0,0,.5); }
 body.night #controls:not(.alone) .kmenu { background: #3b444c; box-shadow: none; }
 body.night .kmenu i { background: #ddd; }
