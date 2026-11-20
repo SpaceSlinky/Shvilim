@@ -1742,15 +1742,28 @@
   // גרירה: הפרטים נפתחים ונסגרים צמוד לאצבע. בעזיבה – לפתוח או לסגור לפי המקום,
   // ותנועה מהירה (הַטָּלָה) ממשיכה לכיוון שלה. הקשה בלי תזוזה מחליפה מצב.
   // לאן חוזרים מכל מצב (בניווט ובתכנון עם נקודות – שואלים קודם)
+  // "חזור" = שלב אחד אחורה: מבטלים את הדבר האחרון שנפתח, לא קופצים רמה שלמה
   function dockBack() {
     const m = dockMode();
     if (m === 'route') {
-      if (active?.nav) return ask('לעצור את הניווט?', 'עצור', stopNav);
-      return $('ri-back').click();
+      if (dock.open) return setDockOpen(false); // הגרף
+      if (active?.nav) return ask('לעצור את הניווט?', 'עצור', stopNav); // שומרים מעצירה בטעות
+      return $('ri-back').click(); // לרשימה, כמו שהייתה
     }
-    if (m === 'plan') return plan?.wps.length > 1 ? ask('לבטל את התכנון?', 'ביטול התכנון', endPlan) : endPlan();
-    if (m === 'lib') return setLibOpen(false);
+    if (m === 'plan') return plan?.wps.length ? $('pl-undo').click() : endPlan(); // הנקודה האחרונה; בלי נקודות – יציאה
+    if (m === 'lib') {
+      if (lsel.editing) { lsel.editing = false; return renderLibrary(); }
+      if (lsel.kind) { clearSel(); return renderLibrary(); }
+      if (libOpen.size) { // הקטגוריה שנפתחה אחרונה
+        const c = [...libOpen].pop();
+        libOpen.delete(c);
+        for (const sec of document.querySelectorAll('#lib-list .cat')) if (sec.dataset.cat === c) sec.classList.remove('open');
+        return;
+      }
+      if (dock.libOpen) return setLibOpen(false);
+    }
   }
+
   // ---------- כפתור "חזור" של הטלפון ----------
   // כשיש לאן לחזור, יש בהיסטוריה רשומה אחת שלנו; "חזור" מוריד אותה (popstate), ואנחנו עושים צעד אחד אחורה.
   // כשאין לאן לחזור – הרשומה יורדת, ו"חזור" הבא יוצא מהאפליקציה כרגיל.
