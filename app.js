@@ -584,10 +584,9 @@
   const mtr = (v) => Math.round(v) + " מ'";
   let offState = false; // סטייה מהמסלול (בניווט)
   function setStats(cells, hot) {
-    cells.forEach(([l, v, sub], i) => {
+    cells.forEach(([l, v], i) => {
       $('st-l' + (i + 1)).textContent = l;
       $('st-v' + (i + 1)).textContent = v;
-      $('st-s' + (i + 1)).textContent = sub || '';
     });
     $('ri-stats').classList.toggle('hot', !!hot);
   }
@@ -612,18 +611,17 @@
       // האצבע על הגרף: מהמיקום שלך (בניווט, אם הנקודה לפניך) או מתחילת המסלול
       const from = atP != null && atP <= scrubAt ? atP : 0;
       const L = legInfo(prof, from, scrubAt, bike);
-      setStats([[from > 0 ? 'ממך עד כאן' : 'מההתחלה עד כאן', Geo.fmtDist(L.len)],
-        ['עלייה', `↑${Math.round(L.gain)}`, `↓${Math.round(L.loss)}`], ['מגיעים', fmtClock(L.time), fmtTime(L.time)]], true);
+      setStats([[from > 0 ? 'ממך עד כאן' : 'עד כאן', Geo.fmtDist(L.len)], ['↑ עלייה', mtr(L.gain)], ['↓ ירידה', mtr(L.loss)],
+        ['מגיעים', fmtClock(L.time)]], true);
     } else if (nav && atP != null) {
       const rem = profileStats(prof, atP), left = total - prevAlong;
       const t = estTime(left, rem.gain, bike);
-      setStats([['נותרו', Geo.fmtDist(left)], ['לעלות', `↑${Math.round(rem.gain)}`, `↓${Math.round(rem.loss)}`], ['סיום', fmtClock(t), fmtTime(t)]]);
+      setStats([['נותרו', Geo.fmtDist(left)], ['↑ לעלות', mtr(rem.gain)], ['↓ לרדת', mtr(rem.loss)], ['🏁 סיום', fmtClock(t)]]);
     } else {
       const t = prof ? estTime(total, prof.gain, bike) : null;
-      setStats([['אורך', Geo.fmtDist(total)], ['עלייה', prof ? `↑${Math.round(prof.gain)}` : wait, prof ? `↓${Math.round(prof.loss)}` : ''],
-        ['זמן', t != null ? fmtTime(t) : wait, t != null ? 'סיום ' + fmtClock(t) : '']]);
+      setStats([['אורך', Geo.fmtDist(total)], ['↑ עלייה', prof ? mtr(prof.gain) : wait], ['↓ ירידה', prof ? mtr(prof.loss) : wait],
+        ['⏱ זמן', t != null ? fmtTime(t) : wait]]);
     }
-    $('ri-dim').value = dimValue();
     drawProfile($('ri-profile'), prof, { at: atP, touch: scrubAt });
   }
   attachScrub($('ri-profile'), () => prof, (d) => {
@@ -631,7 +629,6 @@
     setScrubPoint(pointAt(route, profToRoute(prof, route, d)));
     renderRouteInfo();
   }, () => { clearScrub(); renderRouteInfo(); });
-  $('ri-dim').addEventListener('input', (e) => setDim(+e.target.value));
 
   // ✕ – יוצאים מהמסלול לרשימת המסלולים; בניווט הכפתור עוצר את הניווט
   $('ri-x').addEventListener('click', async () => {
@@ -1218,6 +1215,7 @@
   const layerPrefs = Object.assign(
  { base: 'vector', labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
+  layerPrefs.route = true; // המסלול תמיד מוצג (אין לו יותר תיבה בשכבות)
 
   function applyLayers() {
     const vis = (on) => (on ? 'visible' : 'none');
@@ -1227,6 +1225,7 @@
     }
     map.setLayoutProperty('dim', 'visibility', vis(dimValue() > 0 && layerPrefs.route && (!!active || !!plan)));
     map.setPaintProperty('dim', 'fill-opacity', dimValue());
+    showDim();
     try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
@@ -1419,6 +1418,26 @@
     layerPrefs[document.body.classList.contains('night') ? 'dimNight' : 'dimDay'] = v;
     applyLayers();
   }
+  // הסליידר האנכי במשטח הכלים: למעלה – בלי הסתרה, למטה – הכי מוסתר
+  const DIM_MAX = 0.9;
+  function showDim() {
+    const f = Math.min(1, dimValue() / DIM_MAX);
+    $('dim-v').style.setProperty('--f', f);
+    $('dim-v').setAttribute('aria-valuenow', dimValue().toFixed(2));
+  }
+  (() => {
+    const tr = document.querySelector('#dim-v .vs-track');
+    let down = false;
+    const at = (e) => {
+      const r = tr.getBoundingClientRect();
+      const f = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+      setDim(Math.round(f * DIM_MAX * 20) / 20);
+    };
+    tr.addEventListener('pointerdown', (e) => { down = true; tr.setPointerCapture(e.pointerId); at(e); });
+    tr.addEventListener('pointermove', (e) => down && at(e));
+    tr.addEventListener('pointerup', () => (down = false));
+    tr.addEventListener('pointercancel', () => (down = false));
+  })();
 
   // ---------- הדוק התחתון: בית / רשימת מסלולים / מסלול / תכנון ----------
   const dock = { panel: null, open: false }; // panel: 'lib' – רשימת המסלולים מעל כל מצב; open – פרטי המסלול פתוחים
@@ -1433,6 +1452,8 @@
     for (const sec of dockEl.children) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
+    $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
+    showDim();
     dockEl.classList.toggle('open', dock.open);
     if (m === 'route') renderRouteInfo();
     if (m === 'lib') renderLibrary();
@@ -1519,7 +1540,7 @@
   (() => {
     const h = $('btn-menu');
     let y0 = null, moved = false, base = 0;
-    const full = () => knife.querySelector('.knife').childElementCount * 62;
+    const full = () => knife.querySelectorAll('.knife > button:not([hidden])').length * 46 + ($('dim-v').hidden ? 0 : 170);
     h.addEventListener('pointerdown', (e) => { y0 = e.clientY; moved = false; base = knifeOpen ? 1 : 0; h.setPointerCapture(e.pointerId); });
     h.addEventListener('pointermove', (e) => {
       if (y0 == null) return;
