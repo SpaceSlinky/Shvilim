@@ -1016,6 +1016,7 @@
     detour = null;
     map.getSource('detour')?.setData(empty);
     renderRouteInfo();
+    checkFar(); // החזרה (למעטפת / למיקום) חוזרת לפעול
   }
   async function acceptDetour() {
     if (!detour || !active) return;
@@ -1772,14 +1773,19 @@
     const zoomedOut = (e - w) < (v.getEast() - v.getWest()) * 0.4 && (n - so) < (v.getNorth() - v.getSouth()) * 0.4;
     return outside || zoomedOut;
   }
+  // בניווט: הזזת את המפה – אחרי 8 שניות בלי נגיעה היא חוזרת למיקום שלך (ולא לכל המסלול).
+  // בזמן הוספת נקודה למסלול (לפני האישור) – אין חזרה בכלל, כדי שאפשר יהיה להסתכל מסביב.
+  const RETURN_MS = 8000;
   function checkFar() {
     clearTimeout(farTimer);
-    if (!showingRoute() || follow) return; // במעקב אחרי המיקום – המפה ממילא עליך
+    if (!showingRoute() || follow || detour) return; // במעקב – המפה ממילא עליך
+    const nav = active.nav && watchId != null;
     farTimer = setTimeout(() => {
-      if (!showingRoute() || follow) return;
+      if (!showingRoute() || follow || detour) return;
       if (touching || map.isMoving?.()) return checkFar();
-      if (outOfEnvelope()) fitRoute({ duration: 900 });
-    }, 1000);
+      if (nav) setFollow(true);
+      else if (outOfEnvelope()) fitRoute({ duration: 900 });
+    }, nav ? RETURN_MS : 1000);
   }
   map.on('moveend', checkFar);
   mapEl.addEventListener('touchend', checkFar, { passive: true });
