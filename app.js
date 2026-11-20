@@ -2497,6 +2497,7 @@
     return false;
   }
   function layoutTools() {
+    const STAGGER = 30; // מ"ש בין כפתור לכפתור (בתוך הפונקציה – היא נקראת גם לפני שהקוד כאן רץ)
     const col = document.querySelector('#controls .kcol');
     const all = [...col.children].filter((b) => !b.hidden);
     const open = col.closest('#controls').classList.contains('open');
@@ -2507,7 +2508,7 @@
       const on = now.has(b), was = (layoutTools.shown || new Set()).has(b);
       if (on) b.style.setProperty('--slot', show.indexOf(b));
       // עיכוב: מי שמופיע – לפי הסדר מלמעלה; מי שנעלם – מלמטה למעלה
-      b.style.setProperty('--d', on && !was ? (n++) * 40 + 'ms' : !on && was ? (all.length - all.indexOf(b)) * 30 + 'ms' : '0ms');
+      b.style.setProperty('--d', on && !was ? (n++) * STAGGER + 'ms' : !on && was ? (all.length - all.indexOf(b)) * 25 + 'ms' : '0ms');
       b.classList.toggle('on', on);
       k++;
     }
@@ -2515,6 +2516,7 @@
     const h = all.length * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
     col.style.height = Math.max(0, show.length * 56 - 10) + 'px';
     $('dim-v').style.height = h + 'px';
+    $('dim-v').style.setProperty('--draw', (all.length - 1) * STAGGER + 120 + 'ms'); // הקו יורד באותו קצב שהכפתורים מופיעים
   }
   function setKnife(on) {
     knifeOpen = on;

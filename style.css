@@ -440,17 +440,18 @@ body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.n
 .ktools { position: absolute; top: calc(var(--kb) + 10px); right: 0; display: flex; gap: 12px; align-items: flex-start; pointer-events: none; }
 .kcol { position: relative; width: var(--kb); transition: height .25s; }
 .kcol > button { position: absolute; right: 0; top: calc(var(--slot, 0) * (var(--kb) + 10px)); transform: scale(0); opacity: 0;
-  transition: transform .22s cubic-bezier(.3,1.4,.5,1) var(--d, 0ms), opacity .15s var(--d, 0ms), top .28s cubic-bezier(.22,1,.36,1); }
+  transition: transform .18s cubic-bezier(.3,1.4,.5,1) var(--d, 0ms), opacity .12s var(--d, 0ms), top .25s cubic-bezier(.22,1,.36,1); }
 .kcol > button.on { transform: scale(1); opacity: 1; pointer-events: auto; }
 /* הסתרת הרקע (במסלול / בתכנון): בלי רקע, ישר על המפה. הקו מצטייר מלמעלה למטה; האייקון והידית גדלים במקומם */
 #dim-v { width: 30px; display: flex; flex-direction: column; align-items: center; --f: .6; }
 #controls.open #dim-v { pointer-events: auto; }
-#dim-v .vs-ico { width: 22px; height: 22px; margin: 12px 0 2px; flex: none; transform: scale(0); transition: transform .22s cubic-bezier(.3,1.4,.5,1); }
+#dim-v .vs-ico { width: 22px; height: 22px; margin: 12px 0 2px; flex: none; transform: scale(0); transition: transform .18s cubic-bezier(.3,1.4,.5,1); }
 #controls.open #dim-v .vs-ico { transform: scale(1); transition-delay: 0s; }
-#dim-v .vs-track { clip-path: inset(0 0 100% 0); transition: clip-path .16s cubic-bezier(.4,0,.2,1); }
-#controls.open #dim-v .vs-track { clip-path: inset(-12px -12px -12px -12px); transition-delay: .03s; }
-#dim-v .vs-thumb { scale: 0; transition: scale .22s cubic-bezier(.3,1.4,.5,1); }
-#controls.open #dim-v .vs-thumb { scale: 1; transition-delay: .14s; }
+#dim-v .vs-track { clip-path: inset(0 0 100% 0); transition: clip-path .12s linear; }
+/* הקו יורד יחד עם הכפתורים: מגיע לכל גובה כשהכפתור שבגובה הזה גדל (--draw מחושב לפי מספר הכפתורים) */
+#controls.open #dim-v .vs-track { clip-path: inset(-12px -12px -12px -12px); transition-duration: var(--draw, .15s); }
+#dim-v .vs-thumb { scale: 0; transition: scale .16s cubic-bezier(.3,1.4,.5,1); }
+#controls.open #dim-v .vs-thumb { scale: 1; transition-delay: calc(var(--draw, .15s) * var(--f)); }
 /* על המפה: קו כהה עם הילה לבהירה ביום, קו בהיר עם הילה כהה בלילה */
 #dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); }
 #dim-v .vs-track::before { background: #5f5f5f; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
