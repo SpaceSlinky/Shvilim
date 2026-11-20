@@ -1,6 +1,7 @@
 /* הורדת נתוני OpenStreetMap (Overpass API) והמרתם ל-GeoJSON קומפקטי – ישירות בדפדפן. */
 (function (root) {
-  const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'];
   const TRAIL_COLORS = {
     red: '#e0262b', blue: '#1f5bd8', green: '#16a03a', black: '#222222', orange: '#f57c00',
     purple: '#8e24aa', yellow: '#e8b800', brown: '#8d5524', white: '#ffffff', gray: '#808080', grey: '#808080',
@@ -12,10 +13,13 @@
     track: 'track', path: 'path', footway: 'path', bridleway: 'path', steps: 'path', cycleway: 'path',
   };
 
+  const big = ([w, s, e, n]) => (e - w) * (n - s) > 0.02; // למשל כל הכרמל
   function query([w, s, e, n]) {
     const b = `${s},${w},${n},${e}`;
     const hw = Object.keys(ROAD_CLASS).join('|');
-    return `[out:json][timeout:300];
+    // אזור קטן – זמן קצוב צנוע: שרת עמוס דוחה מראש שאילתות שמבקשות הרבה זמן
+    const t = big([w, s, e, n]) ? 300 : 90;
+    return `[out:json][timeout:${t}];
 relation["route"~"^(hiking|foot|mtb|bicycle)$"](${b});
 out geom(${b});
 (
@@ -133,18 +137,31 @@ out center tags;`;
     return [...set].sort((a, b) => a - b).map((s) => `${s}-${s + 255}`);
   }
 
-  async function download(bbox, onProgress) {
+  const why = (st) => (st === 429 || st === 503 || st === 504 ? `השרת עמוס (${st})` : `שגיאת שרת ${st}`);
+  /** הורדה: מנסים שרת אחרי שרת. signal – ביטול מבחוץ (למשל כשהמשתמש מבקש אזור אחר) */
+  async function download(bbox, onProgress, signal) {
     let last;
     for (const url of OVERPASS) {
+      if (signal?.aborted) throw signal.reason;
+      const ctl = new AbortController();
+      const stop = () => ctl.abort();
+      signal?.addEventListener('abort', stop);
+      const timer = setTimeout(stop, big(bbox) ? 330000 : 120000); // שרת שלא עונה – עוברים לבא
       try {
         onProgress?.('מוריד נתונים מ-OpenStreetMap…');
-        const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query(bbox) }) });
-        if (!res.ok) throw new Error(`Overpass ${res.status}`);
+        const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query(bbox) }), signal: ctl.signal });
+        if (!res.ok) throw new Error(why(res.status));
         onProgress?.('מעבד…');
-        const fc = convert(await res.json());
+        const json = await res.json();
+        // שגיאה באמצע (זמן, זיכרון) מגיעה עם 200 ונתונים חלקיים – לא שומרים מפה חסרה
+        if (/error/i.test(json.remark || '')) throw new Error('השרת לא סיים');
+        const fc = convert(json);
         fc.bbox = bbox;
         return fc;
-      } catch (e) { last = e; }
+      } catch (e) {
+        if (signal?.aborted) throw signal.reason;
+        last = e.name === 'AbortError' ? new Error('אין תשובה מהשרת') : e.name === 'TypeError' ? new Error('אין חיבור לשרת') : e;
+      } finally { clearTimeout(timer); signal?.removeEventListener('abort', stop); }
     }
     throw last;
   }

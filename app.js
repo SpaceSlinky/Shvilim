@@ -232,18 +232,32 @@
   const mapReady = new Promise((r) => map.on('load', r));
 
   // ---------- נתוני המפה: הורדה חד-פעמית ושמירה בטלפון ----------
-  let downloading = false;
-  // quiet: עדכון ברקע בלי הודעות; area: אזור חדש – הודעה קצרה בהתחלה ובסוף
+  // הורדה אחת בכל פעם. עדכון שקט ברקע מפנה את הדרך כשהמשתמש מבקש משהו
+  let dlJob = null; // { quiet, ctl, done }
+  let dlErr = ''; // ההורדה האחרונה של אזור נכשלה – הסיבה מוצגת על הכפתור
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
+  // quiet: עדכון ברקע בלי הודעות; area: אזור חדש – ההתקדמות על הכפתור במרכז המסך
   async function downloadArea(bbox, { quiet = false, area = false } = {}) {
-    if (downloading) return;
+    if (dlJob) {
+      if (quiet || !dlJob.quiet) return;
+      dlJob.ctl.abort(new DOMException('הופסק', 'AbortError'));
+      await dlJob.done;
+    }
     if (!navigator.onLine) return quiet || area ? undefined : toast('אין חיבור לאינטרנט');
-    downloading = true;
+    const ctl = new AbortController();
+    const job = { quiet, ctl };
+    job.done = runDownload(bbox, { quiet, area, signal: ctl.signal }).finally(() => { if (dlJob === job) dlJob = null; });
+    dlJob = job;
+    return job.done;
+  }
+  async function runDownload(bbox, { quiet, area, signal }) {
     $('nodata').hidden = true;
     const say = (m, ms) => { if (area) { dlMsg = m; checkArea(); } else if (!quiet) toast(m, ms); };
-    if (area) say('מוריד את מפות האזור…');
+    if (area) { dlErr = ''; say('מוריד את מפות האזור…'); }
     try {
-      const fresh = await OSM.download(bbox, (m) => say(m, 120000));
-      if (!fresh.features.length) throw new Error('לא נמצאו נתונים באזור');
+      const fresh = await OSM.download(bbox, (m) => say(m, 120000), signal);
+      // אזור בלי שבילים ודרכים – לא שגיאה, פשוט אין מה להציג
+      if (!fresh.features.length && !area) throw new Error('לא נמצאו נתונים באזור');
       const old = await db.get('mapdata').catch(() => null);
       const fc = old ? OSM.merge(old, fresh) : fresh;
       await db.set('mapdata', fc);
@@ -251,21 +265,25 @@
       setMapData(fc);
       say('שומר גופנים…', 60000);
       // טעינה מוקדמת של הגופנים שהשמות דורשים – ה-Service Worker שומר אותם לאופליין
-      await Promise.all(OSM.glyphRanges(fc).map((r) =>
-        fetch(GLYPHS.replace('{fontstack}', encodeURIComponent(FONT[0])).replace('{range}', r)).catch(() => null)));
+      await withTimeout(Promise.all(OSM.glyphRanges(fc).map((r) =>
+        fetch(GLYPHS.replace('{fontstack}', encodeURIComponent(FONT[0])).replace('{range}', r)).catch(() => null))), 30000);
       say('שומר נתוני גובה…', 60000);
-      await Elev.prefetch(bbox).catch(() => 0);
+      await withTimeout(Elev.prefetch(bbox).catch(() => 0), 60000);
       if (navigator.storage?.persist) navigator.storage.persist();
       const trails = fc.features.filter((f) => f.properties.k === 'trail').length;
       markArea(bbox);
-      if (area) toast('מפות האזור נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓', 3000);
+      if (area) toast(fresh.features.length ? 'מפות האזור נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓' : 'אין שבילים או דרכים באזור הזה', 3000);
       else say(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
     } catch (e) {
+      if (signal.aborted) return; // פינה את הדרך להורדה שהמשתמש ביקש
       console.error(e);
-      if (!quiet) toast('ההורדה נכשלה: ' + (e.message || e) + '. נסו שוב.', 6000);
+      const msg = e.message || String(e);
+      if (area) dlErr = msg;
+      else if (!quiet) toast('ההורדה נכשלה: ' + msg + '. נסו שוב.', 6000);
+      // עדכון שקט שנכשל – ינסה שוב מחר, לא בכל פתיחה
+      if (quiet) markArea(bbox, Date.now() - REFRESH_MS + 864e5);
       if (!(await db.get('mapdata').catch(() => null))) $('nodata').hidden = false;
     } finally {
-      downloading = false;
       if (area) { dlMsg = ''; checkArea(); }
     }
   }
@@ -306,9 +324,9 @@
   // אזור חדש שמגיעים אליו (בזום קרוב, עם אינטרנט) – מורד לבד. בלי חיבור / חיסכון בנתונים – לא מורידים.
   const REFRESH_MS = 14 * 864e5;
   const dlAreas = () => { try { return JSON.parse(localStorage.getItem('dlAreas')) || []; } catch { return []; } };
-  function markArea(b) {
+  function markArea(b, t = Date.now()) {
     const list = dlAreas().filter((a) => a.b.join() !== b.join());
-    list.push({ b, t: Date.now() });
+    list.push({ b, t });
     try { localStorage.setItem('dlAreas', JSON.stringify(list)); } catch { /* ignore */ }
   }
   const netOk = () => navigator.onLine && !navigator.connection?.saveData;
@@ -330,7 +348,7 @@
     return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
   }
   function checkArea() {
-    if (!mapFC && !downloading) return (dlHere.hidden = true); // עוד אין מפה בכלל – המסך הראשון מטפל בזה
+    if (!mapFC && !dlJob) return (dlHere.hidden = true); // עוד אין מפה בכלל – המסך הראשון מטפל בזה
     const c = map.getCenter();
     const inside = dlAreas().some(({ b }) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3]);
     if (inside && !dlMsg) return (dlHere.hidden = true);
@@ -339,7 +357,8 @@
     const big = (b[2] - b[0]) * (b[3] - b[1]) > 0.12;
     dlHere.disabled = !!dlMsg || !navigator.onLine || big;
     dlHere.textContent = dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
-      : big ? 'התקרבו כדי להוריד את מפות האזור' : '⬇ להורדת מפות האזור');
+      : big ? 'התקרבו כדי להוריד את מפות האזור'
+      : dlErr ? `ההורדה נכשלה: ${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
   }
   dlHere.addEventListener('click', () => {
     if (dlHere.disabled) return;
