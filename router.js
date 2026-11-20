@@ -230,7 +230,8 @@
 
   /**
    * קטע שמסומן בכמה צבעים (cs): מקבל את הצבע של השביל שהולכים בו – כמו הקטע שלפניו,
-   * ואם אין – הצבע שממשיך הכי רחוק קדימה. משנה את segs במקום ומחזיר אותם.
+   * ואם אין – הצבע שממשיך הכי רחוק קדימה, ובתיקו – הצבע שרואים על המפה (השביל שמצויר אחרון, למעלה).
+   * משנה את segs במקום ומחזיר אותם.
    */
   function pickColors(segs) {
     const L = (sg) => sg.coords.reduce((a, p, j) => (j ? a + Math.hypot((p[0] - sg.coords[j - 1][0]) * KX(p[1]), (p[1] - sg.coords[j - 1][1]) * KY) : 0), 0);
@@ -245,7 +246,7 @@
           for (const c of sg.cs) {
             let r = 0;
             for (let j = i; j < segs.length && has(segs[j], c); j++) r += L(segs[j]);
-            if (r > run) { run = r; best = c; }
+            if (r >= run) { run = r; best = c; } // תיקו – האחרון: הוא זה שמצויר למעלה במפה, כלומר מה שרואים
           }
           sg.c = best;
         }
