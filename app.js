@@ -239,8 +239,8 @@
     g.fillStyle = ch === 'P' ? col : '#ffffff'; g.fill();
     g.lineWidth = 5; g.strokeStyle = ch === 'P' ? '#ffffff' : col; g.stroke();
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    if (ch === 'P') { g.fillStyle = '#fff'; g.font = 'bold 36px sans-serif'; g.fillText('P', S / 2, S / 2 + 2); }
-    else { g.font = '32px sans-serif'; g.fillText(ch, S / 2, S / 2 + 2); }
+    if (ch === 'P') { g.fillStyle = '#fff'; g.font = 'bold 36px "Noto Sans Hebrew", sans-serif'; g.fillText('P', S / 2, S / 2 + 2); }
+    else { g.font = '32px "Noto Sans Hebrew", sans-serif'; g.fillText(ch, S / 2, S / 2 + 2); }
     return g.getImageData(0, 0, S, S);
   }
   map.on('error', (e) => console.warn(e.error || e));
@@ -492,8 +492,6 @@
   });
 
   // ---------- הקשה על המפה: מה רשום ב-OpenStreetMap ----------
-  const COLOR_NAMES = { '#e0262b': 'אדום', '#1f5bd8': 'כחול', '#16a03a': 'ירוק', '#222222': 'שחור', '#f57c00': 'כתום',
-    '#8e24aa': 'סגול', '#e8b800': 'צהוב', '#8d5524': 'חום', '#ffffff': 'לבן / שקוף', '#808080': 'אפור', '#7b5cb8': 'לא ידוע' };
   const HW = { path: 'שביל', footway: 'שביל הליכה', track: 'דרך עפר', steps: 'מדרגות', bridleway: 'שביל רכיבה', cycleway: 'שביל אופניים',
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
   const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
@@ -502,22 +500,34 @@
     const { x, y } = e.point;
     const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
     if (!feats.length) return;
+    // שבילים מסומנים – ריבוע בצבע השביל משמאל לשם הדרך (ולא שורה "שביל מסומן ירוק")
+    const trails = feats.filter((f) => f.properties.k === 'trail');
+    const colors = [...new Set(trails.map((f) => f.properties.c))];
+    const trailName = trails.map((f) => f.properties.n).find(Boolean) || '';
+    const squares = colors.map((c) => `<span class="sq" style="background:${esc(c)}"></span>`).join('');
     const seen = new Set();
     const rows = [];
+    let gotSquares = false;
     for (const f of feats) {
       const p = f.properties;
-      const id = p.k + p.n + p.c + p.h + p.t;
+      if (p.k === 'trail') continue;
+      const id = p.k + p.n + p.h + p.t;
       if (seen.has(id)) continue;
       seen.add(id);
       let line = '';
-      if (p.k === 'trail') line = `שביל מסומן ${COLOR_NAMES[p.c] || p.c}` + (p.ref ? ` (${p.ref})` : '');
-      else if (p.k === 'road') line = HW[p.h] || 'דרך';
+      if (p.k === 'road') line = HW[p.h] || 'דרך';
       else if (p.k === 'water') line = 'נחל';
       else if (p.k === 'bike') line = 'מסלול אופניים';
       else if (p.k === 'poi') line = KIND[p.t === 'water' ? 'water_poi' : p.t] || p.t;
-      rows.push(`<div class="info-row"><b>${esc(p.n || '')}</b> ${line}</div>`);
+      const withSq = p.k === 'road' && !gotSquares && colors.length;
+      if (withSq) gotSquares = true;
+      const name = p.n || (withSq ? trailName : '');
+      rows.push(`<div class="info-row">${name ? `<b>${esc(name)}</b>` : ''}${withSq ? squares : ''} ${line}</div>`);
       if (rows.length >= 4) break;
     }
+    // שביל מסומן בלי דרך מתחתיו
+    if (colors.length && !gotSquares) rows.unshift(`<div class="info-row">${trailName ? `<b>${esc(trailName)}</b>` : ''}${squares} שביל</div>`);
+    if (!rows.length) return;
     new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
   });
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -659,7 +669,7 @@
     g.clearRect(0, 0, W, H);
     const night = document.body.classList.contains('night');
     if (!p) {
-      g.fillStyle = night ? '#999' : '#888'; g.font = '13px sans-serif'; g.textAlign = 'center';
+      g.fillStyle = night ? '#999' : '#888'; g.font = '13px "Noto Sans Hebrew", sans-serif'; g.textAlign = 'center';
       g.fillText(prof === null && active ? 'מחשב גובה…' : 'אין נתוני גובה (נדרש אינטרנט פעם אחת)', W / 2, H / 2);
       return;
     }
@@ -704,7 +714,7 @@
         g.beginPath(); g.moveTo(x, pad.t - 2); g.lineTo(x, H); g.stroke(); g.setLineDash([]);
         dot(d, hot);
       }
-      g.font = 'bold 12px sans-serif'; g.fillStyle = night ? '#e0e0e0' : '#e65100';
+      g.font = 'bold 12px "Noto Sans Hebrew", sans-serif'; g.fillStyle = night ? '#e0e0e0' : '#e65100';
       if (marks.from != null) {
         // שתי אצבעות: הפרש הגובה, באמצע
         const dh = Math.round(eleAt(p, clampD(marks.touch)) - eleAt(p, clampD(marks.from)));
@@ -2247,7 +2257,6 @@
     { k: 'row', name: 'שם מסלול', min: 12, max: 24, s: 16, w: 600 },
     { k: 'len', name: 'אורך (ק"מ)', min: 11, max: 22, s: 15, w: 700 },
   ];
-  const LS_W = [[400, 'רגיל'], [500, 'בינוני'], [700, 'מודגש'], [800, 'כבד']];
   const LS_PAD = { min: 4, max: 22, def: 11 };
   let libStyle = {};
   try { libStyle = JSON.parse(localStorage.getItem('libStyle')) || {}; } catch { /* ignore */ }
@@ -2268,32 +2277,30 @@
   function renderStyleDlg() {
     const box = $('ls-list');
     box.textContent = '';
-    const slider = (title, min, max, val, onInput) => {
-      const item = el('div', 'ls-item');
-      const top = el('div', 'ls-top', title);
+    // סליידר עם תווית קטנה והערך מימין
+    const slider = (label, min, max, step, val, onInput) => {
+      const row = el('div', 'ls-sl');
+      const top = el('div', 'ls-top', label);
       const out = document.createElement('output');
       out.textContent = val;
       top.append(out);
       const rng = document.createElement('input');
-      Object.assign(rng, { type: 'range', min, max, step: 1, value: val });
+      Object.assign(rng, { type: 'range', min, max, step, value: val });
       rng.addEventListener('input', () => { out.textContent = rng.value; onInput(+rng.value); });
-      item.append(top, rng);
-      return item;
+      row.append(top, rng);
+      return row;
     };
     for (const it of LS) {
       const v = (libStyle[it.k] ||= {});
-      const item = slider(it.name, it.min, it.max, v.s ?? it.s, (x) => { v.s = x; saveLibStyle(); });
-      const seg = el('div', 'ls-w');
-      for (const [w, label] of LS_W) {
-        const b = el('button', (v.w ?? it.w) === w ? 'on' : '', label);
-        b.style.fontWeight = w;
-        b.addEventListener('click', () => { v.w = w; saveLibStyle(); seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); });
-        seg.append(b);
-      }
-      item.append(seg);
+      const item = el('div', 'ls-item');
+      item.append(el('div', 'ls-name', it.name),
+        slider('גודל', it.min, it.max, 1, v.s ?? it.s, (x) => { v.s = x; saveLibStyle(); }),
+        slider('עובי', 100, 900, 50, v.w ?? it.w, (x) => { v.w = x; saveLibStyle(); }));
       box.append(item);
     }
-    box.append(slider('מרווח בין שורות', LS_PAD.min, LS_PAD.max, libStyle.pad ?? LS_PAD.def, (x) => { libStyle.pad = x; saveLibStyle(); }));
+    const pad = el('div', 'ls-item');
+    pad.append(el('div', 'ls-name', 'שורות'), slider('מרווח', LS_PAD.min, LS_PAD.max, 1, libStyle.pad ?? LS_PAD.def, (x) => { libStyle.pad = x; saveLibStyle(); }));
+    box.append(pad);
   }
   $('ls-open').addEventListener('click', () => {
     $('layers-dlg').close();

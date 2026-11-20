@@ -1,3 +1,36 @@
+/* הגופן של ezpz: Noto Sans Hebrew (משתנה, 100–900), שמור באפליקציה – עובד גם בלי אינטרנט. unicode-range מועתק כמו שהוא */
+@font-face {
+  font-family: "Noto Sans Hebrew";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("fonts/noto-sans-hebrew-hebrew.woff2") format("woff2");
+  unicode-range: U+0307-0308, U+0590-05FF, U+200C-2010, U+20AA, U+25CC, U+FB1D-FB4F;
+}
+@font-face {
+  font-family: "Noto Sans Hebrew";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("fonts/noto-sans-hebrew-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Noto Sans Hebrew";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 100%;
+  font-display: swap;
+  src: url("fonts/noto-sans-hebrew-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
 :root {
   --green: #1f5f3a;
   --blue: #1e88e5;
@@ -7,7 +40,8 @@
 [hidden] { display: none !important; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none;
-  font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif; }
+  font-family: "Noto Sans Hebrew", system-ui, sans-serif; }
+button, input, select, textarea { font-family: inherit; }
 #map { position: fixed; inset: 0; }
 
 /* כפתורים צפים */
@@ -121,6 +155,8 @@ body.night #layers-dlg .area-row .a-del { color: #ef5350; }
 body.night #btn-compass.active { background: rgba(100,181,246,.18); }
 .info-row { padding: 3px 0; line-height: 1.35; }
 .info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }
+.info-row .sq { display: inline-block; width: 12px; height: 12px; margin-inline-start: 6px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); vertical-align: -1px; }
+.info-row .sq + .sq { margin-inline-start: 3px; }
 body.night .info-row + .info-row { border-color: #444; }
 
 /* גיליון תחתון: נתוני מסלול ותכנון */
@@ -372,22 +408,22 @@ body.night .dl-here { background: #23282e; color: #81c784; }
 body.night .dl-here:disabled { color: #aaa; }
 
 /* עיצוב רשימת המסלולים: חלון למעלה, הרשימה נראית מתחתיו ומשתנה בזמן אמת */
-#style-dlg { margin: 12px auto auto; max-height: 52vh; overflow: auto; padding: 14px 16px; }
+#style-dlg { margin: 12px auto auto; max-height: 56vh; overflow: hidden; padding: 14px 16px; }
+#style-dlg[open] { display: flex; flex-direction: column; } /* הרשימה נגללת, הכפתורים תמיד למטה */
+#ls-list { overflow: auto; min-height: 0; flex: 1; }
 #style-dlg::backdrop { background: transparent; }
 .ls-item { padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.08); }
 .ls-item:last-of-type { border-bottom: 0; }
-.ls-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; font-weight: 600; }
-.ls-top output { font-size: 13px; color: #777; font-weight: 400; font-variant-numeric: tabular-nums; }
-.ls-item input[type=range] { width: 100%; margin: 4px 0 2px; accent-color: var(--green); }
-.ls-w { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
-#style-dlg .ls-w button { flex: 1; margin: 0; padding: 6px 0; border: 0; border-radius: 0; background: none; color: inherit; font-size: 13px; }
-#style-dlg .ls-w button + button { border-inline-start: 1px solid #ccc; }
-#style-dlg .ls-w button.on { background: var(--green); color: #fff; }
+.ls-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.ls-sl { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; }
+.ls-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: #555; }
+.ls-top output { font-size: 12px; color: #888; font-variant-numeric: tabular-nums; }
+.ls-sl input[type=range] { width: 100%; margin: 4px 0; accent-color: var(--green); }
 .ls-btns { display: flex; gap: 8px; margin-top: 8px; }
 #style-dlg .ls-btns button { margin: 0; }
 body.night .ls-item { border-color: rgba(255,255,255,.1); }
-body.night .ls-w, body.night #style-dlg .ls-w button + button { border-color: #444; }
-body.night .ls-top output { color: #aaa; }
+body.night .ls-top { color: #bbb; }
+body.night .ls-top output { color: #999; }
 #layers-dlg .ls-open { margin: 10px 0 0; padding: 10px; font-size: 15px; background: none; border: 1px solid #ccc; border-radius: 10px; color: inherit; }
 
 /* תוספת למסלול */

@@ -1,9 +1,10 @@
 /* Service Worker: שומר את האפליקציה, הספריות והגופנים לשימוש אופליין.
    נתוני המפה עצמם נשמרים ב-IndexedDB (ראו app.js).
    קבצי האפליקציה: מוגשים מהמטמון ומתעדכנים ברקע. ספריות וגופנים מ-CDN: מהמטמון בלבד אחרי הפעם הראשונה. */
-const CACHE = 'shvilim-v59';
+const CACHE = 'shvilim-v60';
 const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'router.js', 'elev.js', 'app.js', 'manifest.webmanifest',
-  'icons/icon-192.png', 'icons/icon-512.png'];
+  'icons/icon-192.png', 'icons/icon-512.png',
+  'fonts/noto-sans-hebrew-hebrew.woff2', 'fonts/noto-sans-hebrew-latin.woff2', 'fonts/noto-sans-hebrew-latin-ext.woff2'];
 const CDN = [
   'https://unpkg.com/maplibre-gl@5.15.0/dist/maplibre-gl.css',
   'https://unpkg.com/maplibre-gl@5.15.0/dist/maplibre-gl.js',
