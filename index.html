@@ -52,8 +52,6 @@
       </div>
         <!-- חריץ המשיכה – בתחתית המשטח עצמו; סגור = רואים רק את הפס הזה -->
         <button id="btn-menu" class="kgrip" title="כלים" aria-label="כלים" aria-expanded="false"><span class="notch"></span></button>
-        <!-- במסלול: קצה המשטח הוא כפתור היציאה -->
-        <button id="k-exit" class="kexit" hidden><b>יציאה</b><b id="k-exit-2">מניווט</b></button>
       </div>
     </div>
   </div>
@@ -79,10 +77,10 @@
     <!-- מסלול: תצוגה מקדימה (לפני היציאה) או ניווט. שורת מספרים אחת שמשמעותה משתנה לפי המצב ולפי האצבע על הגרף -->
     <section data-mode="route" hidden>
       <button class="grip" id="r-grip" aria-label="גרף"></button>
-      <div class="dock-head three">
-        <span></span>
+      <!-- שם המסלול מימין, "יציאה" משמאל (בניווט – עוצרת את הניווט) -->
+      <div class="dock-head r-head">
         <div class="r-title d-title"><b id="ri-name"></b></div>
-        <span></span>
+        <button id="r-exit" class="r-exit">יציאה</button>
       </div>
       <div id="ri-stats" class="stats">
         <div><span id="st-l1" class="lbl"></span><span id="st-v1" class="v"></span></div>

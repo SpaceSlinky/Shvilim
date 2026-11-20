@@ -650,7 +650,6 @@
     const toStart = !nav && lastPos ? Geo.haversine(lastPos.p, route.pts[0]) : 0;
     // לפני היציאה, כשרחוקים מההתחלה – המרחק אליה על הכפתור
     $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
-    $('k-exit-2').textContent = nav ? 'מניווט' : 'מהמסלול';
     $('ri-go').hidden = nav;
     const wait = '…';
     if (scrubAt != null && prof) {
@@ -676,12 +675,12 @@
     renderRouteInfo();
   }, () => { clearScrub(); renderRouteInfo(); });
 
-  // יציאה – מקצה משטח הכלים: בניווט – עוצרים את הניווט; אחרת – חוזרים לרשימה, כמו שהייתה
+  // יציאה – מכותרת הדוק: בניווט – עוצרים את הניווט; אחרת – חוזרים לרשימה, כמו שהייתה
   async function exitRoute() {
     dock.libOpen = true;
     await clearRoute();
   }
-  $('k-exit').addEventListener('click', () => (active?.nav ? stopNav() : exitRoute()));
+  $('r-exit').addEventListener('click', () => (active?.nav ? stopNav() : exitRoute()));
 
   // יוצאים לדרך: מעקב אחרי המיקום, מסך דולק, והמפה מסתובבת לפי הטלפון
   $('ri-go').addEventListener('click', async () => {
@@ -1697,7 +1696,6 @@
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
-    $('k-exit').hidden = m !== 'route';
     $('search').hidden = m !== 'lib'; // חיפוש – רק כשלא בתוך מסלול או בתכנון
     if (m !== 'lib') closeSearch();
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון

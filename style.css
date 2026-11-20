@@ -189,7 +189,6 @@ body.night .vs-thumb { border-color: #23282e; }
   transition: none; /* הגובה צמוד לתוכן – התוכן עצמו מונפש */
   background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 14px rgba(0,0,0,.22); }
 #dock-in > section { padding: 8px 10px; }
-  background: #f2f4f3; color: #222; font: inherit; font-size: 13px; }
 .dock-head { display: flex; align-items: flex-start; gap: 8px; }
 .dock-head > b { flex: 1; font-size: 16px; padding: 4px 2px; }
 .dock-head .x { flex: none; border: 0; background: none; font-size: 18px; padding: 4px 8px; color: inherit; }
@@ -238,7 +237,11 @@ body.night .more-layers summary { color: #aaa; }
 .d-title { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 16px; line-height: 1.6; padding: 2px 0; }
 .r-title { touch-action: none; cursor: pointer; display: flex; justify-content: center; align-items: baseline; min-width: 0; }
 /* כשאין מקום – שם התיקייה מתקצר קודם, ושם המסלול נשאר */
-#ri-name { flex: 0 0 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.r-head { align-items: center; }
+.r-head .r-title { flex: 1; justify-content: flex-start; text-align: start; }
+.r-exit { flex: none; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 700; color: #c62828; padding: 4px 2px 4px 6px; cursor: pointer; }
+body.night .r-exit { color: #ef5350; }
+#ri-name { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .r-title b { font-weight: 700; }
 /* חזרה: גלולה ברורה, בגודל אגודל */
 .back { justify-self: start; min-height: 36px; padding: 6px 12px; border: 0; border-radius: 18px; background: rgba(46,125,79,.12);
@@ -334,13 +337,6 @@ section.open .lib-body { grid-template-rows: 1fr; }
 #btn-theme svg { display: none; }
 /* מראה לאן עוברים: בבהיר – ירח, בכהה – שמש */
 #btn-theme[data-mode="light"] .i-moon, #btn-theme[data-mode="dark"] .i-sun { display: block; }
-/* קצה משטח הכלים במסלול: יציאה, בשתי שורות מודגשות */
-#controls .kexit { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 2px 0 8px; border: 0; background: none;
-  font: inherit; font-size: 12px; line-height: 1.2; color: #c62828; cursor: pointer; }
-#controls .kexit[hidden] { display: none; }
-.kexit b { font-weight: 800; }
-body.night #controls .kexit { color: #ef5350; }
-#controls:has(.kexit:not([hidden])) .kgrip { height: 26px; }
 /* חלון אישור מחיקה */
 #confirm-dlg h2 { font-size: 18px; color: inherit; overflow-wrap: anywhere; }
 .cf-btns { display: flex; gap: 8px; margin-top: 14px; }
