@@ -346,7 +346,6 @@
   async function setMapData(fc) {
     const trailGeoms = markShared(fc);
     buildSharedIdx(fc);
-    if (active && !plan) map.getSource('route')?.setData(routeFeatures(active.segs)); // המסלול זז עם הקווים המשותפים
     mapFC = fc;
     searchIndex = null;
     const lvl = smoothLevel();
@@ -356,6 +355,8 @@
     if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track'
       || trailGeoms.has(JSON.stringify(f.geometry.coordinates))) };
     if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
+    // המסלול המוצג: מתקנים קטעים שלא עוגלו, ומזיזים עם הקווים המשותפים
+    if (active && !plan) { fixActiveSegs(); map.getSource('route')?.setData(routeFeatures(active.segs)); }
   }
   // ---------- המפה השמורה מתעדכנת לבד ----------
   // אזורים שהורדו (localStorage `dlAreas`: [{b, t}]). פעם בשבועיים – עדכון שקט ברקע;
@@ -615,9 +616,43 @@
     return lines;
   }
 
+  // מסלולים שנשמרו בזמן באג (v55–v65): כל קטע בין שתי נקודות נשמר לבד, ולכן לא עוגל – פינות חדות
+  // שלא יושבות על השביל המעוגל. מחברים רצף של קטעים כאלה (אותו צבע, צמודים) ומעגלים מחדש.
+  function repairSegs(segs) {
+    if (!smoother) return segs;
+    const out = [];
+    let run = null, changed = false;
+    const same = (p, q) => p[0] === q[0] && p[1] === q[1];
+    const flush = () => {
+      if (!run) return;
+      if (run.n > 1) { out.push({ ...run.sg, coords: smoother(run.coords) }); changed = true; } else out.push(run.sg);
+      run = null;
+    };
+    for (const sg of segs) {
+      const two = sg.coords.length === 2 && sg.h !== 'free';
+      if (two && run && run.sg.c === sg.c && run.sg.h === sg.h && same(run.coords[run.coords.length - 1], sg.coords[0])) {
+        run.coords.push(sg.coords[1]); run.n++; continue;
+      }
+      flush();
+      if (two) run = { sg, coords: [...sg.coords], n: 1 }; else out.push(sg);
+    }
+    flush();
+    return changed ? out : segs;
+  }
+  function fixActiveSegs() {
+    if (!active) return false;
+    const fixed = repairSegs(active.segs);
+    if (fixed === active.segs) return false;
+    active.segs = fixed;
+    route = Geo.buildRoute(segsToLines(fixed));
+    db.set('active', active).catch(() => {});
+    if (active.libId && !active.edits?.length) libPut(active).catch(() => {}); // גם בספרייה
+    return true;
+  }
   async function setActive(a, { fit = false, save = true } = {}) {
     await mapReady;
     active = a;
+    a.segs = repairSegs(a.segs);
     const lines = segsToLines(a.segs);
     route = Geo.buildRoute(lines);
     prevAlong = null;

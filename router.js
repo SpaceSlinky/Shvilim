@@ -221,7 +221,7 @@
       len += Math.hypot((b[0] - a[0]) * KX(a[1]), (b[1] - a[1]) * KY);
       const c = info[i].c || null, hw = info[i].hw || null, cs = info[i].cs?.length > 1 ? info[i].cs : null;
       const last = segs[segs.length - 1];
-      if (last && last.c === c && (c || last.h === hw) && String(last.cs) === String(cs)) last.coords.push(b);
+      if (last && last.c === c && (c || last.h === hw) && String(last.cs || '') === String(cs || '')) last.coords.push(b);
       else segs.push(cs ? { coords: [a, b], c, h: hw, cs } : { coords: [a, b], c, h: hw });
     }
     const edges = info.map((x) => x.ei).filter((x) => x != null).concat([s.e, t.e]);
