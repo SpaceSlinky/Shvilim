@@ -600,8 +600,6 @@
     const atP = nav && prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
     // שורת משנה: תיקייה; בתצוגה – גם המרחק להתחלה כשרחוקים ממנה
     const toStart = !nav && lastPos ? Geo.haversine(lastPos.p, route.pts[0]) : 0;
-    $('ri-folder').textContent = active.folder || '';
-    document.querySelector('#dock .r-title .sep').hidden = !active.folder;
     // לפני היציאה, כשרחוקים מההתחלה – המרחק אליה על הכפתור
     $('ri-go').textContent = '▶ יוצאים לדרך' + (toStart > 150 ? ` · ${Geo.fmtDist(toStart)} להתחלה` : '');
     // בניווט: "עצור" במקום החזרה (שלא ייצאו מהמסלול בטעות באמצע הדרך)
@@ -1656,7 +1654,6 @@
     dockEl.dataset.mode = m;
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
-    $('controls').classList.toggle('with-dim', !!(active || plan)); // הסליידר מתווסף לצד המשטח
     showDim();
     dockEl.classList.toggle('open', dock.open);
     if (m === 'route') renderRouteInfo();
@@ -1790,7 +1787,7 @@
   // ---------- משטח הכלים ("אולר"): נשלף מלמעלה; סגור – רק ☰; פותחים לרגע, ונסגר אחרי פעולה ----------
   // המשטח זז באמת: --k בין 0 (סגור) ל-1 (פתוח), ו---off הוא גובה הכלים שמעל ה-☰
   const knife = $('controls');
-  const knifeItems = knife.querySelector('.knife');
+  const knifeItems = knife.querySelector('.kbody'); // הכלים והסליידר – מה שנשלף
   let knifeOpen = false;
   new ResizeObserver(() => knife.style.setProperty('--off', knifeItems.offsetHeight + 'px')).observe(knifeItems);
   function setKnife(on) {
