@@ -60,10 +60,12 @@
   // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
   const zwShared = (a, b, fn) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, fn(a), 16, fn(b)];
   const SN = ['coalesce', ['get', 'sn'], 1], SI = ['coalesce', ['get', 'si'], 0], SHARED_W = 0.85, SHARED_STEP = 1.35; // רוחב כל קו, והמרחק בין קווים (פס לבן ביניהם)
-  // ההזזה הצידה של קו בקטע משותף – זהה לשבילים במפה ולמסלול שעליהם
-  const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]);
+  // ההזזה הצידה של קו בקטע משותף – זהה לשבילים במפה ולמסלול שעליהם. tf (0–1): בקצוות של קטע משותף ההזזה
+  // עולה בהדרגה (taperSplit) – אחרת יש "מדרגה" במקום שבו הקו עובר מהאמצע לצד
+  const SHARED_V = ['*', ['-', SI, ['/', ['-', SN, 1], 2]], ['coalesce', ['get', 'tf'], 1]];
+  const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, SHARED_V]);
   // אותה הזזה לחצים (icon-offset: [0, y] בכיוון הקו – y חיובי = ימינה מכיוון התנועה, כמו line-offset)
-  const SHARED_ICON_OFFSET = zwShared(1.5, 4.5, (w) => ['interpolate', ['linear'], ['-', SI, ['/', ['-', SN, 1], 2]],
+  const SHARED_ICON_OFFSET = zwShared(1.5, 4.5, (w) => ['interpolate', ['linear'], SHARED_V,
     -1, ['literal', [0, -w * SHARED_STEP]], 1, ['literal', [0, w * SHARED_STEP]]]);
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
@@ -180,11 +182,13 @@
         paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
       // חצי הכיוון – באותה הזזה הצידה כמו הקו (בקטע משותף), כדי לשבת עליו
       { id: 'route-arrows', type: 'symbol', source: 'route', filter: ['==', '$type', 'LineString'],
-        layout: { 'symbol-placement': 'line', 'symbol-spacing': 70, 'icon-image': 'arrow',
-          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map', 'icon-offset': SHARED_ICON_OFFSET } },
+        // חץ עדין: שברון דק (קו כהה ~1 פיקסל עם הילה לבנה דקה), מרווח – לא שברון עבה כל 70 פיקסלים
+        layout: { 'symbol-placement': 'line', 'symbol-spacing': 110, 'icon-image': 'arrow',
+          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map', 'icon-offset': SHARED_ICON_OFFSET },
+      },
       // נקודות המסלול
       { id: 'route-ends', type: 'circle', source: 'route', filter: ['==', '$type', 'Point'],
-        paint: { 'circle-radius': 7, 'circle-stroke-width': 2.5, 'circle-stroke-color': '#fff',
+        paint: { 'circle-radius': 5.5, 'circle-stroke-width': 2, 'circle-stroke-color': '#fff',
           'circle-color': ['match', ['get', 'kind'], 'start', '#1a9b3c', '#c62828'] } },
       { id: 'wpts', type: 'circle', source: 'wpts',
         paint: { 'circle-radius': 6, 'circle-color': '#f39c12', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
@@ -272,7 +276,7 @@
   });
   map.on('styleimagemissing', (e) => {
     if (map.hasImage(e.id)) return;
-    if (e.id === 'arrow') map.addImage('arrow', arrowImage(), { pixelRatio: 2 });
+    if (e.id === 'arrow') map.addImage('arrow', arrowImage(), { pixelRatio: 3 });
     else if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
@@ -371,6 +375,61 @@
   db.del('mapsmooth').catch(() => {}); // ניקוי העותק השמור מגרסאות קודמות
   // שבילים מסומנים שעוברים על אותה דרך (אותה גאומטריה): לכל צבע מספר קו (si) ומספר הקווים (sn)
   // מחזיר את הגאומטריות שעליהן עובר שביל מסומן (כדי לעגל גם את הדרך שמתחת – אחרת היא מבצבצת לצדו)
+  // חלוקת קו כך שההזזה הצידה עולה בהדרגה בהתחלה (t0) ו/או יורדת בסוף (t1): 4 חלקים לאורך ~20 מ' בכל קצה,
+  // tf = 0, ¼, ½, ¾ – בקצה עצמו ההזזה 0, כמו הקו שממשיך ממנו
+  const TAPER_M = 20, TAPER_N = 4;
+  function taperSplit(coords, t0, t1) {
+    if (!t0 && !t1) return [{ coords, tf: 1 }];
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + Geo.haversine(coords[i - 1], coords[i]));
+    const L = cum[cum.length - 1];
+    if (L < 1) return [{ coords, tf: 1 }];
+    const tl = Math.min(TAPER_M, L / ((t0 ? 1 : 0) + (t1 ? 1 : 0)) * 0.8);
+    const at = (d) => {
+      let j = 1;
+      while (j < cum.length - 1 && cum[j] < d) j++;
+      const seg = cum[j] - cum[j - 1], t = seg ? (d - cum[j - 1]) / seg : 0;
+      return [coords[j - 1][0] + (coords[j][0] - coords[j - 1][0]) * t, coords[j - 1][1] + (coords[j][1] - coords[j - 1][1]) * t];
+    };
+    const cut = (a, b) => {
+      const line = [at(a)];
+      for (let j = 0; j < coords.length; j++) if (cum[j] > a && cum[j] < b) line.push(coords[j]);
+      line.push(at(b));
+      return line;
+    };
+    const parts = [];
+    const step = tl / TAPER_N;
+    if (t0) for (let j = 0; j < TAPER_N; j++) parts.push([j * step, (j + 1) * step, j / TAPER_N]);
+    parts.push([t0 ? tl : 0, t1 ? L - tl : L, 1]);
+    if (t1) for (let j = TAPER_N - 1; j >= 0; j--) parts.push([L - (j + 1) * step, L - j * step, j / TAPER_N]);
+    return parts.filter(([a, b]) => b - a > 0.01).map(([a, b, tf]) => ({ coords: cut(a, b), tf }));
+  }
+  const sharedV = (p) => (p.sn > 1 ? p.si - (p.sn - 1) / 2 : 0);
+  // שבילים מסומנים במפה: קטע משותף שממשיך לקו בהזזה אחרת (שביל רגיל, או קטע משותף שההזזה שלו לצד השני) – מחודד בקצה
+  function taperTrails(fc) {
+    const ends = new Map(); // נקודת קצה + צבע → [{v, start}]
+    const key = (p, c) => p[0].toFixed(7) + ',' + p[1].toFixed(7) + c;
+    for (const f of fc.features) {
+      if (f.properties.k !== 'trail' || f.geometry.type !== 'LineString') continue;
+      const c = f.geometry.coordinates, v = sharedV(f.properties);
+      for (const [p, start] of [[c[0], true], [c[c.length - 1], false]]) {
+        const kk = key(p, f.properties.c);
+        if (!ends.has(kk)) ends.set(kk, []);
+        ends.get(kk).push({ f, v, start });
+      }
+    }
+    const out = [];
+    for (const f of fc.features) {
+      const v = f.properties.k === 'trail' && f.geometry.type === 'LineString' ? sharedV(f.properties) : 0;
+      if (!v) { out.push(f); continue; }
+      const c = f.geometry.coordinates;
+      // ממשיך בלי מדרגה: שכן באותו צבע שההזזה שלו – בכיוון של הקו הזה – זהה
+      const smooth = (p, atStart) => (ends.get(key(p, f.properties.c)) || []).some((n) => n.f !== f && (n.start === atStart ? -n.v : n.v) === v);
+      const t0 = !smooth(c[0], true), t1 = !smooth(c[c.length - 1], false);
+      for (const x of taperSplit(c, t0, t1)) out.push({ type: 'Feature', properties: x.tf === 1 ? f.properties : { ...f.properties, tf: x.tf }, geometry: { type: 'LineString', coordinates: x.coords } });
+    }
+    return { ...fc, features: out };
+  }
   function markShared(fc) {
     const groups = new Map();
     for (const f of fc.features) {
@@ -405,10 +464,10 @@
     searchIndex = null;
     const lvl = smoothLevel();
     smoother = lvl ? Geo.makeSmoother(fc, lvl) : null;
-    if (!lvl) return map.getSource('osm').setData(fc);
+    if (!lvl) return map.getSource('osm').setData(taperTrails(fc));
     // פעם אחת בלבד (לא קודם המקורי ואז המעוגל – זה כפל עבודה למפה). מעגלים רק שבילים, דרכי עפר ונחלים
-    if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track'
-      || trailGeoms.has(JSON.stringify(f.geometry.coordinates))) };
+    if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: taperTrails(Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track'
+      || trailGeoms.has(JSON.stringify(f.geometry.coordinates)))) };
     if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
     if (PERF.sent == null) { PERF.sent = performance.now(); map.once('idle', () => (PERF.ready = performance.now())); }
     // המסלול המוצג: מתקנים קטעים שלא עוגלו, ומזיזים עם הקווים המשותפים
@@ -536,16 +595,17 @@
   map.on('moveend', checkArea);
   addEventListener('online', checkArea);
   addEventListener('offline', checkArea);
-  mapReady.then(() => !map.hasImage('arrow') && map.addImage('arrow', arrowImage(), { pixelRatio: 2 }));
+  mapReady.then(() => !map.hasImage('arrow') && map.addImage('arrow', arrowImage(), { pixelRatio: 3 }));
 
+  // שברון דק: 4×8 פיקסלים, קו כהה ~1.1 פיקסל עם הילה לבנה ~0.5 מכל צד (נראה גם על שביל לבן וגם על הקו הצבעוני)
   function arrowImage() {
-    const s = 32, c = document.createElement('canvas');
+    const s = 42, c = document.createElement('canvas');
     c.width = c.height = s;
     const g = c.getContext('2d');
     g.lineCap = g.lineJoin = 'round';
-    const chevron = () => { g.beginPath(); g.moveTo(11, 8); g.lineTo(22, 16); g.lineTo(11, 24); g.stroke(); };
-    g.strokeStyle = '#fff'; g.lineWidth = 7; chevron();
-    g.strokeStyle = '#222'; g.lineWidth = 3.5; chevron();
+    const chevron = () => { g.beginPath(); g.moveTo(15, 9); g.lineTo(27, 21); g.lineTo(15, 33); g.stroke(); };
+    g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = 6.6; chevron();
+    g.strokeStyle = '#1f1f1f'; g.lineWidth = 3.3; chevron();
     return g.getImageData(0, 0, s, s);
   }
 
@@ -998,9 +1058,21 @@
   let pieceCache = null;
   function routePieces(segs) {
     if (pieceCache?.segs === segs) return pieceCache.pieces;
+    // קטע משותף שהמסלול נכנס אליו או יוצא ממנו – ההזזה עולה/יורדת בהדרגה (כמו השביל במפה), בלי מדרגה
+    const raw = segs.flatMap((sg) => splitShared(sg));
+    const near = (a, b) => a && b && Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+    const split = [];
+    raw.forEach((x, i) => {
+      const v = sharedV(x.props);
+      if (!v) return split.push(x);
+      const prev = raw[i - 1], next = raw[i + 1];
+      const t0 = !!prev && near(prev.coords[prev.coords.length - 1], x.coords[0]) && sharedV(prev.props) !== v;
+      const t1 = !!next && near(next.coords[0], x.coords[x.coords.length - 1]) && sharedV(next.props) !== v;
+      for (const y of taperSplit(x.coords, t0, t1)) split.push({ coords: y.coords, props: y.tf === 1 ? x.props : { ...x.props, tf: y.tf } });
+    });
     const pieces = [];
     let acc = 0;
-    for (const sg of segs) for (const x of splitShared(sg)) {
+    for (const x of split) {
       const cum = [acc];
       for (let j = 1; j < x.coords.length; j++) cum.push((acc += Geo.haversine(x.coords[j - 1], x.coords[j])));
       pieces.push({ coords: x.coords, props: x.props, cum });
