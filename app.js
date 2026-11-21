@@ -387,7 +387,8 @@
       const old = dlAreas().sort((a, b) => a.t - b.t)[0];
       if (old && Date.now() - old.t > REFRESH_MS && netOk()) setTimeout(() => downloadArea(old.b, { quiet: true }), 8000);
       // נתוני הגובה של כל האזורים השמורים – משלימים ברקע מה שחסר (מה שכבר במטמון חוזר מיד, בלי רשת)
-      if (netOk()) setTimeout(() => dlAreas().forEach((ar) => Elev.prefetch(ar.b).catch(() => 0)), 12000);
+      if (netOk()) setTimeout(() => Promise.all(dlAreas().map((ar) => Elev.prefetch(ar.b).catch(() => 0)))
+        .then(() => { if (active && prof === false) loadProfile(); }), 12000);
     } else if (navigator.onLine) downloadArea(CARMEL); // פעם ראשונה – מורידים לבד
     else $('nodata').hidden = false;
   });
@@ -681,12 +682,19 @@
     updateStatus();
     prof = null;
     clearScrub();
+    loadProfile();
+  }
+  // prof: null – מחשב; false – נכשל (אין נתוני גובה); אחרת – הפרופיל. כשנכשל – מנסים שוב כשהאינטרנט חוזר
+  function loadProfile() {
+    const a = active;
+    if (!a || !route) return;
     Elev.profile(route.pts, 15, route.breaks).then((p) => {
       if (active !== a) return;
-      prof = p; updateStatus(); renderRouteInfo();
+      prof = p || false; updateStatus(); renderRouteInfo();
       if (p) { a.gain = Math.round(p.gain); a.loss = Math.round(p.loss); if (a.libId && !a.edits?.length) libUpdateStats(a.libId, p); }
     });
   }
+  addEventListener('online', () => { if (active && prof === false) { Elev.lastError = ''; loadProfile(); } });
 
   function fitRoute(anim = {}) {
     const src = plan?.wps.length > 1 ? plan : active; // בתכנון – המסלול שמתכננים
@@ -769,7 +777,7 @@
     const night = document.body.classList.contains('night');
     if (!p) {
       g.fillStyle = night ? '#999' : '#888'; g.font = '13px "Noto Sans Hebrew", sans-serif'; g.textAlign = 'center';
-      g.fillText(prof === null && active ? 'מחשב גובה…' : 'אין נתוני גובה (נדרש אינטרנט פעם אחת)', W / 2, H / 2);
+      g.fillText(canvas.id === 'ri-profile' && prof === null && active ? 'מחשב גובה…' : 'אין נתוני גובה' + (Elev.lastError ? ` (${Elev.lastError})` : ' (נדרש אינטרנט פעם אחת)'), W / 2, H / 2);
       return;
     }
     const pad = PPAD;
@@ -960,7 +968,7 @@
     $('ri-go').classList.toggle('warn', !!goMsg && !goWait);
     $('ri-go').hidden = nav || !!detour;
     $('dt-box').hidden = !detour;
-    const wait = '…';
+    const wait = prof === false ? '–' : '…'; // נכשל – קו; עוד מחשב – שלוש נקודות
     if (scrub && prof && scrub.a != null) {
       // שתי אצבעות: הטווח שביניהן
       const L = legInfo(prof, scrub.a, scrub.b, bike);

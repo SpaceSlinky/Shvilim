@@ -17,7 +17,7 @@
       tiles.set(k, (async () => {
         try {
           const res = await fetch(URL_T.replace('{z}', Z).replace('{x}', x).replace('{y}', y));
-          if (!res.ok) return null;
+          if (!res.ok) { Elev.lastError = 'השרת החזיר ' + res.status; return null; }
           const bmp = await createImageBitmap(await res.blob());
           const c = document.createElement('canvas');
           c.width = c.height = 256;
@@ -27,7 +27,7 @@
           const out = new Float32Array(256 * 256);
           for (let i = 0; i < out.length; i++) out[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768;
           return out;
-        } catch { return null; }
+        } catch (e) { Elev.lastError = navigator.onLine ? 'אין חיבור לשרת הגובה' : 'אין אינטרנט'; console.warn('elev tile', x, y, e); return null; }
       })().then((t) => { if (!t) tiles.delete(k); return t; })); // כישלון (למשל בלי אינטרנט) – לא נזכר; ינסו שוב בפעם הבאה
     }
     return tiles.get(k);
@@ -47,7 +47,8 @@
     const x0 = Math.floor(worldX(w) / 256), x1 = Math.floor(worldX(e) / 256);
     const y0 = Math.floor(worldY(nn) / 256), y1 = Math.floor(worldY(s) / 256);
     const jobs = [];
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) jobs.push(loadTile(x, y));
+    // אריח אחד נוסף מכל צד – דגימה ליד הקצה משתמשת גם בשכן
+    for (let x = x0 - 1; x <= x1 + 1; x++) for (let y = y0 - 1; y <= y1 + 1; y++) jobs.push(loadTile(x, y));
     const res = await Promise.all(jobs);
     return res.filter(Boolean).length;
   }
@@ -100,7 +101,18 @@
       if (t) loaded.set(k, t);
     }));
     let ele = pts.map((p) => sampleSync(p[0], p[1], loaded));
-    if (ele.some((v) => !Number.isFinite(v))) return null;
+    // חורים (אריח שלא נטען): משלימים מהשכנים; רק אם רוב המסלול בלי גובה – אין פרופיל
+    const ok = ele.filter(Number.isFinite).length;
+    if (ok < ele.length * 0.7) return null;
+    if (ok < ele.length) {
+      let last = null;
+      for (let i = 0; i < ele.length; i++) {
+        if (Number.isFinite(ele[i])) { last = i; continue; }
+        let j = i; while (j < ele.length && !Number.isFinite(ele[j])) j++;
+        for (let k = i; k < j; k++) ele[k] = last == null ? ele[j] : j >= ele.length ? ele[last] : ele[last] + ((ele[j] - ele[last]) * (k - last)) / (j - last);
+        i = j - 1;
+      }
+    }
     // החלקה (ממוצע נע) להפחתת רעש
     const W = 3;
     ele = ele.map((_, i) => {
@@ -118,5 +130,6 @@
     return { dist, ele, gain, loss, min: Math.min(...ele), max: Math.max(...ele), total };
   }
 
-  root.Elev = { prefetch, profile, tileUrls, Z };
+  const Elev = { prefetch, profile, tileUrls, Z, lastError: '' };
+  root.Elev = Elev;
 })(typeof self !== 'undefined' ? self : globalThis);
