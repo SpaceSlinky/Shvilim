@@ -112,8 +112,9 @@
         paint: { 'line-color': '#f7a656', 'line-width': zw(1.2, 7) } },
       { id: 'track', type: 'line', source: 'osm', filter: road('track'), minzoom: 11,
         paint: { 'line-color': '#8b6b3e', 'line-width': zw(0.8, 2.4), 'line-dasharray': [3, 1.5] } },
+      // שביל לאופניים בלבד (סינגל) – כתום, כדי שיהיה ברור שלא נכנסים אליו ברגל
       { id: 'path', type: 'line', source: 'osm', filter: road('path'), minzoom: 12,
-        paint: { 'line-color': '#4a3d30', 'line-width': zw(0.6, 1.8), 'line-dasharray': [2, 1.5] } },
+        paint: { 'line-color': ['case', ['==', ['get', 'b'], 1], '#f57c00', '#4a3d30'], 'line-width': zw(0.6, 1.8), 'line-dasharray': [2, 1.5] } },
       // שבילי אופניים (מסלולי MTB)
       { id: 'bike', type: 'line', source: 'osm', filter: k('bike'), minzoom: 11, layout: { 'line-join': 'round', visibility: 'none' },
         paint: { 'line-color': '#ff6d00', 'line-width': zw(1, 3), 'line-dasharray': [2, 1.2], 'line-opacity': 0.9 } },
@@ -584,7 +585,7 @@
       if (seen.has(id)) continue;
       seen.add(id);
       let line = '';
-      if (p.k === 'road') line = HW[p.h] || 'דרך';
+      if (p.k === 'road') line = p.b ? 'שביל לאופניים בלבד – לא להליכה' : p.fn ? 'אסור להולכי רגל' : HW[p.h] || 'דרך';
       else if (p.k === 'water') line = 'נחל';
       else if (p.k === 'bike') line = 'מסלול אופניים';
       else if (p.k === 'poi') line = KIND[p.t === 'water' ? 'water_poi' : p.t] || p.t;
@@ -1339,7 +1340,7 @@
       el.className = 'wp' + (i === 0 ? ' first' : i === plan.wps.length - 1 ? ' last' : '');
       el.textContent = i + 1;
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(p).addTo(map);
-      m.on('dragend', () => { const ll = m.getLngLat(); plan.wps[i] = [+ll.lng.toFixed(6), +ll.lat.toFixed(6)]; plan.lastDrag = Date.now(); renderPlan(); });
+      m.on('dragend', () => { const ll = m.getLngLat(); plan.wps[i] = snapWp([+ll.lng.toFixed(6), +ll.lat.toFixed(6)]); plan.lastDrag = Date.now(); renderPlan(); });
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
         if (Date.now() - (plan.lastDrag || 0) < 400) return;
@@ -1397,7 +1398,7 @@
     plan = { wps: from?.wps ? from.wps.map((p) => [...p]) : [], opts: { snap: true, bike: false, ...(from?.opts || {}) },
       name: from?.name || '', folder: from?.folder, libId: from?.libId, markers: [] };
     $('pl-snap').checked = plan.opts.snap;
-    $('pl-bike').checked = plan.opts.bike;
+    for (const r of document.querySelectorAll('input[name="pl-mode"]')) r.checked = r.value === (plan.opts.bike ? 'bike' : 'walk');
     clearScrub();
     document.body.classList.add('planning');
     renderDock();
@@ -1420,14 +1421,28 @@
 
   map.on('click', (e) => {
     if (!plan) return;
-    plan.wps.push([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]);
+    plan.wps.push(snapWp([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]));
     renderPlan();
   });
   $('pl-undo').addEventListener('click', () => { plan.wps.pop(); renderPlan(); });
   $('pl-clear').addEventListener('click', () => { plan.wps = []; renderPlan(); });
   $('pl-cancel').addEventListener('click', endPlan);
   $('pl-snap').addEventListener('change', (e) => { plan.opts.snap = e.target.checked; renderPlan(); });
-  $('pl-bike').addEventListener('change', (e) => { plan.opts.bike = e.target.checked; toast('מעדכן…', 800); setTimeout(renderPlan, 30); });
+  for (const r of document.querySelectorAll('input[name="pl-mode"]')) r.addEventListener('change', () => {
+    plan.opts.bike = r.value === 'bike';
+    // נקודות שנצמדו לשביל אופניים בלבד – לא מתאימות להליכה: מצמידים מחדש לרשת של המצב החדש
+    toast('מעדכן…', 800);
+    setTimeout(() => { plan.wps = plan.wps.map(snapWp); renderPlan(); }, 30);
+  });
+  // נקודה שמסמנים (גם מרחוק, בזום רחוק) נצמדת לשביל/דרך הקרובים: רדיוס ~30 פיקסלים על המסך (25–400 מ'), עם העדפה לשביל מסומן
+  function snapWp(p) {
+    if (!plan?.opts.snap) return p;
+    const g = getGraph(plan.opts.bike);
+    if (!g) return p;
+    const mpp = (40075016.686 * Math.cos((p[1] * Math.PI) / 180)) / (512 * 2 ** map.getZoom());
+    const s = Router.snap(g, p, Math.max(25, Math.min(400, 30 * mpp)));
+    return s ? [+s.p[0].toFixed(6), +s.p[1].toFixed(6)] : p;
+  }
   // דיאלוג שמירה – משמש גם לסיום תכנון וגם לשמירת מסלול GPX בספרייה
   let saveMode = null; // 'plan' | 'active'
   async function openSaveDlg(mode, { name = '', folder = '', coords = [] } = {}) {
@@ -2158,7 +2173,7 @@
     ['minor-casing', 'line-color', '#b5b5b5', '#2c2f33'],
     ['minor', 'line-color', '#ffffff', '#5a5e63'],
     ['track', 'line-color', '#8b6b3e', '#a98b5e'],
-    ['path', 'line-color', '#4a3d30', '#b3a596'],
+    ['path', 'line-color', ['case', ['==', ['get', 'b'], 1], '#f57c00', '#4a3d30'], ['case', ['==', ['get', 'b'], 1], '#ffa040', '#b3a596']],
     // בלילה: שביל שחור נשאר שחור אבל מקבל מסגרת בהירה בולטת
     ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
       ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],

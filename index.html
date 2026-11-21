@@ -116,9 +116,13 @@
         <div><span class="lbl">⏱ זמן</span><span id="pl-time" class="v">–</span></div>
       </div>
       <canvas id="pl-profile" class="profile small-profile"></canvas>
+      <!-- הליכה או אופניים – החלטה חד-משמעית: בהליכה אף פעם לא שבילים שמיועדים לאופניים בלבד -->
+      <div class="seg pl-mode">
+        <label><input type="radio" name="pl-mode" value="walk"><span>🥾 הליכה</span></label>
+        <label><input type="radio" name="pl-mode" value="bike"><span>🚲 אופניים</span></label>
+      </div>
       <div class="opts">
         <label><input type="checkbox" id="pl-snap"> צמוד לשבילים</label>
-        <label><input type="checkbox" id="pl-bike"> כולל שבילי אופניים</label>
       </div>
       <div class="btns">
         <button id="pl-done" class="primary">סיום</button>
