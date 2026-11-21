@@ -474,11 +474,10 @@ dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-c
 .klbl { position: absolute; right: calc(100% + 8px); top: 50%; translate: 0 -50%; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
   background: #fff; color: #333; font-size: 13px; font-weight: 600; box-shadow: 0 1px 6px rgba(0,0,0,.2); pointer-events: none; }
 .lyr.off svg { opacity: .35; }
-/* "הסתרת שכבות": השכבות מוסתרות – האייקון דהוי עם קו אלכסוני (מרגיש כבוי), לא כחול */
-#lb-overlay .slash { display: none; }
-#lb-overlay.off svg { opacity: 1; }
-#lb-overlay.off svg path:not(.slash) { opacity: .35; }
-#lb-overlay.off .slash { display: inline; }
+/* "הסתרת שכבות": השכבות מוסתרות – האייקון דהוי וקו אלכסוני מקצה לקצה של העיגול (כמו תמרור "אין כניסה"), לא כחול */
+#lb-overlay.off::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 2px; margin-top: -1px;
+  border-radius: 1px; background: #333; rotate: 45deg; pointer-events: none; }
+body.night #lb-overlay.off::after { background: #ddd; }
 .lyr.off .klbl { color: #999; }
 #lb-base svg { display: none; }
 #lb-base[data-base="vector"] .b-vector, #lb-base[data-base="sat"] .b-sat, #lb-base[data-base="topo"] .b-topo { display: block; }
