@@ -62,6 +62,9 @@
   const SN = ['coalesce', ['get', 'sn'], 1], SI = ['coalesce', ['get', 'si'], 0], SHARED_W = 0.85, SHARED_STEP = 1.35; // רוחב כל קו, והמרחק בין קווים (פס לבן ביניהם)
   // ההזזה הצידה של קו בקטע משותף – זהה לשבילים במפה ולמסלול שעליהם
   const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, ['-', SI, ['/', ['-', SN, 1], 2]]]);
+  // אותה הזזה לחצים (icon-offset: [0, y] בכיוון הקו – y חיובי = ימינה מכיוון התנועה, כמו line-offset)
+  const SHARED_ICON_OFFSET = zwShared(1.5, 4.5, (w) => ['interpolate', ['linear'], ['-', SI, ['/', ['-', SN, 1], 2]],
+    -1, ['literal', [0, -w * SHARED_STEP]], 1, ['literal', [0, w * SHARED_STEP]]]);
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
@@ -166,10 +169,11 @@
           'line-dasharray': ['case', ['==', ['get', 'h'], 'free'], ['literal', [1, 1]], ['literal', [1, 0]]] } },
       // מה שכבר הלכת: קו בצבע הרקע מעל המסלול, כך שהחלק הזה נראה דהוי
       { id: 'route-walked', type: 'line', source: 'walked', layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(4, 8.5) } },
+        paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
+      // חצי הכיוון – באותה הזזה הצידה כמו הקו (בקטע משותף), כדי לשבת עליו
       { id: 'route-arrows', type: 'symbol', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'symbol-placement': 'line', 'symbol-spacing': 70, 'icon-image': 'arrow',
-          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map' } },
+          'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map', 'icon-offset': SHARED_ICON_OFFSET } },
       // נקודות המסלול
       { id: 'route-ends', type: 'circle', source: 'route', filter: ['==', '$type', 'Point'],
         paint: { 'circle-radius': 7, 'circle-stroke-width': 2.5, 'circle-stroke-color': '#fff',
@@ -184,11 +188,14 @@
       { id: 'detour-pt', type: 'circle', source: 'detour', filter: ['==', '$type', 'Point'],
         paint: { 'circle-radius': 8, 'circle-color': '#d81b60', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
       // האצבע על הגרף: הקטע על המסלול והנקודה (כתום ביום, אפור בהיר בלילה)
-      { id: 'scrub-line', type: 'line', source: 'scrub', filter: ['==', '$type', 'LineString'],
+      // האצבע על הגרף: הקטע עד האצבע מעומעם (כמו מה שכבר הלכת), והנקודה – קו קצרצר עגול, כדי לזוז הצידה יחד עם המסלול
+      { id: 'scrub-line', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'dim'],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#ff6d00', 'line-width': 7, 'line-opacity': 0.9 } },
-      { id: 'scrub', type: 'circle', source: 'scrub', filter: ['==', '$type', 'Point'],
-        paint: { 'circle-radius': 8, 'circle-color': '#ff6d00', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
+        paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
+      { id: 'scrub-dot-casing', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'dot'], layout: { 'line-cap': 'round' },
+        paint: { 'line-color': '#ffffff', 'line-width': 18, 'line-offset': SHARED_OFFSET } },
+      { id: 'scrub-dot', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'dot'], layout: { 'line-cap': 'round' },
+        paint: { 'line-color': '#3c4247', 'line-width': 12, 'line-offset': SHARED_OFFSET } },
       { id: 'acc', type: 'fill', source: 'acc',
         paint: { 'fill-color': '#1e88e5', 'fill-opacity': 0.12, 'fill-outline-color': '#1e88e5' } },
     ],
@@ -776,20 +783,18 @@
     const band = (x0, x1, fn) => { g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0, H); g.clip(); fn(); g.restore(); };
     const xAt = marks.at != null ? X(marks.at) : X(0);
     g.lineWidth = 2;
-    // מה שנשאר: ירוק
+    // השטח – אפור מלא (לא שקוף), הקו העליון – לבן
+    const dimArea = () => { area(); g.fillStyle = night ? '#30363c' : '#e1e4e2'; g.fill(); line(); g.strokeStyle = night ? 'rgba(255,255,255,.35)' : '#ffffff'; g.stroke(); };
     band(xAt, W, () => {
-      area(); g.fillStyle = night ? 'rgba(76,175,80,.35)' : 'rgba(46,125,79,.22)'; g.fill();
-      line(); g.strokeStyle = night ? '#81c784' : '#2e7d4f'; g.stroke();
+      area(); g.fillStyle = night ? '#4b545c' : '#b9c0bb'; g.fill();
+      line(); g.strokeStyle = '#ffffff'; g.stroke();
     });
-    // מה שעברת: דהוי
-    if (marks.at != null) band(0, xAt, () => {
-      area(); g.fillStyle = night ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)'; g.fill();
-      line(); g.strokeStyle = night ? 'rgba(255,255,255,.3)' : 'rgba(0,0,0,.25)'; g.stroke();
-    });
-    // הקטע עד האצבע (או בין שתי אצבעות): כתום ביום, אפור בהיר בלילה
-    const hot = night ? '#d9d9d9' : '#ff6d00';
+    // מה שעברת: מעומעם
+    if (marks.at != null) band(0, xAt, dimArea);
+    // הקטע עד האצבע (או בין שתי אצבעות): מעומעם, כמו על המפה
+    const hot = night ? '#ffffff' : '#3c4247';
     const base = marks.from != null ? marks.from : marks.at != null && marks.touch != null && marks.at <= marks.touch ? marks.at : 0;
-    if (marks.touch != null) band(X(base), X(marks.touch), () => { area(); g.fillStyle = night ? 'rgba(217,217,217,.3)' : 'rgba(255,109,0,.35)'; g.fill(); });
+    if (marks.touch != null) band(X(base), X(marks.touch), dimArea);
     const dot = (d, color) => {
       g.fillStyle = color; g.strokeStyle = night ? '#1d2227' : '#fff'; g.lineWidth = 2;
       g.beginPath(); g.arc(X(d), Y(eleAt(p, clampD(d))), 5, 0, 7); g.fill(); g.stroke();
@@ -803,7 +808,7 @@
         g.beginPath(); g.moveTo(x, pad.t - 2); g.lineTo(x, H); g.stroke(); g.setLineDash([]);
         dot(d, hot);
       }
-      g.font = 'bold 12px "Noto Sans Hebrew", sans-serif'; g.fillStyle = night ? '#e0e0e0' : '#e65100';
+      g.font = 'bold 12px "Noto Sans Hebrew", sans-serif'; g.fillStyle = hot;
       if (marks.from != null) {
         // שתי אצבעות: הפרש הגובה, באמצע
         const dh = Math.round(eleAt(p, clampD(marks.touch)) - eleAt(p, clampD(marks.from)));
@@ -861,15 +866,18 @@
 
   let scrub = null; // האצבע על הגרף של המסלול הפעיל: { b } – נקודה, { a, b } – שתי אצבעות (מרחקים בגרף)
   // על המפה: הקטע a→b של המסלול והנקודה (או שתי הנקודות)
-  function setScrubMap(r, p, a, b, both) {
-    if (!r) return map.getSource('scrub')?.setData(empty);
+  // שכבה מעל קטע של המסלול (from→to, מרחקים על המסלול), מחולקת כמו המסלול עצמו – כדי לזוז הצידה יחד איתו בקטעים משותפים
+  function overlayFeatures(segs, from, to, k) {
+    return cutSegs(segs, from, to).flatMap(splitShared)
+      .map((x) => ({ type: 'Feature', properties: { ...x.props, k }, geometry: { type: 'LineString', coordinates: x.coords } }));
+  }
+  function setScrubMap(segs, r, p, a, b, both) {
+    if (!segs || !r) return map.getSource('scrub')?.setData(empty);
     const ra = profToRoute(p, r, a), rb = profToRoute(p, r, b);
-    const i = idxAt(r.cum, ra), j = idxAt(r.cum, rb);
-    const line = [pointAt(r, ra), ...r.pts.slice(i + 1, j + 1), pointAt(r, rb)];
-    const pt = (c) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: c } });
-    const feats = [pt(line[line.length - 1])];
-    if (both) feats.push(pt(line[0]));
-    if (rb - ra > 1) feats.unshift({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: line } });
+    const feats = rb - ra > 1 ? overlayFeatures(segs, ra, rb, 'dim') : [];
+    const dot = (d) => overlayFeatures(segs, Math.max(0, d - 0.8), Math.max(d, 0.8), 'dot');
+    feats.push(...dot(rb));
+    if (both) feats.push(...dot(ra));
     map.getSource('scrub')?.setData({ type: 'FeatureCollection', features: feats });
   }
   function clearScrub() { scrub = null; setScrubMap(null); }
@@ -918,14 +926,14 @@
       const L = legInfo(prof, scrub.a, scrub.b, bike);
       setStats([['בין האצבעות', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
         ['הפרש גובה', signed(eleAt(prof, scrub.b) - eleAt(prof, scrub.a))]], true);
-      setScrubMap(route, prof, scrub.a, scrub.b, true);
+      setScrubMap(active.segs, route, prof, scrub.a, scrub.b, true);
     } else if (scrub && prof) {
       // האצבע על הגרף: מהמיקום שלך (בניווט, אם הנקודה לפניך) או מתחילת המסלול
       const from = atP != null && atP <= scrub.b ? atP : 0;
       const L = legInfo(prof, from, scrub.b, bike);
       setStats([[from > 0 ? 'ממך עד כאן' : 'עד כאן', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
         ['מגיעים', fmtClock(L.time)]], true);
-      setScrubMap(route, prof, from, scrub.b);
+      setScrubMap(active.segs, route, prof, from, scrub.b);
     } else if (nav && atP != null) {
       const rem = profileStats(prof, atP), left = total - prevAlong;
       const t = estTime(left, rem.gain, bike);
@@ -1008,9 +1016,8 @@
     if (along == null) { walkedAt = -1; map.getSource('walked')?.setData(empty); return; }
     if (Math.abs(along - walkedAt) < 5) return;
     walkedAt = along;
-    const i = idxAt(route.cum, along);
-    const coords = route.pts.slice(0, i + 1).concat([pointAt(route, along)]);
-    map.getSource('walked')?.setData(coords.length > 1 ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } } : empty);
+    // מחולק כמו המסלול – כך יושב עליו גם בקטעים משותפים (שזזים הצידה)
+    map.getSource('walked')?.setData({ type: 'FeatureCollection', features: active ? overlayFeatures(active.segs, 0, along, 'walk') : [] });
   }
 
   // ---------- תוספת למסלול קיים: לחיצה ארוכה על המפה ----------
@@ -1272,7 +1279,7 @@
   attachScrub($('pl-profile'), () => plan?.prof, (a, b) => {
     const range = b != null, from = range ? a : 0, to = range ? b : a;
     plan.scrubAt = to;
-    setScrubMap(plan.route, plan.prof, from, to, range);
+    setScrubMap(plan.segs, plan.route, plan.prof, from, to, range);
     const L = legInfo(plan.prof, from, to, plan.opts.bike);
     if (plan.hint == null) plan.hint = $('pl-hint').textContent;
     $('pl-hint').textContent = range
@@ -2030,9 +2037,9 @@
   // ---------- מצב לילה ----------
   const DARK = ['#222222', '#000000', '#000', '#111111', '#111', '#1a1a1a', '#333333', '#333'];
   const THEME = [ // [שכבה, מאפיין, יום, לילה]
-    ['scrub', 'circle-color', '#ff6d00', '#d9d9d9'],
-    ['scrub', 'circle-stroke-color', '#ffffff', '#5f6368'],
-    ['scrub-line', 'line-color', '#ff6d00', '#d9d9d9'],
+    ['scrub-line', 'line-color', '#ffffff', '#1b1f24'],
+    ['scrub-dot-casing', 'line-color', '#ffffff', '#1b1f24'],
+    ['scrub-dot', 'line-color', '#3c4247', '#ffffff'],
     ['bg', 'background-color', '#e6e1d1', '#15191e'],
     ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
     ['major-casing', 'line-color', '#b8742a', '#4d3215'],
