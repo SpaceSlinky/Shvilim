@@ -83,18 +83,14 @@
       // תצלום אוויר: דרך esrifb:// – איפה שיש רזולוציה גבוהה מציגים אותה; איפה ש-Esri מחזיר תמונת
       // "Map data not yet available" – מגדילים את החלק המתאים מהרמה הקודמת שיש בה צילום (מפוקסל, אבל אמיתי)
       sat: { type: 'raster', tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri', tiles: ['esrifb://{z}/{y}/{x}'] },
-      topo: { type: 'raster', tileSize: 256, maxzoom: 17, attribution: '© OpenTopoMap (CC-BY-SA)',
-        tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png'] },
-      ihm: { type: 'raster', tileSize: 256, maxzoom: 16, attribution: '© Israel Hiking Map',
-        tiles: ['https://israelhiking.osm.org.il/Hebrew/Tiles/{z}/{x}/{y}.png'] },
       scrub: { type: 'geojson', data: empty },
       detour: { type: 'geojson', data: empty },
       walked: { type: 'geojson', data: empty },
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#e6e1d1' } },
-      ...['sat', 'topo', 'ihm'].map((id) => ({ id: 'base-' + id, type: 'raster', source: id,
-        layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150 } })),
+      // תצלום אוויר: מעל רקע המפה ומתחת לכל השאר (שבילים, דרכים, שמות) – המפה עצמה אף פעם לא נעלמת
+      { id: 'base-sat', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -2198,53 +2194,34 @@
   };
   const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major']);
   const layerPrefs = Object.assign(
- { base: 'vector', labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
+ { sat: 0, labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
   layerPrefs.route = true; // המסלול תמיד מוצג (אין לו יותר תיבה בשכבות)
   // אין יותר בחירה של שכבה-שכבה: כולן דלוקות, ו"הסתרת שכבות" (overlay) מסתירה את כולן יחד
   for (const g of Object.keys(GROUPS)) layerPrefs[g] = true;
   layerPrefs.labels = true;
+  // תצלום אוויר: שקיפות 0–1 (סליידר). פעם היה "סוג מפה" (מפה/תצלום/טופו) ו"הסתרת שכבות" – בוטלו
+  if ('base' in layerPrefs) { layerPrefs.sat = layerPrefs.base === 'sat' ? 1 : 0; delete layerPrefs.base; }
+  delete layerPrefs.overlay;
+  layerPrefs.sat = Math.max(0, Math.min(1, +layerPrefs.sat || 0));
   // הסתרת הרקע – ערך אחד ליום וללילה (פעם היו שניים: ממשיכים מהערך של המצב הנוכחי)
   if (layerPrefs.dim == null) layerPrefs.dim = (localStorage.getItem('theme') === 'dark' ? layerPrefs.dimNight : layerPrefs.dimDay) ?? 0.55;
 
   function applyLayers() {
     const vis = (on) => (on ? 'visible' : 'none');
-    for (const b of ['sat', 'topo', 'ihm']) map.setLayoutProperty('base-' + b, 'visibility', vis(layerPrefs.base === b));
-    for (const [g, ids] of Object.entries(GROUPS)) {
-      const on = g === 'route' || layerPrefs.overlay !== false; // "הסתרת שכבות" – הכול חוץ מהמסלול
-      for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(on && layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
-    }
+    map.setLayoutProperty('base-sat', 'visibility', vis(layerPrefs.sat > 0));
+    map.setPaintProperty('base-sat', 'raster-opacity', layerPrefs.sat);
+    for (const [g, ids] of Object.entries(GROUPS))
+      for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
     map.setLayoutProperty('dim', 'visibility', vis(dimValue() > 0 && layerPrefs.route && (!!active || !!plan)));
     map.setPaintProperty('dim', 'fill-opacity', dimValue());
-    showDim();
+    showSat();
     try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
   function smoothLevel() { return layerPrefs.smooth ? 2 : 0; }
-  // ---------- מצב "שכבות" בסרגל הכלים: סוג מפה (מתחלף בנגיעה), הסתרת כל השכבות במכה אחת, מפות שמורות ----------
-  const BASES = [['vector', 'מפה'], ['sat', 'תצלום'], ['topo', 'טופו']];
-  function syncLayerBtns() {
-    const base = BASES.find(([b]) => b === layerPrefs.base) || BASES[0];
-    $('lb-base').dataset.base = base[0];
-    $('lb-base').querySelector('.klbl').textContent = base[1];
-    const hidden = layerPrefs.overlay === false;
-    $('lb-overlay').classList.toggle('off', hidden);
-    $('lb-overlay').querySelector('.klbl').textContent = hidden ? 'הצגת שכבות' : 'הסתרת שכבות';
-  }
-  $('lb-base').addEventListener('click', () => {
-    const i = BASES.findIndex(([b]) => b === layerPrefs.base);
-    layerPrefs.base = BASES[(i + 1) % BASES.length][0];
-    if (layerPrefs.base !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);
-    applyLayers(); syncLayerBtns();
-  });
-  // כל השכבות (שבילים, דרכים, נחלים, נקודות, יישובים, אופניים, שמות) – מוצגות או מוסתרות יחד; המסלול נשאר
-  $('lb-overlay').addEventListener('click', () => {
-    layerPrefs.overlay = layerPrefs.overlay === false;
-    applyLayers(); syncLayerBtns();
-  });
-  $('lb-areas').addEventListener('click', () => { renderAreas(); $('areas-dlg').showModal(); });
+  $('btn-areas').addEventListener('click', () => { renderAreas(); $('areas-dlg').showModal(); });
   $('areas-close').addEventListener('click', () => $('areas-dlg').close());
-  syncLayerBtns();
   mapReady.then(applyLayers);
 
   // ---------- מצב לילה ----------
@@ -2285,7 +2262,7 @@
     document.body.classList.toggle('night', night);
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
-    for (const b of ['sat', 'topo', 'ihm']) map.setPaintProperty('base-' + b, 'raster-brightness-max', night ? 0.7 : 1);
+    map.setPaintProperty('base-sat', 'raster-brightness-max', night ? 0.7 : 1);
   }
   // בהיר / כהה: כפתור אחד שמחליף מיד (בלי מצב אוטומטי). נשמר ב-localStorage `theme`
   let isNight = localStorage.getItem('theme') === 'dark';
@@ -2419,26 +2396,22 @@
   });
   $('search-form').addEventListener('submit', (e) => { e.preventDefault(); if ($('search-input').value.trim()) onlineSearch($('search-input').value.trim()); });
 
-  // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה) בשקיפות שבוחרים ----------
-  function dimValue() { return layerPrefs.dim; }
-  function setDim(v) {
-    layerPrefs.dim = v;
-    applyLayers();
-  }
-  // הסליידר האנכי במשטח הכלים: למעלה – בלי הסתרה, למטה – הכי מוסתר
-  const DIM_MAX = 0.9;
-  function showDim() {
-    const f = Math.min(1, dimValue() / DIM_MAX);
-    $('dim-v').style.setProperty('--f', f);
-    $('dim-v').setAttribute('aria-valuenow', dimValue().toFixed(2));
+  // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה). בלי סליידר (הוחלף בתצלום האוויר):
+  // הערך השמור, ופוחת ככל שמעלים את התצלום – כדי שהתצלום לא ייראה דהוי ----------
+  function dimValue() { return layerPrefs.dim * (1 - layerPrefs.sat); }
+  // ---------- תצלום אוויר: סליידר אנכי ליד הכלים – למעלה 0%, למטה 100% ----------
+  function showSat() {
+    $('sat-v').style.setProperty('--f', layerPrefs.sat);
+    $('sat-v').setAttribute('aria-valuenow', Math.round(layerPrefs.sat * 100));
   }
   (() => {
-    const tr = document.querySelector('#dim-v .vs-track');
+    const tr = document.querySelector('#sat-v .vs-track');
     let down = false;
     const at = (e) => {
       const r = tr.getBoundingClientRect();
-      const f = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
-      setDim(Math.round(f * DIM_MAX * 20) / 20);
+      const f = Math.round(Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * 20) / 20;
+      if (f > 0 && layerPrefs.sat === 0 && !navigator.onLine) toast('תצלום אוויר דורש אינטרנט', 3000);
+      if (f !== layerPrefs.sat) { layerPrefs.sat = f; applyLayers(); }
     };
     tr.addEventListener('pointerdown', (e) => { down = true; tr.setPointerCapture(e.pointerId); at(e); });
     tr.addEventListener('pointermove', (e) => down && at(e));
@@ -2465,8 +2438,7 @@
     $('search').classList.toggle('collapsed', m !== 'lib');
     layoutTools();
     if (m !== 'lib') closeSearch();
-    $('dim-v').hidden = !(active || plan); // הסתרת הרקע – רק כשיש מסלול או בתכנון
-    showDim();
+    showSat();
     dockEl.classList.toggle('open', dock.open);
     if (m === 'route') renderRouteInfo();
     const ls = document.querySelector('#dock section[data-mode="lib"]');
@@ -2728,16 +2700,14 @@
     const STAGGER = 30; // מ"ש בין כפתור לכפתור (בתוך הפונקציה – היא נקראת גם לפני שהקוד כאן רץ)
     const col = document.querySelector('#controls .kcol');
     const ctl = col.closest('#controls');
-    const open = ctl.classList.contains('open'), lyr = ctl.classList.contains('layers');
-    // בשכבות: "שכבות" נשאר למעלה, ושאר הכלים מתחלפים במקום באפשרויות שלו
-    const all = [...col.children].filter((b) => !b.hidden && (lyr ? b.classList.contains('lyr') || b.id === 'btn-layers' : !b.classList.contains('lyr')));
-    for (const b of col.children) if (!all.includes(b) && b.classList.contains('on')) {
+    const open = ctl.classList.contains('open');
+    const all = [...col.children].filter((b) => !b.hidden);
+    for (const b of col.children) if (b.hidden && b.classList.contains('on')) {
       b.style.setProperty('--d', '0ms');
       b.classList.remove('on');
       (layoutTools.shown || new Set()).delete(b);
     }
     const show = open ? all : all.filter(pinned);
-    $('btn-layers').classList.toggle('pressed', open && lyr);
     const now = new Set(show);
     let n = 0, k = 0;
     for (const b of all) {
@@ -2751,20 +2721,15 @@
     layoutTools.shown = now; // (מאפיין ולא let – נקרא גם מ-renderDock לפני שהשורה הזו רצה)
     const h = all.length * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
     col.style.height = Math.max(0, show.length * 56 - 10) + 'px';
-    $('dim-v').style.height = h + 'px';
-    $('dim-v').style.setProperty('--draw', (all.length - 1) * STAGGER + 120 + 'ms'); // הקו יורד באותו קצב שהכפתורים מופיעים
+    $('sat-v').style.height = h + 'px';
+    $('sat-v').style.setProperty('--draw', (all.length - 1) * STAGGER + 120 + 'ms'); // הקו יורד באותו קצב שהכפתורים מופיעים
   }
-  // מצבים: סגור / כלים / שכבות ("שכבות" נהיה לחוץ, והאפשרויות שלו בשורה משמאלו; נגיעה נוספת בו – סוגרת אותן)
-  function setKnife(on) { setKnifeMode(on ? 'tools' : 'closed'); }
-  function setKnifeMode(m) {
-    knifeOpen = m !== 'closed';
+  function setKnife(on) {
+    knifeOpen = on;
     knife.classList.toggle('open', knifeOpen);
-    knife.classList.toggle('layers', m === 'layers');
-    if (m === 'layers') syncLayerBtns();
     layoutTools();
     $('btn-menu').setAttribute('aria-expanded', knifeOpen);
   }
-  $('btn-layers').addEventListener('click', () => setKnifeMode(knife.classList.contains('layers') ? 'tools' : 'layers'));
   $('btn-menu').addEventListener('click', () => setKnife(!knifeOpen));
   $('search-input').addEventListener('focus', () => setKnife(false)); // תוצאות החיפוש נפתחות מתחת – בלי עיגולים מעליהן
   // מצב ה-GPS, המעקב והסיבוב משתנים בכמה מקומות – בדיקה זולה מעדכנת את העיגולים ה"נעוצים"

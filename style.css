@@ -206,14 +206,11 @@ body.night .scrub-head { color: #ffab40; }
 /* העברה לתיקייה */
 
 .needle { transition: transform .15s linear; }
-#dim-v .vs-ico { width: 20px; height: 20px; margin: 6px 0 4px; flex: none; }
-#dim-v .vs-ico .half { fill: #333; stroke: none; }
 .vs-track { position: relative; flex: 1; width: 26px; margin: 8px 0 14px; touch-action: none; cursor: pointer; }
 .vs-track::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; translate: -50% 0; border-radius: 2px; background: #ddd; }
 .vs-fill { position: absolute; left: 50%; top: 0; width: 4px; translate: -50% 0; height: calc(var(--f) * 100%); border-radius: 2px; background: var(--green); }
 .vs-thumb { position: absolute; left: 50%; top: calc(var(--f) * 100%); width: 18px; height: 18px; translate: -50% -50%; border-radius: 50%;
   background: var(--green); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
-body.night #dim-v .vs-ico .half { fill: #ddd; }
 body.night .vs-track::before { background: #444; }
 body.night .vs-fill, body.night .vs-thumb { background: #4caf50; }
 body.night .vs-thumb { border-color: #23282e; }
@@ -446,21 +443,17 @@ body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.n
 .kcol > button { position: absolute; right: 0; top: calc(var(--slot, 0) * (var(--kb) + 10px)); transform: scale(0); opacity: 0;
   transition: transform .18s cubic-bezier(.3,1.4,.5,1) var(--d, 0ms), opacity .12s var(--d, 0ms), top .25s cubic-bezier(.22,1,.36,1); }
 .kcol > button.on { transform: scale(1); opacity: 1; pointer-events: auto; }
-/* הסתרת הרקע (במסלול / בתכנון): בלי רקע, ישר על המפה. הקו מצטייר מלמעלה למטה; האייקון והידית גדלים במקומם */
-#dim-v { width: 30px; display: flex; flex-direction: column; align-items: center; --f: .6; }
-#controls.open:not(.layers) #dim-v { pointer-events: auto; }
-#dim-v .vs-ico { width: 22px; height: 22px; margin: 12px 0 2px; flex: none; transform: scale(0); transition: transform .18s cubic-bezier(.3,1.4,.5,1); }
-#controls.open:not(.layers) #dim-v .vs-ico { transform: scale(1); transition-delay: 0s; }
-#dim-v .vs-track { clip-path: inset(0 0 100% 0); transition: clip-path .12s linear; }
+/* תצלום אוויר: סליידר בלי רקע ובלי אייקון, ישר על המפה. הקו מצטייר מלמעלה למטה; הידית גדלה במקומה */
+#sat-v { width: 30px; display: flex; flex-direction: column; align-items: center; --f: .6; }
+#controls.open #sat-v { pointer-events: auto; }
+#sat-v .vs-track { clip-path: inset(0 0 100% 0); transition: clip-path .12s linear; }
 /* הקו יורד יחד עם הכפתורים: מגיע לכל גובה כשהכפתור שבגובה הזה גדל (--draw מחושב לפי מספר הכפתורים) */
-#controls.open:not(.layers) #dim-v .vs-track { clip-path: inset(-12px -12px -12px -12px); transition-duration: var(--draw, .15s); }
-#dim-v .vs-thumb { scale: 0; transition: scale .16s cubic-bezier(.3,1.4,.5,1); }
-#controls.open:not(.layers) #dim-v .vs-thumb { scale: 1; transition-delay: calc(var(--draw, .15s) * var(--f)); }
+#controls.open #sat-v .vs-track { clip-path: inset(-12px -12px -12px -12px); transition-duration: var(--draw, .15s); }
+#sat-v .vs-thumb { scale: 0; transition: scale .16s cubic-bezier(.3,1.4,.5,1); }
+#controls.open #sat-v .vs-thumb { scale: 1; transition-delay: calc(var(--draw, .15s) * var(--f)); }
 /* על המפה: קו כהה עם הילה לבהירה ביום, קו בהיר עם הילה כהה בלילה */
-#dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); }
-#dim-v .vs-track::before { background: #5f5f5f; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
-body.night #dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #000) drop-shadow(0 0 1px #000); }
-body.night #dim-v .vs-track::before { background: #6f777f; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85); }
+#sat-v .vs-track::before { background: #5f5f5f; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
+body.night #sat-v .vs-track::before { background: #6f777f; box-shadow: 0 0 0 1.5px rgba(0,0,0,.85); }
 body.night #controls button { background: #565f68; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 body.night #controls .kmenu { background: transparent; box-shadow: none; }
 body.night .kmenu i { background: #ddd; }
@@ -469,20 +462,6 @@ body.night .kmenu i { background: #ddd; }
 dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-cancel, #areas-dlg .ls-open, .back, .stop, .dl-here,
 .seg, .dt-modes, .tgrp { border-radius: 999px; }
 
-/* ===== מצב שכבות: עיגולים עם תווית משמאל; כבוי – דהוי; ה-☰ הופך לחץ חזרה (→) ===== */
-.kcol > button.lyr { overflow: visible; }
-.klbl { position: absolute; right: calc(100% + 8px); top: 50%; translate: 0 -50%; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
-  background: #fff; color: #333; font-size: 13px; font-weight: 600; box-shadow: 0 1px 6px rgba(0,0,0,.2); pointer-events: none; }
-.lyr.off svg { opacity: .35; }
-/* "הסתרת שכבות": השכבות מוסתרות – האייקון דהוי וקו אלכסוני מקצה לקצה של העיגול (כמו תמרור "אין כניסה"), לא כחול */
-#lb-overlay.off::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 2px; margin-top: -1px;
-  border-radius: 1px; background: #333; rotate: 45deg; pointer-events: none; }
-body.night #lb-overlay.off::after { background: #ddd; }
-.lyr.off .klbl { color: #999; }
-#lb-base svg { display: none; }
-#lb-base[data-base="vector"] .b-vector, #lb-base[data-base="sat"] .b-sat, #lb-base[data-base="topo"] .b-topo { display: block; }
-body.night .klbl { background: #565f68; color: #f0f0f0; }
-body.night .lyr.off .klbl { color: #b0b5ba; }
 /* פיתוח (זמני): נקודה קטנה משמאל למעלה */
 #dev-dot { position: fixed; top: calc(8px + var(--safe-t) + var(--kb) + 8px); left: 12px; z-index: 11; width: 12px; height: 12px; padding: 0; border: 0;
   border-radius: 50%; background: rgba(120,120,120,.35); }
