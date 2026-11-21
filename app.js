@@ -89,6 +89,8 @@
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#e6e1d1' } },
+      // תצלום אוויר מתחת למפה – במקום הרקע (חצי העליון של הסליידר)
+      { id: 'base-sat', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -162,9 +164,9 @@
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
           'text-size': ['match', ['get', 't'], ['city', 'town'], 17, 15] },
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
+      // תצלום אוויר מעל כל המפה (חצי התחתון של הסליידר); המסלול, הנקודות והמיקום – מעליו
+      { id: 'sat-top', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       // מסלול פעיל: המפה מתחתיו דוהה, והמסלול מצויר בצבעי השבילים עם מסגרת לבנה (בלי קו מתאר כהה)
-      // תצלום אוויר: מעל כל המפה (שבילים, דרכים, שמות), בשקיפות שבסליידר; המסלול, הנקודות והמיקום – מעליו
-      { id: 'base-sat', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       { id: 'dim', type: 'fill', source: 'dim', layout: { visibility: 'none' }, paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } },
       { id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -2221,8 +2223,12 @@
 
   function applyLayers() {
     const vis = (on) => (on ? 'visible' : 'none');
-    map.setLayoutProperty('base-sat', 'visibility', vis(layerPrefs.sat > 0));
-    map.setPaintProperty('base-sat', 'raster-opacity', layerPrefs.sat);
+    // סליידר אחד, שלושה מצבים: 0 – מפה; 0.5 – תצלום מלא מתחת למפה; 1 – רק תצלום (מעל המפה)
+    const under = Math.min(1, layerPrefs.sat * 2), over = Math.max(0, layerPrefs.sat * 2 - 1);
+    map.setLayoutProperty('base-sat', 'visibility', vis(under > 0));
+    map.setPaintProperty('base-sat', 'raster-opacity', under);
+    map.setLayoutProperty('sat-top', 'visibility', vis(over > 0));
+    map.setPaintProperty('sat-top', 'raster-opacity', over);
     for (const [g, ids] of Object.entries(GROUPS))
       for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
     map.setLayoutProperty('dim', 'visibility', vis(dimValue() > 0 && layerPrefs.route && (!!active || !!plan)));
@@ -2274,7 +2280,7 @@
     document.body.classList.toggle('night', night);
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
-    map.setPaintProperty('base-sat', 'raster-brightness-max', night ? 0.7 : 1);
+    for (const id of ['base-sat', 'sat-top']) map.setPaintProperty(id, 'raster-brightness-max', night ? 0.7 : 1);
   }
   // בהיר / כהה: כפתור אחד שמחליף מיד (בלי מצב אוטומטי). נשמר ב-localStorage `theme`
   let isNight = localStorage.getItem('theme') === 'dark';
@@ -2410,7 +2416,7 @@
 
   // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה). בלי סליידר (הוחלף בתצלום האוויר):
   // הערך השמור, ופוחת ככל שמעלים את התצלום – כדי שהתצלום לא ייראה דהוי ----------
-  function dimValue() { return layerPrefs.dim * (1 - layerPrefs.sat); }
+  function dimValue() { return layerPrefs.dim * (1 - Math.min(1, layerPrefs.sat * 2)); }
   // ---------- תצלום אוויר: סליידר אנכי ליד הכלים – למעלה 0%, למטה 100% ----------
   function showSat() {
     $('sat-v').style.setProperty('--f', layerPrefs.sat);
@@ -2421,7 +2427,10 @@
     let down = false;
     const at = (e) => {
       const r = tr.getBoundingClientRect();
-      const f = Math.round(Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * 20) / 20;
+      let f = Math.round(Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * 100) / 100;
+      // סנאפ עדין באמצע (תצלום מלא מתחת למפה) ובקצוות; רטט קצר כשנתפס באמצע
+      if (Math.abs(f - 0.5) < 0.05) f = 0.5; else if (f < 0.03) f = 0; else if (f > 0.97) f = 1;
+      if (f === 0.5 && layerPrefs.sat !== 0.5) navigator.vibrate?.(8);
       if (f > 0 && layerPrefs.sat === 0 && !navigator.onLine) toast('תצלום אוויר דורש אינטרנט', 3000);
       if (f !== layerPrefs.sat) { layerPrefs.sat = f; applyLayers(); }
     };
