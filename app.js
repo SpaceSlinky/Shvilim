@@ -703,8 +703,17 @@
     return out;
   }
   function routeFeatures(segs, wpts) {
-    const f = routePieces(segs).map((x) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: x.coords },
-      properties: x.props }));
+    const f = [];
+    for (const x of routePieces(segs)) {
+      let line = [];
+      const flush = () => { if (line.length > 1) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: line }, properties: x.props }); line = []; };
+      for (let j = 1; j < x.coords.length; j++) {
+        if (x.dup?.[j]) { flush(); continue; } // מעבר חוזר באותה דרך – מצויר פעם אחת
+        if (!line.length) line.push(x.coords[j - 1]);
+        line.push(x.coords[j]);
+      }
+      flush();
+    }
     const all = segs.flatMap((sg) => sg.coords);
     if (all.length > 1) {
       f.push({ type: 'Feature', geometry: { type: 'Point', coordinates: all[all.length - 1] }, properties: { kind: 'end' } });
@@ -1056,8 +1065,49 @@
       for (let j = 1; j < x.coords.length; j++) cum.push((acc += Geo.haversine(x.coords[j - 1], x.coords[j])));
       pieces.push({ coords: x.coords, props: x.props, cum });
     }
+    markRepeats(pieces);
     pieceCache = { segs, pieces };
     return pieces;
+  }
+  // דרך שהמסלול עובר בה פעמיים (הלוך ושוב, או לולאה שחוזרת) – מצוירת פעם אחת: קטע שכולו (התחלה, אמצע וסוף)
+  // עד 5 מ' מקטע מוקדם יותר במסלול, ובאותו כיוון או הפוך – מסומן dup[j] ולא מצויר (גם לא העמעום / מה שהלכת עליו).
+  // אחרת שני המעברים נראים כשני קווים צמודים (גאומטריה מעט שונה / הזזה לצד אחר)
+  function markRepeats(pieces) {
+    const D = 5, ALONG = 15, CELL = 10;
+    const lat0 = pieces[0]?.coords[0][1] ?? 32.7, kx = 111320 * Math.cos((lat0 * Math.PI) / 180), ky = 110540;
+    const grid = new Map();
+    const P = (c) => [c[0] * kx, c[1] * ky];
+    const distSeg = (p, s) => {
+      const dx = s.b[0] - s.a[0], dy = s.b[1] - s.a[1], L2 = dx * dx + dy * dy;
+      const t = L2 ? Math.max(0, Math.min(1, ((p[0] - s.a[0]) * dx + (p[1] - s.a[1]) * dy) / L2)) : 0;
+      return Math.hypot(s.a[0] + t * dx - p[0], s.a[1] + t * dy - p[1]);
+    };
+    const near = (p, dir, along) => {
+      const cx = Math.floor(p[0] / CELL), cy = Math.floor(p[1] / CELL);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const s of grid.get(cx + i + ',' + (cy + j)) || []) {
+        if (along - s.along < ALONG) continue;
+        if (Math.abs(dir[0] * s.dir[0] + dir[1] * s.dir[1]) < 0.85) continue; // לא מקביל – חצייה, לא חזרה
+        if (distSeg(p, s) < D) return true;
+      }
+      return false;
+    };
+    for (const pc of pieces) {
+      pc.dup = [];
+      for (let j = 1; j < pc.coords.length; j++) {
+        const a = P(pc.coords[j - 1]), b = P(pc.coords[j]), len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 0.01) continue;
+        const dir = [(b[0] - a[0]) / len, (b[1] - a[1]) / len], along = (pc.cum[j - 1] + pc.cum[j]) / 2;
+        const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        if (near(a, dir, along) && near(m, dir, along) && near(b, dir, along)) pc.dup[j] = true;
+        const s = { a, b, dir, along };
+        for (let x = Math.floor(Math.min(a[0], b[0]) / CELL); x <= Math.floor(Math.max(a[0], b[0]) / CELL); x++)
+          for (let y = Math.floor(Math.min(a[1], b[1]) / CELL); y <= Math.floor(Math.max(a[1], b[1]) / CELL); y++) {
+            const kk = x + ',' + y;
+            if (!grid.has(kk)) grid.set(kk, []);
+            grid.get(kk).push(s);
+          }
+      }
+    }
   }
   function overlayFeatures(segs, from, to, k) {
     const out = [];
@@ -1065,13 +1115,15 @@
       const { coords: c, cum } = pc;
       if (cum[cum.length - 1] <= from || cum[0] >= to) continue;
       const at = (j, x) => { const d = cum[j] - cum[j - 1], t = d ? (x - cum[j - 1]) / d : 0; return [c[j - 1][0] + (c[j][0] - c[j - 1][0]) * t, c[j - 1][1] + (c[j][1] - c[j - 1][1]) * t]; };
-      const line = [];
+      let line = [];
+      const flush = () => { if (line.length > 1) out.push({ type: 'Feature', properties: { ...pc.props, k }, geometry: { type: 'LineString', coordinates: line } }); line = []; };
       for (let j = 1; j < c.length; j++) {
         if (cum[j] <= from || cum[j - 1] >= to) continue;
+        if (k !== 'dot' && pc.dup?.[j]) { flush(); continue; } // מעבר חוזר – לא מצויר, גם לא מעליו
         if (!line.length) line.push(cum[j - 1] >= from ? c[j - 1] : at(j, from));
         line.push(cum[j] <= to ? c[j] : at(j, to));
       }
-      if (line.length > 1) out.push({ type: 'Feature', properties: { ...pc.props, k }, geometry: { type: 'LineString', coordinates: line } });
+      flush();
     }
     return out;
   }
