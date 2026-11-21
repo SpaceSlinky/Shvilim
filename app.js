@@ -353,6 +353,7 @@
   async function setMapData(fc) {
     const trailGeoms = markShared(fc);
     buildSharedIdx(fc);
+    pieceCache = null; // הקטעים המשותפים השתנו
     mapFC = fc;
     searchIndex = null;
     const lvl = smoothLevel();
@@ -602,7 +603,7 @@
     return out;
   }
   function routeFeatures(segs, wpts) {
-    const f = segs.flatMap(splitShared).map((x) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: x.coords }, properties: x.props }));
+    const f = routePieces(segs).map((x) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: x.coords }, properties: x.props }));
     const all = segs.flatMap((sg) => sg.coords);
     if (all.length > 1) {
       f.push({ type: 'Feature', geometry: { type: 'Point', coordinates: all[all.length - 1] }, properties: { kind: 'end' } });
@@ -783,18 +784,20 @@
     const band = (x0, x1, fn) => { g.save(); g.beginPath(); g.rect(x0, 0, x1 - x0, H); g.clip(); fn(); g.restore(); };
     const xAt = marks.at != null ? X(marks.at) : X(0);
     g.lineWidth = 2;
-    // השטח – אפור מלא (לא שקוף), הקו העליון – לבן
-    const dimArea = () => { area(); g.fillStyle = night ? '#30363c' : '#e1e4e2'; g.fill(); line(); g.strokeStyle = night ? 'rgba(255,255,255,.35)' : '#ffffff'; g.stroke(); };
+    // מה שנשאר: ירוק
     band(xAt, W, () => {
-      area(); g.fillStyle = night ? '#4b545c' : '#b9c0bb'; g.fill();
-      line(); g.strokeStyle = '#ffffff'; g.stroke();
+      area(); g.fillStyle = night ? 'rgba(76,175,80,.35)' : 'rgba(46,125,79,.22)'; g.fill();
+      line(); g.strokeStyle = night ? '#81c784' : '#2e7d4f'; g.stroke();
     });
-    // מה שעברת: מעומעם
-    if (marks.at != null) band(0, xAt, dimArea);
-    // הקטע עד האצבע (או בין שתי אצבעות): מעומעם, כמו על המפה
-    const hot = night ? '#ffffff' : '#3c4247';
+    // מה שעברת: דהוי
+    if (marks.at != null) band(0, xAt, () => {
+      area(); g.fillStyle = night ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)'; g.fill();
+      line(); g.strokeStyle = night ? 'rgba(255,255,255,.3)' : 'rgba(0,0,0,.25)'; g.stroke();
+    });
+    // הקטע המסומן (עד האצבע / בין שתי אצבעות): צבע מלא – אפור בהיר בכהה, אפור כהה בבהיר
+    const hot = night ? '#d5d9dc' : '#59626a';
     const base = marks.from != null ? marks.from : marks.at != null && marks.touch != null && marks.at <= marks.touch ? marks.at : 0;
-    if (marks.touch != null) band(X(base), X(marks.touch), dimArea);
+    if (marks.touch != null) band(X(base), X(marks.touch), () => { area(); g.fillStyle = hot; g.fill(); });
     const dot = (d, color) => {
       g.fillStyle = color; g.strokeStyle = night ? '#1d2227' : '#fff'; g.lineWidth = 2;
       g.beginPath(); g.arc(X(d), Y(eleAt(p, clampD(d))), 5, 0, 7); g.fill(); g.stroke();
@@ -867,11 +870,46 @@
   let scrub = null; // האצבע על הגרף של המסלול הפעיל: { b } – נקודה, { a, b } – שתי אצבעות (מרחקים בגרף)
   // על המפה: הקטע a→b של המסלול והנקודה (או שתי הנקודות)
   // שכבה מעל קטע של המסלול (from→to, מרחקים על המסלול), מחולקת כמו המסלול עצמו – כדי לזוז הצידה יחד איתו בקטעים משותפים
-  function overlayFeatures(segs, from, to, k) {
-    return cutSegs(segs, from, to).flatMap(splitShared)
-      .map((x) => ({ type: 'Feature', properties: { ...x.props, k }, geometry: { type: 'LineString', coordinates: x.coords } }));
+  // החלוקה של המסלול (כולל ההזזה בקטעים משותפים) מחושבת פעם אחת לכל מסלול ונשמרת עם מרחקים מצטברים –
+  // בזמן גרירה על הגרף רק חותכים ממנה את הקטע (בלי לחפש שוב קטעים משותפים בכל תזוזה)
+  let pieceCache = null;
+  function routePieces(segs) {
+    if (pieceCache?.segs === segs) return pieceCache.pieces;
+    const pieces = [];
+    let acc = 0;
+    for (const sg of segs) for (const x of splitShared(sg)) {
+      const cum = [acc];
+      for (let j = 1; j < x.coords.length; j++) cum.push((acc += Geo.haversine(x.coords[j - 1], x.coords[j])));
+      pieces.push({ coords: x.coords, props: x.props, cum });
+    }
+    pieceCache = { segs, pieces };
+    return pieces;
   }
-  function setScrubMap(segs, r, p, a, b, both) {
+  function overlayFeatures(segs, from, to, k) {
+    const out = [];
+    for (const pc of routePieces(segs)) {
+      const { coords: c, cum } = pc;
+      if (cum[cum.length - 1] <= from || cum[0] >= to) continue;
+      const at = (j, x) => { const d = cum[j] - cum[j - 1], t = d ? (x - cum[j - 1]) / d : 0; return [c[j - 1][0] + (c[j][0] - c[j - 1][0]) * t, c[j - 1][1] + (c[j][1] - c[j - 1][1]) * t]; };
+      const line = [];
+      for (let j = 1; j < c.length; j++) {
+        if (cum[j] <= from || cum[j - 1] >= to) continue;
+        if (!line.length) line.push(cum[j - 1] >= from ? c[j - 1] : at(j, from));
+        line.push(cum[j] <= to ? c[j] : at(j, to));
+      }
+      if (line.length > 1) out.push({ type: 'Feature', properties: { ...pc.props, k }, geometry: { type: 'LineString', coordinates: line } });
+    }
+    return out;
+  }
+  // לכל היותר פעם אחת בפריים (גרירה מהירה שולחת הרבה אירועים)
+  let scrubPending = null, scrubRaf = 0;
+  function setScrubMap(...args) {
+    scrubPending = args;
+    if (!args[0]) { cancelAnimationFrame(scrubRaf); scrubRaf = 0; return drawScrubMap(); }
+    if (!scrubRaf) scrubRaf = requestAnimationFrame(() => { scrubRaf = 0; drawScrubMap(); });
+  }
+  function drawScrubMap() {
+    const [segs, r, p, a, b, both] = scrubPending || [];
     if (!segs || !r) return map.getSource('scrub')?.setData(empty);
     const ra = profToRoute(p, r, a), rb = profToRoute(p, r, b);
     const feats = rb - ra > 1 ? overlayFeatures(segs, ra, rb, 'dim') : [];
