@@ -80,10 +80,9 @@
       wpts: { type: 'geojson', data: empty },
       acc: { type: 'geojson', data: empty },
       // רקעים אונליין (דורשים אינטרנט)
-      // תצלום אוויר: ב-19 יש אזורים (גם בכרמל) שבהם Esri מחזיר תמונת "Map data not yet available" – עוצרים ב-18,
-      // ומעבר לזה המפה מגדילה את הרמה האחרונה (מפוקסל, אבל אמיתי)
-      sat: { type: 'raster', tileSize: 256, maxzoom: 18, attribution: 'Imagery © Esri',
-        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'] },
+      // תצלום אוויר: דרך esrifb:// – איפה שיש רזולוציה גבוהה מציגים אותה; איפה ש-Esri מחזיר תמונת
+      // "Map data not yet available" – מגדילים את החלק המתאים מהרמה הקודמת שיש בה צילום (מפוקסל, אבל אמיתי)
+      sat: { type: 'raster', tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri', tiles: ['esrifb://{z}/{y}/{x}'] },
       topo: { type: 'raster', tileSize: 256, maxzoom: 17, attribution: '© OpenTopoMap (CC-BY-SA)',
         tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png'] },
       ihm: { type: 'raster', tileSize: 256, maxzoom: 16, attribution: '© Israel Hiking Map',
@@ -213,6 +212,36 @@
 
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('view')); } catch { /* ignore */ }
+
+  // ---------- תצלום אוויר: תמונת "אין נתונים" של Esri → הרמה הקודמת ----------
+  const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/';
+  async function esriImage(z, y, x, signal, depth = 0) {
+    const res = await fetch(`${ESRI}${z}/${y}/${x}`, { signal });
+    if (!res.ok) throw new Error('esri ' + res.status);
+    const blob = await res.blob();
+    const bmp = await createImageBitmap(blob);
+    // התמונה של Esri כשאין צילום: רקע אפור אחיד (204,204,204) עם כיתוב בהיר – בודקים דגימה של פיקסלים
+    const c = new OffscreenCanvas(32, 32), g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(bmp, 0, 0, 32, 32);
+    const d = g.getImageData(0, 0, 32, 32).data;
+    let gray = 0;
+    for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 204) < 6 && Math.abs(d[i + 1] - 204) < 6 && Math.abs(d[i + 2] - 204) < 6) gray++;
+    const missing = gray > 0.6 * 32 * 32;
+    if (!missing || z <= 10 || depth >= 4) return { bmp, blob };
+    // הרמה הקודמת: הרבע המתאים, מוגדל לגודל אריח
+    const up = await esriImage(z - 1, y >> 1, x >> 1, signal, depth + 1);
+    const out = new OffscreenCanvas(256, 256), og = out.getContext('2d');
+    og.imageSmoothingEnabled = true;
+    const sw = up.bmp.width / 2, sh = up.bmp.height / 2;
+    og.drawImage(up.bmp, (x & 1) * sw, (y & 1) * sh, sw, sh, 0, 0, 256, 256);
+    const ob = await out.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+    return { bmp: await createImageBitmap(ob), blob: ob };
+  }
+  maplibregl.addProtocol?.('esrifb', async (params, ac) => {
+    const [z, y, x] = params.url.replace('esrifb://', '').split('/').map(Number);
+    const { blob } = await esriImage(z, y, x, ac?.signal);
+    return { data: await blob.arrayBuffer() };
+  });
 
   const map = new maplibregl.Map({
     container: 'map',
