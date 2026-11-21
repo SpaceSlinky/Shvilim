@@ -594,8 +594,25 @@
     // שביל מסומן בלי דרך מתחתיו
     if (colors.length && !gotSquares) rows.unshift(`<div class="info-row">${trailName ? `<b>${esc(trailName)}</b> ` : ''}שביל${squares}</div>`);
     if (!rows.length) return;
+    // נקודת עניין / נחל עם שם – קישור לתמונות שאנשים צילמו (גוגל תמונות), עם היישוב הקרוב כדי לא לקבל מקום אחר באותו שם
+    const named = feats.find((f) => (f.properties.k === 'poi' || f.properties.k === 'water') && f.properties.n);
+    if (named && navigator.onLine) {
+      const n = named.properties.n, town = townNear(named.geometry.type === 'Point' ? named.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat]);
+      const q = town && !n.includes(town) ? `${n} ${town}` : n;
+      rows.push(`<a class="info-photos" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}" target="_blank" rel="noopener">📷 תמונות</a>`);
+    }
     new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
   });
+  // היישוב הקרוב (עד 8 ק"מ) – להקשר בחיפוש התמונות
+  function townNear(p) {
+    let best = null, bd = 8000;
+    for (const f of mapFC?.features || []) {
+      if (f.properties.k !== 'place' || !f.properties.n || !(f.properties.t in PLACE_RANK) || PLACE_RANK[f.properties.t] > 4) continue;
+      const d = Geo.haversine(p, f.geometry.coordinates);
+      if (d < bd) { bd = d; best = f.properties.n; }
+    }
+    return best;
+  }
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   // ---------- מסלול פעיל (GPX או מסלול מתוכנן) ----------
