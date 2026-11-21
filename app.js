@@ -575,9 +575,10 @@
     const named = navigator.onLine && feats.find((f) => (f.properties.k === 'poi' || f.properties.k === 'water') && f.properties.n);
     let cam = '';
     if (named) {
-      const n = named.properties.n, town = townNear(named.geometry.type === 'Point' ? named.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat]);
-      const q = town && !n.includes(town) ? `${n} ${town}` : n;
-      cam = `<a class="info-photos" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}" target="_blank" rel="noopener" aria-label="תמונות">${CAM_SVG}</a>`;
+      // גוגל מפות: חיפוש השם בלבד, ממוקד במקום שלו – מוצא את המקום עצמו (ולא יישוב בשם דומה) ופותח את הכרטיס עם התמונות.
+      // (גוגל תמונות עם "השם + היישוב הקרוב" – בוטל: היישוב ניצח, למשל "צנירי הכרמל בית אורן" הביא את בית אורן)
+      const [lon, lat] = named.geometry.type === 'Point' ? named.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
+      cam = `<a class="info-photos" href="https://www.google.com/maps/search/${encodeURIComponent(named.properties.n)}/@${lat.toFixed(6)},${lon.toFixed(6)},17z" target="_blank" rel="noopener" aria-label="תמונות">${CAM_SVG}</a>`;
     }
     const seen = new Set();
     const rows = [];
@@ -607,16 +608,6 @@
     new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
   });
   const CAM_SVG = '<svg viewBox="0 0 24 24"><path d="M4 8h3.5l1.5-2.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
-  // היישוב הקרוב (עד 8 ק"מ) – להקשר בחיפוש התמונות
-  function townNear(p) {
-    let best = null, bd = 8000;
-    for (const f of mapFC?.features || []) {
-      if (f.properties.k !== 'place' || !f.properties.n || !(f.properties.t in PLACE_RANK) || PLACE_RANK[f.properties.t] > 4) continue;
-      const d = Geo.haversine(p, f.geometry.coordinates);
-      if (d < bd) { bd = d; best = f.properties.n; }
-    }
-    return best;
-  }
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   // ---------- מסלול פעיל (GPX או מסלול מתוכנן) ----------
