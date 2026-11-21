@@ -776,7 +776,60 @@
 
   // ---------- נתוני מסלול: אורך, עלייה/ירידה, זמן וגרף גובה ----------
   const fmtTime = (min) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h}:${String(m).padStart(2, '0')} ש'` : `${m} דק'`; };
-  const estTime = (lenM, gain, bike) => (bike ? (lenM / 1000) * 5 + (gain / 100) * 6 : (lenM / 1000) * 15 + (gain / 100) * 10);
+  const estTime = (lenM, gain, bike) => (bike ? (lenM / 1000) * 5 + (gain / 100) * 6 : (lenM / 1000) * 15 + (gain / 100) * 10); // גיבוי, כשאין גובה
+
+  // ---------- הערכת זמן: לכל קטע של 15 מ' – מהירות לפי השיפוע (טובלר), × תוואי × קצב × כיול אישי ----------
+  // טובלר: 6·e^(−3.5·|שיפוע+0.05|) קמ"ש – ירידה קלה הכי מהירה (~5), עלייה וגם ירידה תלולה מאטות.
+  const PACES = [['normal', 'רגיל', 1], ['fast', 'מהיר', 1.15], ['kids', 'עם ילדים', 0.7]];
+  let pace = localStorage.getItem('pace') || 'normal';
+  const paceRow = () => PACES.find((x) => x[0] === pace) || PACES[0];
+  const paceCal = (() => { try { return JSON.parse(localStorage.getItem('paceCal')) || {}; } catch { return {}; } })(); // {walk:{f,n}, bike:{f,n}}
+  const calOf = (bike) => paceCal[bike ? 'bike' : 'walk'] || { f: 1, n: 0 };
+  const TERRAIN = { walk: { road: 1.05, track: 1, path: 0.9, steps: 0.6, free: 0.6 }, bike: { road: 1.3, track: 1, path: 0.8, steps: 0.15, free: 0.5 } };
+  const terrClass = (h) => (!h ? 'path' : h === 'free' ? 'free' : h === 'steps' ? 'steps' : h === 'track' ? 'track'
+    : ['path', 'footway', 'bridleway', 'cycleway'].includes(h) ? 'path' : 'road');
+  const terrCache = new WeakMap();
+  function terrainOf(segs) { // [{to: מרחק מצטבר, cls}] לפי סוג הדרך של כל קטע
+    if (!segs?.length) return null;
+    if (terrCache.has(segs)) return terrCache.get(segs);
+    const out = [];
+    let acc = 0;
+    for (const sg of segs) {
+      for (let j = 1; j < sg.coords.length; j++) acc += Geo.haversine(sg.coords[j - 1], sg.coords[j]);
+      out.push({ to: acc, cls: terrClass(sg.h) });
+    }
+    terrCache.set(segs, out);
+    return out;
+  }
+  function speedAt(sl, cls, bike) { // קמ"ש
+    if (bike) return Math.max(3, sl >= 0 ? 14 * Math.exp(-12 * sl) : Math.min(25, 14 * (1 - 8 * sl))) * TERRAIN.bike[cls];
+    return 6 * Math.exp(-3.5 * Math.abs(sl + 0.05)) * TERRAIN.walk[cls];
+  }
+  // דקות תנועה (בלי עצירות) בין from ל-to (מרחקים בגרף). raw – בלי קצב וכיול (לכיול עצמו)
+  function timeOf(p, from, to, segs, bike, raw) {
+    if (!p) return null;
+    const terr = terrainOf(segs), scale = terr ? terr[terr.length - 1].to / (p.total || 1) : 1;
+    let t = 0, ti = 0;
+    for (let i = 1; i < p.dist.length; i++) {
+      const a = p.dist[i - 1], b = p.dist[i];
+      if (b <= from || b === a) continue;
+      if (a >= to) break;
+      const dx = Math.min(b, to) - Math.max(a, from);
+      const sl = Math.max(-0.5, Math.min(0.5, (p.ele[i] - p.ele[i - 1]) / (b - a)));
+      let cls = 'path';
+      if (terr) { const al = a * scale; while (ti < terr.length - 1 && terr[ti].to < al) ti++; cls = terr[ti].cls; }
+      t += (dx / 1000 / speedAt(sl, cls, bike)) * 60;
+    }
+    return raw ? t : t / (paceRow()[2] * calOf(bike).f);
+  }
+  // הכפתור מתחת לזמן: הקצב הנוכחי; נגיעה מחליפה רגיל → מהיר → עם ילדים
+  function paceLabel(bike) { return paceRow()[1] + (calOf(bike).n ? ' · מותאם לך' : '') + ' ⌄'; }
+  function cyclePace() {
+    pace = PACES[(PACES.indexOf(paceRow()) + 1) % PACES.length][0];
+    try { localStorage.setItem('pace', pace); } catch { /* ignore */ }
+    renderRouteInfo();
+    if (plan) planTime();
+  }
 
   function profileStats(p, from = 0, to = Infinity) {
     if (!p) return null;
@@ -920,10 +973,10 @@
   }
 
   // מה יש בין נקודה אחת לשנייה לאורך המסלול
-  function legInfo(p, from, to, bike) {
+  function legInfo(p, from, to, bike, segs) {
     const st = profileStats(p, from, to);
     const len = to - from;
-    return { len, ele: eleAt(p, to), gain: st.gain, loss: st.loss, time: estTime(len, st.gain, bike) };
+    return { len, ele: eleAt(p, to), gain: st.gain, loss: st.loss, time: timeOf(p, from, to, segs, bike) ?? estTime(len, st.gain, bike) };
   }
 
   let scrub = null; // האצבע על הגרף של המסלול הפעיל: { b } – נקודה, { a, b } – שתי אצבעות (מרחקים בגרף)
@@ -1003,6 +1056,9 @@
       $('st-v' + (i + 1)).textContent = v;
     });
     $('ri-stats').classList.toggle('hot', !!hot);
+    const l4 = cells[3]?.[0] || '';
+    $('ri-pace').hidden = !/זמן|סיום|מגיעים/.test(l4);
+    $('ri-pace').textContent = paceLabel(!!active?.opts?.bike);
   }
   function renderRouteInfo() {
     if (!active || !route || dockMode() !== 'route') return;
@@ -1020,23 +1076,23 @@
     const wait = prof === false ? '–' : '…'; // נכשל – קו; עוד מחשב – שלוש נקודות
     if (scrub && prof && scrub.a != null) {
       // שתי אצבעות: הטווח שביניהן
-      const L = legInfo(prof, scrub.a, scrub.b, bike);
+      const L = legInfo(prof, scrub.a, scrub.b, bike, active.segs);
       setStats([['בין האצבעות', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
         ['הפרש גובה', signed(eleAt(prof, scrub.b) - eleAt(prof, scrub.a))]], true);
       setScrubMap(active.segs, route, prof, scrub.a, scrub.b, true);
     } else if (scrub && prof) {
       // האצבע על הגרף: מהמיקום שלך (בניווט, אם הנקודה לפניך) או מתחילת המסלול
       const from = atP != null && atP <= scrub.b ? atP : 0;
-      const L = legInfo(prof, from, scrub.b, bike);
+      const L = legInfo(prof, from, scrub.b, bike, active.segs);
       setStats([[from > 0 ? 'ממך עד כאן' : 'עד כאן', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
         ['מגיעים', fmtClock(L.time)]], true);
       setScrubMap(active.segs, route, prof, from, scrub.b);
     } else if (nav && atP != null) {
       const rem = profileStats(prof, atP), left = total - prevAlong;
-      const t = estTime(left, rem.gain, bike);
+      const t = timeOf(prof, atP, prof.total, active.segs, bike);
       setStats([['נותרו', Geo.fmtDist(left)], ['↗ לעלות', mtr(rem.gain)], ['↘ לרדת', mtr(rem.loss)], ['🏁 סיום', fmtClock(t)]]);
     } else {
-      const t = prof ? estTime(total, prof.gain, bike) : null;
+      const t = prof ? timeOf(prof, 0, prof.total, active.segs, bike) : null;
       setStats([['אורך', Geo.fmtDist(total)], ['↗ עלייה', prof ? mtr(prof.gain) : wait], ['↘ ירידה', prof ? mtr(prof.loss) : wait],
         ['⏱ זמן', t != null ? fmtTime(t) : wait]]);
     }
@@ -1088,7 +1144,7 @@
       return goSay(!pos ? 'לא נמצא מיקום · נסו שוב' : `רחוק מהמסלול (${Geo.fmtDist(r.off)}) · יוצאים לדרך רק ממנו`);
     }
     goSay('');
-    active.nav = true; prevAlong = null;
+    active.nav = true; prevAlong = null; paceLog = null;
     db.set('active', active);
     startGps(); setFollow(true);
     if (lastPos) map.easeTo({ center: lastPos.p, zoom: Math.max(map.getZoom(), 16) });
@@ -1096,8 +1152,30 @@
     setDockOpen(false);
     updateStatus();
   });
+  // ---------- כיול אישי: זמן התנועה בפועל (בלי עצירות) מול ההערכה, על הקטע שהלכת ----------
+  let paceLog = null; // { from, along, moving(ms), t, p }
+  function logPace(along) {
+    const now = Date.now(), p = lastPos.p;
+    if (!paceLog) { paceLog = { from: along, along, moving: 0, t: now, p }; return; }
+    const dt = now - paceLog.t, v = (Geo.haversine(paceLog.p, p) / Math.max(dt, 1)) * 1000; // מ'/שנ'
+    if (dt < 60000 && v > 0.3 && v < (active.opts?.bike ? 12 : 3)) paceLog.moving += dt; // זז – לא עומד, לא ברכב
+    Object.assign(paceLog, { t: now, p, along: Math.max(paceLog.along, along) });
+  }
+  function finishPace() {
+    const L = paceLog;
+    paceLog = null;
+    if (!L || !prof || L.moving < 10 * 60000 || L.along - L.from < 800) return; // מעט מדי בשביל למדוד
+    const bike = !!active?.opts?.bike, k = prof.total / (route.total || 1);
+    const est = timeOf(prof, L.from * k, L.along * k, active.segs, bike, true);
+    const f = Math.max(0.4, Math.min(2, est / (paceRow()[2] * (L.moving / 60000))));
+    const c = calOf(bike);
+    paceCal[bike ? 'bike' : 'walk'] = { f: c.n ? c.f * 0.6 + f * 0.4 : f, n: c.n + 1 };
+    try { localStorage.setItem('paceCal', JSON.stringify(paceCal)); } catch { /* ignore */ }
+    toast('ההערכה הותאמה לקצב שלך', 2500);
+  }
   function stopNav() {
     if (!active) return;
+    finishPace();
     active.nav = false; prevAlong = null;
     db.set('active', active);
     setFollow(false);
@@ -1221,7 +1299,8 @@
     Elev.profile(r.pts, 15, r.breaks).then((p) => {
       if (detour !== mine || detour.mode !== mode) return;
       const bike = !!active.opts?.bike;
-      const oldT = estTime(route.total, prof?.gain || 0, bike), newT = p ? estTime(r.total, p.gain, bike) : null;
+      const oldT = prof ? timeOf(prof, 0, prof.total, active.segs, bike) : estTime(route.total, 0, bike);
+      const newT = p ? timeOf(p, 0, p.total, buildDetourSegs(), bike) : null;
       $('dt-info').textContent = lenTxt
         + (p && prof ? ` · ↗ עוד ${Math.max(0, Math.round(p.gain - prof.gain))} מ'` : '')
         + (newT != null ? ` · ⏱ ${more(fmtTime(Math.abs(newT - oldT)), newT < oldT)}` : '');
@@ -1364,20 +1443,27 @@
         const r = Geo.buildRoute(segsToLines(segs));
         const p = await Elev.profile(r.pts, 15, r.breaks);
         if (plan !== mine) return;
-        plan.prof = p; plan.route = r;
+        plan.prof = p; plan.route = r; plan.rawSegs = segs;
         $('pl-up').textContent = p ? Math.round(p.gain) + " מ'" : '?';
         $('pl-down').textContent = p ? Math.round(p.loss) + " מ'" : '?';
-        $('pl-time').textContent = p ? fmtTime(estTime(len, p.gain, plan.opts.bike)) : '?';
+        planTime();
         drawProfile($('pl-profile'), p);
       }, 350);
     } else drawProfile($('pl-profile'), null);
   }
 
+  function planTime() {
+    $('pl-pace').textContent = paceLabel(plan.opts.bike);
+    if (plan.prof) $('pl-time').textContent = fmtTime(timeOf(plan.prof, 0, plan.prof.total, plan.rawSegs, plan.opts.bike));
+    else if (plan.prof === null && plan.wps.length > 1 && $('pl-time').textContent === '…') $('pl-time').textContent = '?';
+  }
+  $('pl-pace').addEventListener('click', cyclePace);
+  $('ri-pace').addEventListener('click', cyclePace);
   attachScrub($('pl-profile'), () => plan?.prof, (a, b) => {
     const range = b != null, from = range ? a : 0, to = range ? b : a;
     plan.scrubAt = to;
     setScrubMap(plan.segs, plan.route, plan.prof, from, to, range);
-    const L = legInfo(plan.prof, from, to, plan.opts.bike);
+    const L = legInfo(plan.prof, from, to, plan.opts.bike, plan.rawSegs);
     if (plan.hint == null) plan.hint = $('pl-hint').textContent;
     $('pl-hint').textContent = range
       ? `בין האצבעות: ${Geo.fmtDist(L.len)} · ↗${Math.round(L.gain)} ↘${Math.round(L.loss)} · הפרש ${signed(eleAt(plan.prof, to) - eleAt(plan.prof, from))}`
@@ -1399,6 +1485,7 @@
       name: from?.name || '', folder: from?.folder, libId: from?.libId, markers: [] };
     $('pl-snap').checked = plan.opts.snap;
     for (const r of document.querySelectorAll('input[name="pl-mode"]')) r.checked = r.value === (plan.opts.bike ? 'bike' : 'walk');
+    $('pl-pace').textContent = paceLabel(plan.opts.bike);
     clearScrub();
     document.body.classList.add('planning');
     renderDock();
@@ -1430,6 +1517,7 @@
   $('pl-snap').addEventListener('change', (e) => { plan.opts.snap = e.target.checked; renderPlan(); });
   for (const r of document.querySelectorAll('input[name="pl-mode"]')) r.addEventListener('change', () => {
     plan.opts.bike = r.value === 'bike';
+    $('pl-pace').textContent = paceLabel(plan.opts.bike);
     // נקודות שנצמדו לשביל אופניים בלבד – לא מתאימות להליכה: מצמידים מחדש לרשת של המצב החדש
     toast('מעדכן…', 800);
     setTimeout(() => { plan.wps = plan.wps.map(snapWp); renderPlan(); }, 30);
@@ -1960,6 +2048,7 @@
       const r = Geo.locate(route, lastPos.p, prevAlong);
       prevAlong = r.along;
       setWalked(r.along);
+      logPace(r.along);
     }
     renderRouteInfo();
   }
