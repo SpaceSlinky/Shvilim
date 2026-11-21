@@ -2227,7 +2227,9 @@
     const base = BASES.find(([b]) => b === layerPrefs.base) || BASES[0];
     $('lb-base').dataset.base = base[0];
     $('lb-base').querySelector('.klbl').textContent = base[1];
-    $('lb-overlay').classList.toggle('pressed', layerPrefs.overlay === false);
+    const hidden = layerPrefs.overlay === false;
+    $('lb-overlay').classList.toggle('off', hidden);
+    $('lb-overlay').querySelector('.klbl').textContent = hidden ? 'הצגת שכבות' : 'הסתרת שכבות';
   }
   $('lb-base').addEventListener('click', () => {
     const i = BASES.findIndex(([b]) => b === layerPrefs.base);
