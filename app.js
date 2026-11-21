@@ -89,8 +89,6 @@
     },
     layers: [
       { id: 'bg', type: 'background', paint: { 'background-color': '#e6e1d1' } },
-      // תצלום אוויר: מעל רקע המפה ומתחת לכל השאר (שבילים, דרכים, שמות) – המפה עצמה אף פעם לא נעלמת
-      { id: 'base-sat', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -165,6 +163,8 @@
           'text-size': ['match', ['get', 't'], ['city', 'town'], 17, 15] },
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
       // מסלול פעיל: המפה מתחתיו דוהה, והמסלול מצויר בצבעי השבילים עם מסגרת לבנה (בלי קו מתאר כהה)
+      // תצלום אוויר: מעל כל המפה (שבילים, דרכים, שמות), בשקיפות שבסליידר; המסלול, הנקודות והמיקום – מעליו
+      { id: 'base-sat', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       { id: 'dim', type: 'fill', source: 'dim', layout: { visibility: 'none' }, paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } },
       { id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -571,6 +571,14 @@
     const colors = [...new Set(trails.map((f) => f.properties.c))];
     const trailName = trails.map((f) => f.properties.n).find(Boolean) || '';
     const squares = colors.map((c) => `<span class="sq" style="background:${esc(c)}"></span>`).join('');
+    // נקודת עניין / נחל עם שם – אייקון מצלמה בסוף השורה שלה (משמאל): תמונות שאנשים צילמו
+    const named = navigator.onLine && feats.find((f) => (f.properties.k === 'poi' || f.properties.k === 'water') && f.properties.n);
+    let cam = '';
+    if (named) {
+      const n = named.properties.n, town = townNear(named.geometry.type === 'Point' ? named.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat]);
+      const q = town && !n.includes(town) ? `${n} ${town}` : n;
+      cam = `<a class="info-photos" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}" target="_blank" rel="noopener" aria-label="תמונות">${CAM_SVG}</a>`;
+    }
     const seen = new Set();
     const rows = [];
     let gotSquares = false;
@@ -588,21 +596,17 @@
       const withSq = p.k === 'road' && !gotSquares && colors.length;
       if (withSq) gotSquares = true;
       const name = p.n || (withSq ? trailName : '');
-      rows.push(`<div class="info-row">${name ? `<b>${esc(name)}</b> ` : ''}${line}${withSq ? squares : ''}</div>`);
+      rows.push(`<div class="info-row">${name ? `<b>${esc(name)}</b> ` : ''}${line}${withSq ? squares : ''}${f === named ? cam : ''}</div>`);
+      if (f === named) cam = '';
       if (rows.length >= 4) break;
     }
     // שביל מסומן בלי דרך מתחתיו
     if (colors.length && !gotSquares) rows.unshift(`<div class="info-row">${trailName ? `<b>${esc(trailName)}</b> ` : ''}שביל${squares}</div>`);
     if (!rows.length) return;
-    // נקודת עניין / נחל עם שם – קישור לתמונות שאנשים צילמו (גוגל תמונות), עם היישוב הקרוב כדי לא לקבל מקום אחר באותו שם
-    const named = feats.find((f) => (f.properties.k === 'poi' || f.properties.k === 'water') && f.properties.n);
-    if (named && navigator.onLine) {
-      const n = named.properties.n, town = townNear(named.geometry.type === 'Point' ? named.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat]);
-      const q = town && !n.includes(town) ? `${n} ${town}` : n;
-      rows.push(`<a class="info-photos" href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}" target="_blank" rel="noopener">📷 תמונות</a>`);
-    }
+    if (cam) rows.push(`<div class="info-row">${cam}</div>`);
     new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
   });
+  const CAM_SVG = '<svg viewBox="0 0 24 24"><path d="M4 8h3.5l1.5-2.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
   // היישוב הקרוב (עד 8 ק"מ) – להקשר בחיפוש התמונות
   function townNear(p) {
     let best = null, bd = 8000;

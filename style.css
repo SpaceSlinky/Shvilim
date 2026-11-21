@@ -85,8 +85,9 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 .maplibregl-popup-content { font-size: 15px; padding: 8px 12px; direction: rtl; }
 /* החלון עצמו משמאל-לימין: אחרת ב-RTL המשולש עובר לצד הלא נכון ומצביע הפוך */
 .maplibregl-popup { direction: ltr; }
-.info-photos { display: block; margin-top: 6px; font-weight: 600; color: var(--blue); text-decoration: none; }
-body.night .info-photos { color: #7cb8ff; }
+.info-photos { display: inline-block; width: 26px; height: 26px; margin-inline-start: 10px; vertical-align: middle; color: #333; }
+.info-photos svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+body.night .info-photos { color: #ddd; }
 
 /* חיפוש */
 /* חיפוש: פס למעלה, משמאל למשטח הכלים */
