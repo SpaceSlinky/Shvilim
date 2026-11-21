@@ -1914,13 +1914,14 @@
     $('btn-locate').classList.toggle('active', on);
   }
 
+  // נגיעה: כבוי → מדליקים וממרכזים; דלוק והמפה זזה ממך → ממרכזים; דלוק ועליך → מכבים (בלי לחיצה ארוכה חבויה)
   $('btn-locate').addEventListener('click', () => {
+    if (watchId != null && follow && !active?.nav) { stopGps(); return toast('GPS כבוי', 1500); }
     startGps();
     setFollow(true);
     if (lastPos) map.easeTo({ center: lastPos.p, zoom: Math.max(map.getZoom(), 15) });
     else toast('מחפש מיקום…', 2000);
   });
-  $('btn-locate').addEventListener('contextmenu', (e) => { e.preventDefault(); stopGps(); toast('GPS כבוי'); });
   map.on('dragstart', () => follow && setFollow(false));
 
   async function requestWake() {
@@ -2624,13 +2625,16 @@
     const col = document.querySelector('#controls .kcol');
     const ctl = col.closest('#controls');
     const open = ctl.classList.contains('open'), lyr = ctl.classList.contains('layers');
-    const all = [...col.children].filter((b) => !b.hidden && b.classList.contains('lyr') === lyr);
-    const rest = [...col.children].filter((b) => !b.hidden && b.classList.contains('lyr') !== lyr);
-    for (const b of rest) { // הקבוצה השנייה (כלים ↔ שכבות) – נעלמת במקום
-      if (b.classList.contains('on')) b.style.setProperty('--d', '0ms');
-      b.classList.remove('on');
-    }
+    const all = [...col.children].filter((b) => !b.hidden);
     const show = open ? all : all.filter(pinned);
+    // אפשרויות השכבות – בשורה משמאל ל"שכבות", גדלות במקום אחת אחרי השנייה (מימין לשמאל)
+    const row = [...document.querySelectorAll('#controls .krow > button')];
+    row.forEach((b, i) => {
+      const on = open && lyr, was = b.classList.contains('on');
+      b.style.setProperty('--d', on && !was ? i * STAGGER + 'ms' : !on && was ? (row.length - 1 - i) * 25 + 'ms' : '0ms');
+      b.classList.toggle('on', on);
+    });
+    $('btn-layers').classList.toggle('pressed', open && lyr);
     const now = new Set(show);
     let n = 0, k = 0;
     for (const b of all) {
@@ -2642,12 +2646,12 @@
       k++;
     }
     layoutTools.shown = now; // (מאפיין ולא let – נקרא גם מ-renderDock לפני שהשורה הזו רצה)
-    const h = (lyr ? 0 : all.length) * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
+    const h = all.length * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
     col.style.height = Math.max(0, show.length * 56 - 10) + 'px';
     $('dim-v').style.height = h + 'px';
     $('dim-v').style.setProperty('--draw', (all.length - 1) * STAGGER + 120 + 'ms'); // הקו יורד באותו קצב שהכפתורים מופיעים
   }
-  // מצבים: סגור / כלים / שכבות (העיגולים מתחלפים במקום; ה-☰ הופך לחץ חזרה לכלים)
+  // מצבים: סגור / כלים / שכבות ("שכבות" נהיה לחוץ, והאפשרויות שלו בשורה משמאלו; נגיעה נוספת בו – סוגרת אותן)
   function setKnife(on) { setKnifeMode(on ? 'tools' : 'closed'); }
   function setKnifeMode(m) {
     knifeOpen = m !== 'closed';
@@ -2657,8 +2661,8 @@
     layoutTools();
     $('btn-menu').setAttribute('aria-expanded', knifeOpen);
   }
-  $('btn-layers').addEventListener('click', () => setKnifeMode('layers'));
-  $('btn-menu').addEventListener('click', () => (knife.classList.contains('layers') ? setKnifeMode('tools') : setKnife(!knifeOpen)));
+  $('btn-layers').addEventListener('click', () => setKnifeMode(knife.classList.contains('layers') ? 'tools' : 'layers'));
+  $('btn-menu').addEventListener('click', () => setKnife(!knifeOpen));
   $('search-input').addEventListener('focus', () => setKnife(false)); // תוצאות החיפוש נפתחות מתחת – בלי עיגולים מעליהן
   // מצב ה-GPS, המעקב והסיבוב משתנים בכמה מקומות – בדיקה זולה מעדכנת את העיגולים ה"נעוצים"
   map.on('rotate', layoutTools);

@@ -48,8 +48,6 @@ button, input, select, textarea { font-family: inherit; }
 /* כפתורים צפים */
 #controls svg { width: 24px; height: 24px; stroke: #333; stroke-width: 2; fill: #333; stroke-linecap: round; stroke-linejoin: round; }
 #controls svg path, #controls svg circle[fill="none"] { fill: none; }
-#btn-locate.gps-on svg { stroke: var(--blue); fill: var(--blue); }
-#btn-locate.active { background: rgba(30,136,229,.16); }
 
 
 /* מיקום המשתמש */
@@ -61,8 +59,11 @@ button, input, select, textarea { font-family: inherit; }
 .me.has-heading .me-heading { display: block; }
 
 /* הודעה קופצת */
-#toast { position: fixed; top: calc(64px + var(--safe-t)); left: 14px; right: 80px; z-index: 10;
-  background: rgba(30,30,30,.9); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 15px; }
+/* הודעה קופצת – כמו התוויות הקטנות של השכבות: גלולה לבנה, טקסט קטן, ממורכזת */
+#toast { position: fixed; top: calc(64px + var(--safe-t)); left: 50%; translate: -50% 0; z-index: 10; max-width: calc(100% - 120px); width: max-content;
+  background: #fff; color: #333; padding: 5px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; text-align: center;
+  box-shadow: 0 1px 6px rgba(0,0,0,.22); }
+body.night #toast { background: #565f68; color: #f0f0f0; }
 
 /* תפריט ומסך פתיחה */
 dialog { border: none; border-radius: 16px; padding: 18px; width: min(92vw, 380px); }
@@ -114,8 +115,6 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 body.night { color-scheme: dark; }
 body.night #search-form { background: #565f68; color: #d6dade; box-shadow: 0 2px 10px rgba(0,0,0,.5); }
 body.night #controls svg { stroke: #ddd; fill: #ddd; }
-body.night #btn-locate.gps-on svg { stroke: #64b5f6; fill: #64b5f6; }
-body.night #btn-locate.active { background: rgba(100,181,246,.18); }
 body.night .card, body.night dialog, body.night #search-results { background: #1d2227; color: #e6e6e6; }
 body.night #search-results li { border-color: #333; }
 body.night dialog button, body.night .card button { background: #2a3036; color: #eee; border-color: #444; }
@@ -137,7 +136,6 @@ body.night .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-co
 #compass-needle { transition: transform .15s linear; }
 #controls #compass-needle .n { fill: #d32f2f; stroke: none; }
 #controls #compass-needle .s { fill: #9e9e9e; stroke: none; }
-#btn-compass.active { background: rgba(30,136,229,.16); }
 #areas-dlg h3 { margin: 12px 0 2px; font-size: 15px; color: #555; }
 #areas-dlg .row { margin: 7px 0; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
@@ -153,7 +151,6 @@ body.night .area-row { border-color: rgba(255,255,255,.1); }
 body.night .a-name small { color: #aaa; }
 body.night #areas-dlg .area-row .a-del { color: #ef5350; }
 #areas-list:empty::after { content: 'אין מפות שמורות'; display: block; padding: 6px 0; font-size: 14px; color: #888; }
-body.night #btn-compass.active { background: rgba(100,181,246,.18); }
 .info-row { padding: 3px 0; line-height: 1.35; }
 .info-row + .info-row { border-top: 1px solid #ddd; margin-top: 3px; }
 .info-row .sq { display: inline-block; width: 12px; height: 12px; margin-inline-start: 8px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); vertical-align: -1px; }
@@ -474,15 +471,12 @@ dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-c
 
 /* ===== מצב שכבות: עיגולים עם תווית משמאל; כבוי – דהוי; ה-☰ הופך לחץ חזרה (→) ===== */
 .kcol > button.lyr { overflow: visible; }
-.klbl { position: absolute; right: calc(100% + 8px); top: 50%; translate: 0 -50%; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+.klbl { position: absolute; top: calc(100% + 4px); left: 50%; translate: -50% 0; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
   background: #fff; color: #333; font-size: 13px; font-weight: 600; box-shadow: 0 1px 6px rgba(0,0,0,.2); pointer-events: none; }
 .lyr.off svg { opacity: .35; }
 .lyr.off .klbl { color: #999; }
 #lb-base svg { display: none; }
 #lb-base[data-base="vector"] .b-vector, #lb-base[data-base="sat"] .b-sat, #lb-base[data-base="topo"] .b-topo { display: block; }
-#controls.open.layers .kmenu i:nth-child(1) { transform: translate(4px, -4px) rotate(40deg) scaleX(.55); }
-#controls.open.layers .kmenu i:nth-child(2) { opacity: 1; transform: none; }
-#controls.open.layers .kmenu i:nth-child(3) { transform: translate(4px, 4px) rotate(-40deg) scaleX(.55); }
 body.night .klbl { background: #565f68; color: #f0f0f0; }
 body.night .lyr.off .klbl { color: #b0b5ba; }
 /* פיתוח (זמני): נקודה קטנה משמאל למעלה */
@@ -490,3 +484,14 @@ body.night .lyr.off .klbl { color: #b0b5ba; }
   border-radius: 50%; background: rgba(120,120,120,.35); }
 .ls-perf { margin: 0 0 6px; font-size: 12px; color: #777; }
 body.night .ls-perf { color: #aaa; }
+
+/* שורת אפשרויות השכבות: משמאל לעיגול "שכבות" (הראשון בעמודה); כל עיגול גדל במקומו */
+.krow { position: absolute; top: 0; right: calc(var(--kb) + 10px); display: flex; gap: 10px; pointer-events: none; }
+.krow > button { position: relative; transform: scale(0); opacity: 0; transition: transform .18s cubic-bezier(.3,1.4,.5,1) var(--d, 0ms), opacity .12s var(--d, 0ms); }
+.krow > button.on { transform: none; opacity: 1; pointer-events: auto; }
+.krow .klbl { font-size: 11px; padding: 2px 7px; }
+/* מצב דלוק (GPS, מצפן, שכבות פתוחות): רקע כחול מלא ואייקון לבן – לא שקיפות */
+#controls button.pressed, #controls #btn-compass.active, #controls #btn-locate.gps-on { background: var(--blue); }
+#controls button.pressed svg, #controls #btn-locate.gps-on svg { stroke: #fff; fill: #fff; }
+#controls #btn-compass.active #compass-needle .s { fill: #fff; }
+body.night #controls button.pressed, body.night #controls #btn-compass.active, body.night #controls #btn-locate.gps-on { background: #1e88e5; }
