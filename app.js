@@ -65,7 +65,8 @@
   const SHARED_V = ['*', ['-', SI, ['/', ['-', SN, 1], 2]], ['coalesce', ['get', 'tf'], 1]];
   const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, SHARED_V]);
   // אותה הזזה לחצים (icon-offset: [0, y] בכיוון הקו – y חיובי = ימינה מכיוון התנועה, כמו line-offset)
-  const SHARED_ICON_OFFSET = zwShared(1.5, 4.5, (w) => ['interpolate', ['linear'], SHARED_V,
+  // (ביחידות של האייקון: החץ מוקטן עם רוחב הקו – icon-size 0.48→1 – ולכן ההזזה מחולקת בו)
+  const SHARED_ICON_OFFSET = zwShared(1.5 / 0.48, 4.5, (w) => ['interpolate', ['linear'], SHARED_V,
     -1, ['literal', [0, -w * SHARED_STEP]], 1, ['literal', [0, w * SHARED_STEP]]]);
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
@@ -182,8 +183,10 @@
         paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
       // חצי הכיוון – באותה הזזה הצידה כמו הקו (בקטע משותף), כדי לשבת עליו
       { id: 'route-arrows', type: 'symbol', source: 'route', filter: ['==', '$type', 'LineString'],
-        // חץ עדין: שברון דק (קו כהה ~1 פיקסל עם הילה לבנה דקה), מרווח – לא שברון עבה כל 70 פיקסלים
-        layout: { 'symbol-placement': 'line', 'symbol-spacing': 110, 'icon-image': 'arrow',
+        // חץ בתוך הקו: שברון חד וגבוה בדיוק כרוחב הקו (icon-size לפי רוחב route-line); על קו בהיר – שחור 60%,
+        // על קו כהה (שחור, כחול) – לבן 20% (dk מחושב ב-routeFeatures)
+        layout: { 'symbol-placement': 'line', 'symbol-spacing': 110, 'icon-image': ['case', ['==', ['get', 'dk'], 1], 'arrow-w', 'arrow-b'],
+          'icon-size': ['interpolate', ['exponential', 1.5], ['zoom'], 11, 0.48, 16, 1],
           'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map', 'icon-offset': SHARED_ICON_OFFSET },
       },
       // נקודות המסלול
@@ -276,7 +279,7 @@
   });
   map.on('styleimagemissing', (e) => {
     if (map.hasImage(e.id)) return;
-    if (e.id === 'arrow') map.addImage('arrow', arrowImage(), { pixelRatio: 3 });
+    if (e.id === 'arrow-b' || e.id === 'arrow-w') map.addImage(e.id, arrowImage(e.id === 'arrow-w'), { pixelRatio: 4 });
     else if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
@@ -595,18 +598,25 @@
   map.on('moveend', checkArea);
   addEventListener('online', checkArea);
   addEventListener('offline', checkArea);
-  mapReady.then(() => !map.hasImage('arrow') && map.addImage('arrow', arrowImage(), { pixelRatio: 3 }));
+  mapReady.then(() => { for (const id of ['arrow-b', 'arrow-w']) if (!map.hasImage(id)) map.addImage(id, arrowImage(id === 'arrow-w'), { pixelRatio: 4 }); });
 
-  // שברון דק: 4×8 פיקסלים, קו כהה ~1.1 פיקסל עם הילה לבנה ~0.5 מכל צד (נראה גם על שביל לבן וגם על הקו הצבעוני)
-  function arrowImage() {
-    const s = 42, c = document.createElement('canvas');
-    c.width = c.height = s;
+  // שברון חד (פינות ישרות, בלי עיגול) שגובהו בדיוק רוחב הקו (5 פיקסלים בזום 16 – 20 פיקסלי קנבס ב-pixelRatio 4),
+  // עובי ~1.5 פיקסל; כל מה שחורג מהגובה נחתך – החץ תמיד בתוך הקו
+  function arrowImage(light) {
+    const w = 24, h = 20, c = document.createElement('canvas');
+    c.width = w; c.height = h;
     const g = c.getContext('2d');
-    g.lineCap = g.lineJoin = 'round';
-    const chevron = () => { g.beginPath(); g.moveTo(15, 9); g.lineTo(27, 21); g.lineTo(15, 33); g.stroke(); };
-    g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = 6.6; chevron();
-    g.strokeStyle = '#1f1f1f'; g.lineWidth = 3.3; chevron();
-    return g.getImageData(0, 0, s, s);
+    g.lineJoin = 'miter'; g.lineCap = 'butt'; g.miterLimit = 10; g.lineWidth = 6;
+    g.strokeStyle = light ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.6)';
+    g.beginPath(); g.moveTo(4, -2); g.lineTo(15, 10); g.lineTo(4, 22); g.stroke();
+    return g.getImageData(0, 0, w, h);
+  }
+  // קו כהה (שחור, כחול כהה) – החץ עליו לבן
+  function darkColor(c) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(c || '');
+    if (!m) return c === 'black';
+    const n = parseInt(m[1], 16);
+    return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 < 0.2;
   }
 
   let longPressAt = 0; // אחרי לחיצה ארוכה (תוספת למסלול) – לא פותחים מידע על מה שמתחת
@@ -725,7 +735,8 @@
     return out;
   }
   function routeFeatures(segs, wpts) {
-    const f = routePieces(segs).map((x) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: x.coords }, properties: x.props }));
+    const f = routePieces(segs).map((x) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: x.coords },
+      properties: darkColor(x.props.c) ? { ...x.props, dk: 1 } : x.props }));
     const all = segs.flatMap((sg) => sg.coords);
     if (all.length > 1) {
       f.push({ type: 'Feature', geometry: { type: 'Point', coordinates: all[all.length - 1] }, properties: { kind: 'end' } });
