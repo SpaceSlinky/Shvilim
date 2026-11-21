@@ -721,6 +721,7 @@
   }
   async function setActive(a, { fit = false, save = true } = {}) {
     await mapReady;
+    if (!active || fit) routeSat = 0; // כניסה למסלול – תמיד מתחילים ממסלול ממוקד
     active = a;
     a.segs = repairSegs(a.segs);
     const lines = segsToLines(a.segs);
@@ -2218,13 +2219,20 @@
   if ('base' in layerPrefs) { layerPrefs.sat = layerPrefs.base === 'sat' ? 1 : 0; delete layerPrefs.base; }
   delete layerPrefs.overlay;
   layerPrefs.sat = Math.max(0, Math.min(1, +layerPrefs.sat || 0));
+  // בתוך מסלול (תצוגה / ניווט) לסליידר משמעות אחרת – ערך נפרד, מתחיל תמיד מ-0 (מסלול ממוקד)
+  let routeSat = 0;
+  const FOCUS_DIM = 0.85; // מסלול ממוקד: כמה המפה מוסתרת
+  const inRoute = () => !!active && !plan;
+  const sliderVal = () => (inRoute() ? routeSat : layerPrefs.sat);
   // הסתרת הרקע – ערך אחד ליום וללילה (פעם היו שניים: ממשיכים מהערך של המצב הנוכחי)
   if (layerPrefs.dim == null) layerPrefs.dim = (localStorage.getItem('theme') === 'dark' ? layerPrefs.dimNight : layerPrefs.dimDay) ?? 0.55;
 
   function applyLayers() {
     const vis = (on) => (on ? 'visible' : 'none');
-    // סליידר אחד, שלושה מצבים: 0 – מפה; 0.5 – תצלום מלא מתחת למפה; 1 – רק תצלום (מעל המפה)
-    const under = Math.min(1, layerPrefs.sat * 2), over = Math.max(0, layerPrefs.sat * 2 - 1);
+    // סליידר אחד, שלושה מצבים. בשיטוט: 0 – מפה; 0.5 – תצלום מלא מתחת למפה; 1 – רק תצלום (מעל המפה).
+    // בתוך מסלול: 0 – מסלול ממוקד (המפה כמעט מוסתרת); 0.5 – מפה מלאה; 1 – המסלול על תצלום (מעל המפה)
+    const v = sliderVal();
+    const under = inRoute() ? 0 : Math.min(1, v * 2), over = Math.max(0, v * 2 - 1);
     map.setLayoutProperty('base-sat', 'visibility', vis(under > 0));
     map.setPaintProperty('base-sat', 'raster-opacity', under);
     map.setLayoutProperty('sat-top', 'visibility', vis(over > 0));
@@ -2416,11 +2424,15 @@
 
   // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה). בלי סליידר (הוחלף בתצלום האוויר):
   // הערך השמור, ופוחת ככל שמעלים את התצלום – כדי שהתצלום לא ייראה דהוי ----------
-  function dimValue() { return layerPrefs.dim * (1 - Math.min(1, layerPrefs.sat * 2)); }
-  // ---------- תצלום אוויר: סליידר אנכי ליד הכלים – למעלה 0%, למטה 100% ----------
+  function dimValue() {
+    if (inRoute()) return FOCUS_DIM * Math.max(0, 1 - routeSat * 2);
+    return layerPrefs.dim * (1 - Math.min(1, layerPrefs.sat * 2));
+  }
+  // ---------- הסליידר שליד הכלים ----------
   function showSat() {
-    $('sat-v').style.setProperty('--f', layerPrefs.sat);
-    $('sat-v').setAttribute('aria-valuenow', Math.round(layerPrefs.sat * 100));
+    $('sat-v').style.setProperty('--f', sliderVal());
+    $('sat-v').setAttribute('aria-valuenow', Math.round(sliderVal() * 100));
+    $('sat-v').setAttribute('aria-label', inRoute() ? 'מסלול ממוקד / מפה / תצלום' : 'תצלום אוויר');
   }
   (() => {
     const tr = document.querySelector('#sat-v .vs-track');
@@ -2430,9 +2442,12 @@
       let f = Math.round(Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * 100) / 100;
       // סנאפ עדין באמצע (תצלום מלא מתחת למפה) ובקצוות; רטט קצר כשנתפס באמצע
       if (Math.abs(f - 0.5) < 0.05) f = 0.5; else if (f < 0.03) f = 0; else if (f > 0.97) f = 1;
-      if (f === 0.5 && layerPrefs.sat !== 0.5) navigator.vibrate?.(8);
-      if (f > 0 && layerPrefs.sat === 0 && !navigator.onLine) toast('תצלום אוויר דורש אינטרנט', 3000);
-      if (f !== layerPrefs.sat) { layerPrefs.sat = f; applyLayers(); }
+      const was = sliderVal(), satFrom = inRoute() ? 0.5 : 0; // מאיפה מתחיל התצלום
+      if (f === 0.5 && was !== 0.5) navigator.vibrate?.(8);
+      if (f > satFrom && was <= satFrom && !navigator.onLine) toast('תצלום אוויר דורש אינטרנט', 3000);
+      if (f === was) return;
+      if (inRoute()) routeSat = f; else layerPrefs.sat = f; // בתוך מסלול – לא נשמר (כל מסלול מתחיל ממוקד)
+      applyLayers();
     };
     tr.addEventListener('pointerdown', (e) => { down = true; tr.setPointerCapture(e.pointerId); at(e); });
     tr.addEventListener('pointermove', (e) => down && at(e));
