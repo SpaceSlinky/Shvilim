@@ -138,10 +138,18 @@
         layout: { 'symbol-placement': 'line', 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13,
           'symbol-spacing': 400, 'text-offset': [0, -1.1] },
         paint: { 'text-color': '#222', ...halo } },
-      { id: 'poi-icon', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['!=', ['get', 't'], 'peak']], minzoom: 12.5,
+      { id: 'poi-icon', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['!=', ['get', 't'], 'peak'], ['!=', ['get', 't'], 'parking']], minzoom: 12.5,
         layout: { 'icon-image': ['concat', 'poi-', ['get', 't']], 'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.5, 16, 0.85],
           'icon-padding': 1, 'icon-allow-overlap': ['step', ['zoom'], false, 15.5, true] } },
-      { id: 'poi-label', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['has', 'n'], ['!=', ['get', 't'], 'peak']], minzoom: 14,
+      { id: 'poi-label', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['has', 'n'], ['!=', ['get', 't'], 'peak'], ['!=', ['get', 't'], 'parking']], minzoom: 14,
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'text-anchor': 'top', 'text-offset': [0, 1.3],
+          'text-max-width': 8, 'text-optional': true },
+        paint: { 'text-color': '#333', ...halo } },
+      // חניונים – בקבוצת "עירוני"
+      { id: 'parking-icon', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['==', ['get', 't'], 'parking']], minzoom: 12.5,
+        layout: { 'icon-image': 'poi-parking', 'icon-size': ['interpolate', ['linear'], ['zoom'], 12.5, 0.5, 16, 0.85],
+          'icon-padding': 1, 'icon-allow-overlap': ['step', ['zoom'], false, 15.5, true] } },
+      { id: 'parking-label', type: 'symbol', source: 'osm', filter: ['all', k('poi'), ['has', 'n'], ['==', ['get', 't'], 'parking']], minzoom: 14,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 12, 'text-anchor': 'top', 'text-offset': [0, 1.3],
           'text-max-width': 8, 'text-optional': true },
         paint: { 'text-color': '#333', ...halo } },
@@ -286,6 +294,7 @@
   }
   map.on('error', (e) => console.warn(e.error || e));
   const mapReady = new Promise((r) => map.on('load', r));
+  mapReady.then(() => (PERF.style = performance.now()));
 
   // ---------- נתוני המפה: הורדה חד-פעמית ושמירה בטלפון ----------
   // הורדה אחת בכל פעם. עדכון שקט ברקע מפנה את הדרך כשהמשתמש מבקש משהו
@@ -381,7 +390,15 @@
     }
     return groups;
   }
+  // זמני פתיחה (לחלון הפיתוח): מתי הנתונים נקראו מהטלפון, נשלחו למפה, והמפה מוכנה
+  const PERF = {};
+  function showPerf() {
+    const f = (v) => (v != null ? (v / 1000).toFixed(1) + ' ש\'' : '–');
+    $('ls-perf').textContent = `פתיחה: מפה ${f(PERF.style)} · נתונים מהטלפון ${f(PERF.data)} · עיבוד ${f(PERF.sent && PERF.data != null ? PERF.sent - PERF.data : null)} · מוכן ${f(PERF.ready)}`
+      + (mapFC ? ` · ${mapFC.features.length.toLocaleString()} קווים ונקודות` : '');
+  }
   async function setMapData(fc) {
+    if (PERF.data == null) PERF.data = performance.now();
     const trailGeoms = markShared(fc);
     buildSharedIdx(fc);
     pieceCache = null; // הקטעים המשותפים השתנו
@@ -394,6 +411,7 @@
     if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track'
       || trailGeoms.has(JSON.stringify(f.geometry.coordinates))) };
     if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
+    if (PERF.sent == null) { PERF.sent = performance.now(); map.once('idle', () => (PERF.ready = performance.now())); }
     // המסלול המוצג: מתקנים קטעים שלא עוגלו, ומזיזים עם הקווים המשותפים
     if (active && !plan) { fixActiveSegs(); map.getSource('route')?.setData(routeFeatures(active.segs)); }
   }
@@ -458,7 +476,7 @@
       sm.textContent = `${fmtSize(size)} · ${a.t ? 'עודכן ' + new Date(a.t).toLocaleDateString('he-IL') : ''}`;
       go.append(sm);
       go.addEventListener('click', () => {
-        $('layers-dlg').close();
+        $('areas-dlg').close();
         map.fitBounds([[a.b[0], a.b[1]], [a.b[2], a.b[3]]], { padding: 20, duration: 600 });
       });
       const del = document.createElement('button');
@@ -491,7 +509,6 @@
     renderAreas();
     checkArea();
   }
-  $('layers-dlg').querySelector('.more-layers').addEventListener('toggle', (e) => { if (e.target.open) renderAreas(); });
 
   // אזור בלי מפה שמורה (למשל אחרי חיפוש): במרכז המסך – "להורדת מפות האזור" (לחיץ)
   const dlHere = $('dl-here');
@@ -2071,9 +2088,10 @@
     poi: ['poi-icon', 'poi-label', 'peak'],
     bike: ['bike'],
     places: ['place-minor', 'place-major'],
+    parking: ['parking-icon', 'parking-label'],
     route: ['route-casing', 'route-line', 'route-walked', 'route-arrows', 'route-ends', 'wpts'],
   };
-  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'place-minor', 'place-major']);
+  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major']);
   const layerPrefs = Object.assign(
  { base: 'vector', labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
@@ -2094,23 +2112,34 @@
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
   function smoothLevel() { return layerPrefs.smooth ? 2 : 0; }
-  function syncLayerForm() {
-    for (const el of document.querySelectorAll('#layers-dlg input')) {
-      if (el.type === 'radio') el.checked = el.value === layerPrefs.base;
-      else el.checked = !!layerPrefs[el.name];
-    }
+  // ---------- מצב "שכבות" בסרגל הכלים: רקע (מתחלף בנגיעה), טבע, עירוני, אופניים, מפות שמורות ----------
+  const LAYER_SETS = {
+    nature: ['trails', 'paths', 'tracks', 'water', 'poi'], // שבילים, דרכי עפר, נחלים, נקודות עניין
+    urban: ['roads', 'places', 'parking'], // כבישים ורחובות, יישובים, חניונים
+    bike: ['bike'],
+  };
+  const BASES = [['vector', 'מפה'], ['sat', 'תצלום'], ['topo', 'טופו']];
+  const setOn = (k) => LAYER_SETS[k].every((g) => layerPrefs[g]);
+  function syncLayerBtns() {
+    const base = BASES.find(([b]) => b === layerPrefs.base) || BASES[0];
+    $('lb-base').dataset.base = base[0];
+    $('lb-base').querySelector('.klbl').textContent = base[1];
+    for (const k of Object.keys(LAYER_SETS)) $('lb-' + k).classList.toggle('off', !setOn(k));
   }
-  $('layers-dlg').addEventListener('change', (e) => {
-    const el = e.target;
-    if (el.type === 'radio') {
-      layerPrefs.base = el.value;
-      if (el.value !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);
-    } else layerPrefs[el.name] = el.checked;
-    applyLayers();
-    if (el.name === 'smooth' && mapFC) setTimeout(() => setMapData(mapFC), 30);
+  $('lb-base').addEventListener('click', () => {
+    const i = BASES.findIndex(([b]) => b === layerPrefs.base);
+    layerPrefs.base = BASES[(i + 1) % BASES.length][0];
+    if (layerPrefs.base !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);
+    applyLayers(); syncLayerBtns();
   });
-  $('btn-layers').addEventListener('click', () => { syncLayerForm(); if ($('layers-dlg').querySelector('.more-layers').open) renderAreas(); $('layers-dlg').showModal(); });
-  $('layers-close').addEventListener('click', () => $('layers-dlg').close());
+  for (const k of Object.keys(LAYER_SETS)) $('lb-' + k).addEventListener('click', () => {
+    const on = !setOn(k);
+    for (const g of LAYER_SETS[k]) layerPrefs[g] = on;
+    applyLayers(); syncLayerBtns();
+  });
+  $('lb-areas').addEventListener('click', () => { renderAreas(); $('areas-dlg').showModal(); });
+  $('areas-close').addEventListener('click', () => $('areas-dlg').close());
+  syncLayerBtns();
   mapReady.then(applyLayers);
 
   // ---------- מצב לילה ----------
@@ -2487,8 +2516,8 @@
     pad.append(el('div', 'ls-name', 'שורות'), slider('מרווח', LS_PAD.min, LS_PAD.max, 1, libStyle.pad ?? LS_PAD.def, (x) => { libStyle.pad = x; saveLibStyle(); }));
     box.append(pad);
   }
-  $('ls-open').addEventListener('click', () => {
-    $('layers-dlg').close();
+  $('dev-dot').addEventListener('click', () => {
+    showPerf();
     if (dockMode() === 'lib' && !dock.libOpen) setLibOpen(true); // כדי לראות את השינויים על הרשימה עצמה
     renderStyleDlg();
     $('style-dlg').showModal();
@@ -2593,8 +2622,14 @@
   function layoutTools() {
     const STAGGER = 30; // מ"ש בין כפתור לכפתור (בתוך הפונקציה – היא נקראת גם לפני שהקוד כאן רץ)
     const col = document.querySelector('#controls .kcol');
-    const all = [...col.children].filter((b) => !b.hidden);
-    const open = col.closest('#controls').classList.contains('open');
+    const ctl = col.closest('#controls');
+    const open = ctl.classList.contains('open'), lyr = ctl.classList.contains('layers');
+    const all = [...col.children].filter((b) => !b.hidden && b.classList.contains('lyr') === lyr);
+    const rest = [...col.children].filter((b) => !b.hidden && b.classList.contains('lyr') !== lyr);
+    for (const b of rest) { // הקבוצה השנייה (כלים ↔ שכבות) – נעלמת במקום
+      if (b.classList.contains('on')) b.style.setProperty('--d', '0ms');
+      b.classList.remove('on');
+    }
     const show = open ? all : all.filter(pinned);
     const now = new Set(show);
     let n = 0, k = 0;
@@ -2607,18 +2642,23 @@
       k++;
     }
     layoutTools.shown = now; // (מאפיין ולא let – נקרא גם מ-renderDock לפני שהשורה הזו רצה)
-    const h = all.length * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
+    const h = (lyr ? 0 : all.length) * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
     col.style.height = Math.max(0, show.length * 56 - 10) + 'px';
     $('dim-v').style.height = h + 'px';
     $('dim-v').style.setProperty('--draw', (all.length - 1) * STAGGER + 120 + 'ms'); // הקו יורד באותו קצב שהכפתורים מופיעים
   }
-  function setKnife(on) {
-    knifeOpen = on;
-    knife.classList.toggle('open', on);
+  // מצבים: סגור / כלים / שכבות (העיגולים מתחלפים במקום; ה-☰ הופך לחץ חזרה לכלים)
+  function setKnife(on) { setKnifeMode(on ? 'tools' : 'closed'); }
+  function setKnifeMode(m) {
+    knifeOpen = m !== 'closed';
+    knife.classList.toggle('open', knifeOpen);
+    knife.classList.toggle('layers', m === 'layers');
+    if (m === 'layers') syncLayerBtns();
     layoutTools();
-    $('btn-menu').setAttribute('aria-expanded', on);
+    $('btn-menu').setAttribute('aria-expanded', knifeOpen);
   }
-  $('btn-menu').addEventListener('click', () => setKnife(!knifeOpen));
+  $('btn-layers').addEventListener('click', () => setKnifeMode('layers'));
+  $('btn-menu').addEventListener('click', () => (knife.classList.contains('layers') ? setKnifeMode('tools') : setKnife(!knifeOpen)));
   $('search-input').addEventListener('focus', () => setKnife(false)); // תוצאות החיפוש נפתחות מתחת – בלי עיגולים מעליהן
   // מצב ה-GPS, המעקב והסיבוב משתנים בכמה מקומות – בדיקה זולה מעדכנת את העיגולים ה"נעוצים"
   map.on('rotate', layoutTools);

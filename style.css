@@ -138,20 +138,20 @@ body.night .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-co
 #controls #compass-needle .n { fill: #d32f2f; stroke: none; }
 #controls #compass-needle .s { fill: #9e9e9e; stroke: none; }
 #btn-compass.active { background: rgba(30,136,229,.16); }
-#layers-dlg h3 { margin: 12px 0 2px; font-size: 15px; color: #555; }
-#layers-dlg .row { margin: 7px 0; }
+#areas-dlg h3 { margin: 12px 0 2px; font-size: 15px; color: #555; }
+#areas-dlg .row { margin: 7px 0; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; }
 .grid2 .row { font-size: 14px; }
-body.night #layers-dlg h3 { color: #aaa; }
+body.night #areas-dlg h3 { color: #aaa; }
 .credits { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #888; text-align: center; }
 .area-row { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(0,0,0,.08); }
-#layers-dlg .area-row button { width: auto; margin: 0; padding: 8px 2px; border: 0; background: none; font: inherit; color: inherit; border-radius: 0; }
-#layers-dlg .area-row .a-name { flex: 1; min-width: 0; text-align: start; font-size: 15px; font-weight: 600; }
+#areas-dlg .area-row button { width: auto; margin: 0; padding: 8px 2px; border: 0; background: none; font: inherit; color: inherit; border-radius: 0; }
+#areas-dlg .area-row .a-name { flex: 1; min-width: 0; text-align: start; font-size: 15px; font-weight: 600; }
 .a-name small { display: block; font-size: 12px; font-weight: 400; color: #777; }
-#layers-dlg .area-row .a-del { flex: none; font-size: 14px; font-weight: 700; color: #c62828; padding-inline: 6px; }
+#areas-dlg .area-row .a-del { flex: none; font-size: 14px; font-weight: 700; color: #c62828; padding-inline: 6px; }
 body.night .area-row { border-color: rgba(255,255,255,.1); }
 body.night .a-name small { color: #aaa; }
-body.night #layers-dlg .area-row .a-del { color: #ef5350; }
+body.night #areas-dlg .area-row .a-del { color: #ef5350; }
 #areas-list:empty::after { content: 'אין מפות שמורות'; display: block; padding: 6px 0; font-size: 14px; color: #888; }
 body.night #btn-compass.active { background: rgba(100,181,246,.18); }
 .info-row { padding: 3px 0; line-height: 1.35; }
@@ -411,7 +411,6 @@ body.night .dl-here:disabled { color: #aaa; }
 body.night .ls-item { border-color: rgba(255,255,255,.1); }
 body.night .ls-top { color: #bbb; }
 body.night .ls-top output { color: #999; }
-#layers-dlg .ls-open { margin: 10px 0 0; padding: 10px; font-size: 15px; background: none; border: 1px solid #ccc; border-radius: 10px; color: inherit; }
 
 /* תוספת למסלול */
 .dt-box { margin-top: 8px; text-align: center; }
@@ -452,14 +451,14 @@ body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.n
 .kcol > button.on { transform: scale(1); opacity: 1; pointer-events: auto; }
 /* הסתרת הרקע (במסלול / בתכנון): בלי רקע, ישר על המפה. הקו מצטייר מלמעלה למטה; האייקון והידית גדלים במקומם */
 #dim-v { width: 30px; display: flex; flex-direction: column; align-items: center; --f: .6; }
-#controls.open #dim-v { pointer-events: auto; }
+#controls.open:not(.layers) #dim-v { pointer-events: auto; }
 #dim-v .vs-ico { width: 22px; height: 22px; margin: 12px 0 2px; flex: none; transform: scale(0); transition: transform .18s cubic-bezier(.3,1.4,.5,1); }
-#controls.open #dim-v .vs-ico { transform: scale(1); transition-delay: 0s; }
+#controls.open:not(.layers) #dim-v .vs-ico { transform: scale(1); transition-delay: 0s; }
 #dim-v .vs-track { clip-path: inset(0 0 100% 0); transition: clip-path .12s linear; }
 /* הקו יורד יחד עם הכפתורים: מגיע לכל גובה כשהכפתור שבגובה הזה גדל (--draw מחושב לפי מספר הכפתורים) */
-#controls.open #dim-v .vs-track { clip-path: inset(-12px -12px -12px -12px); transition-duration: var(--draw, .15s); }
+#controls.open:not(.layers) #dim-v .vs-track { clip-path: inset(-12px -12px -12px -12px); transition-duration: var(--draw, .15s); }
 #dim-v .vs-thumb { scale: 0; transition: scale .16s cubic-bezier(.3,1.4,.5,1); }
-#controls.open #dim-v .vs-thumb { scale: 1; transition-delay: calc(var(--draw, .15s) * var(--f)); }
+#controls.open:not(.layers) #dim-v .vs-thumb { scale: 1; transition-delay: calc(var(--draw, .15s) * var(--f)); }
 /* על המפה: קו כהה עם הילה לבהירה ביום, קו בהיר עם הילה כהה בלילה */
 #dim-v .vs-ico { filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); }
 #dim-v .vs-track::before { background: #5f5f5f; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
@@ -470,5 +469,24 @@ body.night #controls .kmenu { background: transparent; box-shadow: none; }
 body.night .kmenu i { background: #ddd; }
 
 /* ===== כל הכפתורים – גלולה ===== */
-dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-cancel, #layers-dlg .ls-open, .back, .stop, .dl-here,
+dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-cancel, #areas-dlg .ls-open, .back, .stop, .dl-here,
 .seg, .dt-modes, .tgrp { border-radius: 999px; }
+
+/* ===== מצב שכבות: עיגולים עם תווית משמאל; כבוי – דהוי; ה-☰ הופך לחץ חזרה (→) ===== */
+.kcol > button.lyr { overflow: visible; }
+.klbl { position: absolute; right: calc(100% + 8px); top: 50%; translate: 0 -50%; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  background: #fff; color: #333; font-size: 13px; font-weight: 600; box-shadow: 0 1px 6px rgba(0,0,0,.2); pointer-events: none; }
+.lyr.off svg { opacity: .35; }
+.lyr.off .klbl { color: #999; }
+#lb-base svg { display: none; }
+#lb-base[data-base="vector"] .b-vector, #lb-base[data-base="sat"] .b-sat, #lb-base[data-base="topo"] .b-topo { display: block; }
+#controls.open.layers .kmenu i:nth-child(1) { transform: translate(4px, -4px) rotate(40deg) scaleX(.55); }
+#controls.open.layers .kmenu i:nth-child(2) { opacity: 1; transform: none; }
+#controls.open.layers .kmenu i:nth-child(3) { transform: translate(4px, 4px) rotate(-40deg) scaleX(.55); }
+body.night .klbl { background: #565f68; color: #f0f0f0; }
+body.night .lyr.off .klbl { color: #b0b5ba; }
+/* פיתוח (זמני): נקודה קטנה משמאל למעלה */
+#dev-dot { position: fixed; top: calc(8px + var(--safe-t) + var(--kb) + 8px); left: 12px; z-index: 11; width: 12px; height: 12px; padding: 0; border: 0;
+  border-radius: 50%; background: rgba(120,120,120,.35); }
+.ls-perf { margin: 0 0 6px; font-size: 12px; color: #777; }
+body.night .ls-perf { color: #aaa; }
