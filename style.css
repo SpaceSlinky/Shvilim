@@ -471,7 +471,7 @@ dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-c
 
 /* ===== מצב שכבות: עיגולים עם תווית משמאל; כבוי – דהוי; ה-☰ הופך לחץ חזרה (→) ===== */
 .kcol > button.lyr { overflow: visible; }
-.klbl { position: absolute; top: calc(100% + 4px); left: 50%; translate: -50% 0; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+.klbl { position: absolute; right: calc(100% + 8px); top: 50%; translate: 0 -50%; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
   background: #fff; color: #333; font-size: 13px; font-weight: 600; box-shadow: 0 1px 6px rgba(0,0,0,.2); pointer-events: none; }
 .lyr.off svg { opacity: .35; }
 .lyr.off .klbl { color: #999; }
@@ -485,11 +485,6 @@ body.night .lyr.off .klbl { color: #b0b5ba; }
 .ls-perf { margin: 0 0 6px; font-size: 12px; color: #777; }
 body.night .ls-perf { color: #aaa; }
 
-/* שורת אפשרויות השכבות: משמאל לעיגול "שכבות" (הראשון בעמודה); כל עיגול גדל במקומו */
-.krow { position: absolute; top: 0; right: calc(var(--kb) + 10px); display: flex; gap: 10px; pointer-events: none; }
-.krow > button { position: relative; transform: scale(0); opacity: 0; transition: transform .18s cubic-bezier(.3,1.4,.5,1) var(--d, 0ms), opacity .12s var(--d, 0ms); }
-.krow > button.on { transform: none; opacity: 1; pointer-events: auto; }
-.krow .klbl { font-size: 11px; padding: 2px 7px; }
 /* מצב דלוק (GPS, מצפן, שכבות פתוחות): רקע כחול מלא ואייקון לבן – לא שקיפות */
 #controls button.pressed, #controls #btn-compass.active, #controls #btn-locate.gps-on { background: var(--blue); }
 #controls button.pressed svg, #controls #btn-locate.gps-on svg { stroke: #fff; fill: #fff; }

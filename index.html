@@ -41,19 +41,15 @@
             <svg viewBox="0 0 24 24" class="i-moon"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none"/></svg>
             <svg viewBox="0 0 24 24" class="i-sun"><circle cx="12" cy="12" r="4" fill="none"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none"/></svg>
           </button>
-      </div>
-      <div class="krow">
-        <!-- אפשרויות השכבות: בשורה משמאל לעיגול "שכבות" (שנהיה "לחוץ"); נגיעה נוספת בו – סוגרת -->
-        <button id="lb-base" class="lyr" data-base="vector" aria-label="רקע">
-          <svg viewBox="0 0 24 24" class="b-vector"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" fill="none"/><path d="M9 4v14M15 6v14" fill="none"/></svg>
-          <svg viewBox="0 0 24 24" class="b-sat"><g transform="rotate(-45 12 11)"><rect x="10" y="9" width="4" height="4" rx=".8" fill="none"/><rect x="2" y="6.5" width="5.5" height="9" rx=".6" fill="none"/><rect x="16.5" y="6.5" width="5.5" height="9" rx=".6" fill="none"/><path d="M7.5 11H10M14 11h2.5M12 13v2" fill="none"/></g><path d="M4 18.5a5 5 0 0 0 3.5 3" fill="none"/></svg>
-          <svg viewBox="0 0 24 24" class="b-topo"><path d="M3 19L11 7M11 7H6.5M11 7v4.5" fill="none"/><path d="M12.5 7.5L21 19M21 19h-4.5M21 19v-4.5" fill="none"/></svg>
-          <span class="klbl">מפה</span>
-        </button>
-        <button id="lb-nature" class="lyr" aria-label="טבע"><svg viewBox="0 0 24 24"><path d="M12 3l6 9h-3l4 6H5l4-6H6z" fill="none"/><path d="M12 18v3" fill="none"/></svg><span class="klbl">טבע</span></button>
-        <button id="lb-urban" class="lyr" aria-label="עירוני"><svg viewBox="0 0 24 24"><path d="M4 21V9l6-3v15M10 21V4l10 4v13M3 21h18" fill="none"/><path d="M14 11h2M14 15h2" fill="none"/></svg><span class="klbl">עירוני</span></button>
-        <button id="lb-bike" class="lyr" aria-label="אופניים"><svg viewBox="0 0 24 24"><circle cx="6" cy="16" r="3.5" fill="none"/><circle cx="18" cy="16" r="3.5" fill="none"/><path d="M6 16l4-8h5l3 8M10 8l2 8H6M13 5h3" fill="none"/></svg><span class="klbl">אופניים</span></button>
-        <button id="lb-areas" class="lyr" aria-label="מפות שמורות"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5" fill="none"/><path d="M4 17v3h16v-3" fill="none"/></svg><span class="klbl">מפות שמורות</span></button>
+          <!-- מצב שכבות: "שכבות" נשאר למעלה (לחוץ), והעיגולים שמתחתיו מתחלפים במקום ל: סוג מפה, הסתרת שכבות, מפות שמורות -->
+          <button id="lb-base" class="lyr" data-base="vector" aria-label="רקע">
+            <svg viewBox="0 0 24 24" class="b-vector"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" fill="none"/><path d="M9 4v14M15 6v14" fill="none"/></svg>
+            <svg viewBox="0 0 24 24" class="b-sat"><g transform="rotate(-45 12 11)"><rect x="10" y="9" width="4" height="4" rx=".8" fill="none"/><rect x="2" y="6.5" width="5.5" height="9" rx=".6" fill="none"/><rect x="16.5" y="6.5" width="5.5" height="9" rx=".6" fill="none"/><path d="M7.5 11H10M14 11h2.5M12 13v2" fill="none"/></g><path d="M4 18.5a5 5 0 0 0 3.5 3" fill="none"/></svg>
+            <svg viewBox="0 0 24 24" class="b-topo"><path d="M3 19L11 7M11 7H6.5M11 7v4.5" fill="none"/><path d="M12.5 7.5L21 19M21 19h-4.5M21 19v-4.5" fill="none"/></svg>
+            <span class="klbl">מפה</span>
+          </button>
+          <button id="lb-overlay" class="lyr" aria-label="הסתרת שכבות"><svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z" fill="none"/><path d="M3 14l9 5 9-5" fill="none"/><path d="M4 3l16 18" fill="none"/></svg><span class="klbl">הסתרת שכבות</span></button>
+          <button id="lb-areas" class="lyr" aria-label="מפות שמורות"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5" fill="none"/><path d="M4 17v3h16v-3" fill="none"/></svg><span class="klbl">מפות שמורות</span></button>
       </div>
       <div id="dim-v" class="vslider" hidden aria-label="הסתרת הרקע" role="slider" aria-valuemin="0" aria-valuemax="0.9">
           <svg viewBox="0 0 24 24" class="vs-ico"><circle cx="12" cy="12" r="8" fill="none"/><path d="M12 4a8 8 0 0 1 0 16z" class="half"/></svg>

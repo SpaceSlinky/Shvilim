@@ -2201,6 +2201,9 @@
  { base: 'vector', labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
   layerPrefs.route = true; // המסלול תמיד מוצג (אין לו יותר תיבה בשכבות)
+  // אין יותר בחירה של שכבה-שכבה: כולן דלוקות, ו"הסתרת שכבות" (overlay) מסתירה את כולן יחד
+  for (const g of Object.keys(GROUPS)) layerPrefs[g] = true;
+  layerPrefs.labels = true;
   // הסתרת הרקע – ערך אחד ליום וללילה (פעם היו שניים: ממשיכים מהערך של המצב הנוכחי)
   if (layerPrefs.dim == null) layerPrefs.dim = (localStorage.getItem('theme') === 'dark' ? layerPrefs.dimNight : layerPrefs.dimDay) ?? 0.55;
 
@@ -2208,7 +2211,8 @@
     const vis = (on) => (on ? 'visible' : 'none');
     for (const b of ['sat', 'topo', 'ihm']) map.setLayoutProperty('base-' + b, 'visibility', vis(layerPrefs.base === b));
     for (const [g, ids] of Object.entries(GROUPS)) {
-      for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
+      const on = g === 'route' || layerPrefs.overlay !== false; // "הסתרת שכבות" – הכול חוץ מהמסלול
+      for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(on && layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
     }
     map.setLayoutProperty('dim', 'visibility', vis(dimValue() > 0 && layerPrefs.route && (!!active || !!plan)));
     map.setPaintProperty('dim', 'fill-opacity', dimValue());
@@ -2217,19 +2221,13 @@
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
   function smoothLevel() { return layerPrefs.smooth ? 2 : 0; }
-  // ---------- מצב "שכבות" בסרגל הכלים: רקע (מתחלף בנגיעה), טבע, עירוני, אופניים, מפות שמורות ----------
-  const LAYER_SETS = {
-    nature: ['trails', 'paths', 'tracks', 'water', 'poi'], // שבילים, דרכי עפר, נחלים, נקודות עניין
-    urban: ['roads', 'places', 'parking'], // כבישים ורחובות, יישובים, חניונים
-    bike: ['bike'],
-  };
+  // ---------- מצב "שכבות" בסרגל הכלים: סוג מפה (מתחלף בנגיעה), הסתרת כל השכבות במכה אחת, מפות שמורות ----------
   const BASES = [['vector', 'מפה'], ['sat', 'תצלום'], ['topo', 'טופו']];
-  const setOn = (k) => LAYER_SETS[k].every((g) => layerPrefs[g]);
   function syncLayerBtns() {
     const base = BASES.find(([b]) => b === layerPrefs.base) || BASES[0];
     $('lb-base').dataset.base = base[0];
     $('lb-base').querySelector('.klbl').textContent = base[1];
-    for (const k of Object.keys(LAYER_SETS)) $('lb-' + k).classList.toggle('off', !setOn(k));
+    $('lb-overlay').classList.toggle('pressed', layerPrefs.overlay === false);
   }
   $('lb-base').addEventListener('click', () => {
     const i = BASES.findIndex(([b]) => b === layerPrefs.base);
@@ -2237,9 +2235,9 @@
     if (layerPrefs.base !== 'vector' && !navigator.onLine) toast('רקע זה דורש אינטרנט', 3000);
     applyLayers(); syncLayerBtns();
   });
-  for (const k of Object.keys(LAYER_SETS)) $('lb-' + k).addEventListener('click', () => {
-    const on = !setOn(k);
-    for (const g of LAYER_SETS[k]) layerPrefs[g] = on;
+  // כל השכבות (שבילים, דרכים, נחלים, נקודות, יישובים, אופניים, שמות) – מוצגות או מוסתרות יחד; המסלול נשאר
+  $('lb-overlay').addEventListener('click', () => {
+    layerPrefs.overlay = layerPrefs.overlay === false;
     applyLayers(); syncLayerBtns();
   });
   $('lb-areas').addEventListener('click', () => { renderAreas(); $('areas-dlg').showModal(); });
@@ -2729,15 +2727,14 @@
     const col = document.querySelector('#controls .kcol');
     const ctl = col.closest('#controls');
     const open = ctl.classList.contains('open'), lyr = ctl.classList.contains('layers');
-    const all = [...col.children].filter((b) => !b.hidden);
+    // בשכבות: "שכבות" נשאר למעלה, ושאר הכלים מתחלפים במקום באפשרויות שלו
+    const all = [...col.children].filter((b) => !b.hidden && (lyr ? b.classList.contains('lyr') || b.id === 'btn-layers' : !b.classList.contains('lyr')));
+    for (const b of col.children) if (!all.includes(b) && b.classList.contains('on')) {
+      b.style.setProperty('--d', '0ms');
+      b.classList.remove('on');
+      (layoutTools.shown || new Set()).delete(b);
+    }
     const show = open ? all : all.filter(pinned);
-    // אפשרויות השכבות – בשורה משמאל ל"שכבות", גדלות במקום אחת אחרי השנייה (מימין לשמאל)
-    const row = [...document.querySelectorAll('#controls .krow > button')];
-    row.forEach((b, i) => {
-      const on = open && lyr, was = b.classList.contains('on');
-      b.style.setProperty('--d', on && !was ? i * STAGGER + 'ms' : !on && was ? (row.length - 1 - i) * 25 + 'ms' : '0ms');
-      b.classList.toggle('on', on);
-    });
     $('btn-layers').classList.toggle('pressed', open && lyr);
     const now = new Set(show);
     let n = 0, k = 0;
