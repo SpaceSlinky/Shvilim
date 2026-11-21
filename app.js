@@ -965,10 +965,11 @@
       area(); g.fillStyle = night ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)'; g.fill();
       line(); g.strokeStyle = night ? 'rgba(255,255,255,.3)' : 'rgba(0,0,0,.25)'; g.stroke();
     });
-    // הקטע המסומן (עד האצבע / בין שתי אצבעות): צבע מלא – אפור בהיר בכהה, אפור כהה בבהיר
+    // הקטע המסומן (עד האצבע / בין שתי אצבעות): צבע מלא. הקו והמספר – אפור בהיר בכהה, אפור כהה בבהיר
     const hot = night ? '#d5d9dc' : '#59626a';
     const base = marks.from != null ? marks.from : marks.at != null && marks.touch != null && marks.at <= marks.touch ? marks.at : 0;
-    if (marks.touch != null) band(X(base), X(marks.touch), () => { area(); g.fillStyle = hot; g.fill(); });
+    // המילוי – ירוק מלא בצבע הקו העליון של הגרף (לא לבן/אפור)
+    if (marks.touch != null) band(X(base), X(marks.touch), () => { area(); g.fillStyle = night ? '#81c784' : '#2e7d4f'; g.fill(); });
     const dot = (d, color) => {
       g.fillStyle = color; g.strokeStyle = night ? '#1d2227' : '#fff'; g.lineWidth = 2;
       g.beginPath(); g.arc(X(d), Y(eleAt(p, clampD(d))), 5, 0, 7); g.fill(); g.stroke();
