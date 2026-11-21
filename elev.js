@@ -28,7 +28,7 @@
           for (let i = 0; i < out.length; i++) out[i] = d[i * 4] * 256 + d[i * 4 + 1] + d[i * 4 + 2] / 256 - 32768;
           return out;
         } catch { return null; }
-      })());
+      })().then((t) => { if (!t) tiles.delete(k); return t; })); // כישלון (למשל בלי אינטרנט) – לא נזכר; ינסו שוב בפעם הבאה
     }
     return tiles.get(k);
   }

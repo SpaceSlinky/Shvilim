@@ -386,6 +386,8 @@
       // עדכון שקט של האזור הישן ביותר
       const old = dlAreas().sort((a, b) => a.t - b.t)[0];
       if (old && Date.now() - old.t > REFRESH_MS && netOk()) setTimeout(() => downloadArea(old.b, { quiet: true }), 8000);
+      // נתוני הגובה של כל האזורים השמורים – משלימים ברקע מה שחסר (מה שכבר במטמון חוזר מיד, בלי רשת)
+      if (netOk()) setTimeout(() => dlAreas().forEach((ar) => Elev.prefetch(ar.b).catch(() => 0)), 12000);
     } else if (navigator.onLine) downloadArea(CARMEL); // פעם ראשונה – מורידים לבד
     else $('nodata').hidden = false;
   });
