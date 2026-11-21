@@ -80,7 +80,9 @@
       wpts: { type: 'geojson', data: empty },
       acc: { type: 'geojson', data: empty },
       // רקעים אונליין (דורשים אינטרנט)
-      sat: { type: 'raster', tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri',
+      // תצלום אוויר: ב-19 יש אזורים (גם בכרמל) שבהם Esri מחזיר תמונת "Map data not yet available" – עוצרים ב-18,
+      // ומעבר לזה המפה מגדילה את הרמה האחרונה (מפוקסל, אבל אמיתי)
+      sat: { type: 'raster', tileSize: 256, maxzoom: 18, attribution: 'Imagery © Esri',
         tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'] },
       topo: { type: 'raster', tileSize: 256, maxzoom: 17, attribution: '© OpenTopoMap (CC-BY-SA)',
         tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png'] },
