@@ -250,7 +250,7 @@
     style,
     center: saved?.center || DEFAULT_VIEW.center,
     zoom: saved?.zoom || DEFAULT_VIEW.zoom,
-    minZoom: 9,
+    minZoom: 6, // מעודכן מיד לפי גודל המסך (israelMinZoom)
     maxZoom: 19,
     dragRotate: true,
     pitchWithRotate: false,
@@ -258,6 +258,14 @@
     attributionControl: false, // הקרדיטים – בחלון השכבות
   });
   map.touchPitch?.disable?.();
+  // זום אאוט נגמר כשכל ישראל (מאילת עד החרמון) על המסך – לפי גודל המסך, מעל הדוק הסגור
+  const ISRAEL = [[34.2, 29.45], [35.95, 33.35]];
+  function israelMinZoom() {
+    const cam = map.cameraForBounds(ISRAEL, { padding: { top: 70, bottom: 100, left: 10, right: 10 } });
+    if (cam && isFinite(cam.zoom)) map.setMinZoom(Math.max(4, Math.min(9, cam.zoom)));
+  }
+  israelMinZoom();
+  map.on('resize', israelMinZoom);
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 100 }), 'bottom-left');
   map.on('moveend', () => {
     try {
