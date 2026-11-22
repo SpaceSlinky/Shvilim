@@ -69,6 +69,8 @@
   // דהייה לפי זום: מופיע בין z0 ל-z1 (שקיפות 0 → max). המפה המפורטת מתרוקנת בשלבים בהתרחקות
   const fade = (z0, z1, max = 1) => ['interpolate', ['linear'], ['zoom'], z0, 0, z1, max];
   // המעטפת: מופיעה 8.5–9, נעלמת 10.3–11 (בדיוק כשהשבילים המסומנים מופיעים, 10–10.7)
+  // הנקודה והשם מרחוק – מלאים עד 8.6, נעלמים עד 9.2 (בדיוק כשהמעטפת והשם בתוכה מופיעים)
+  const DOT_FADE = ['interpolate', ['linear'], ['zoom'], 8.6, 1, 9.2, 0];
   const ENV_FADE = (max) => ['interpolate', ['linear'], ['zoom'], 8.5, 0, 9, max, 10.3, max, 11, 0];
   const FADES = { // שכבה: [מתחיל להופיע, מלא]
     'minor-casing': [11.5, 12], minor: [11.5, 12], path: [11.5, 12], track: [11, 11.5], bike: [11, 11.5],
@@ -194,6 +196,14 @@
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 12.5,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
+      // מרחוק (מתחת לזום 9, עד הזום הכי רחוק): כל אזור שהורד – נקודה ירוקה עם השם; קרוב יותר – המעטפת והשם בתוכה
+      { id: 'env-dot', type: 'circle', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], maxzoom: 9.2,
+        paint: { 'circle-radius': 5, 'circle-color': '#2e7d4f', 'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
+          'circle-opacity': DOT_FADE, 'circle-stroke-opacity': DOT_FADE } },
+      { id: 'env-dot-label', type: 'symbol', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], maxzoom: 9.2,
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13, 'text-anchor': 'right', 'text-offset': [-0.7, 0],
+          'text-allow-overlap': true },
+        paint: { 'text-color': '#1f5f3a', 'text-halo-color': 'rgba(255,255,255,.8)', 'text-halo-width': 1, 'text-halo-blur': 0.5, 'text-opacity': DOT_FADE } },
       { id: 'env-label', type: 'symbol', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.5, maxzoom: 11,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
         paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1, 'text-halo-blur': 0.5, 'text-opacity': ENV_FADE(1) } },
@@ -2573,6 +2583,10 @@
     ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
     ['env-label', 'text-color', '#1f5f3a', '#a5d6a7'],
+    ['env-dot', 'circle-color', '#2e7d4f', '#81c784'],
+    ['env-dot', 'circle-stroke-color', '#ffffff', '#101317'],
+    ['env-dot-label', 'text-color', '#1f5f3a', '#a5d6a7'],
+    ['env-dot-label', 'text-halo-color', 'rgba(255,255,255,.8)', 'rgba(16,19,23,.8)'],
     ['env-label', 'text-halo-color', 'rgba(255,255,255,.8)', 'rgba(16,19,23,.8)'], // הילה דקה בצבע הרקע – לא קו מתאר לבן גס בלילה
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
     ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
