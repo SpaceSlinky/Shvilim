@@ -98,7 +98,8 @@
         paint: { 'line-color': '#9a8f9f', 'line-width': 1, 'line-dasharray': [3, 2] } },
       { id: 'ov-road', type: 'line', source: 'overview', maxzoom: 10, filter: k('r'), layout: { 'line-join': 'round', 'line-cap': 'round' },
         paint: { 'line-color': ['match', ['get', 'r'], 'm', '#e09a52', 't', '#e6b071', 's', '#ddd3bc', '#d8c49a'],
-          'line-width': ['interpolate', ['linear'], ['zoom'], 6, ['match', ['get', 'r'], 's', 0.25, 'p', 0.45, 0.9], 10, ['match', ['get', 'r'], 's', 0.8, 'p', 1.1, 1.9]] } },
+          'line-width': ['interpolate', ['linear'], ['zoom'], 6, ['match', ['get', 'r'], 's', 0.25, 'p', 0.45, 0.9], 10, ['match', ['get', 'r'], 's', 0.8, 'p', 1.1, 1.9],
+            15, ['match', ['get', 'r'], 's', 2.5, 'p', 3.5, 5]] } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -219,6 +220,15 @@
         paint: { 'fill-color': '#1e88e5', 'fill-opacity': 0.12, 'fill-outline-color': '#1e88e5' } },
     ],
   };
+  // המפה הכללית מעבר לזום 10: איפה שאין מפה שמורה היא ממשיכה להופיע (אחרת – מסך ריק), מתוך עותק שממנו נחתכו
+  // האזורים השמורים (overview-hi, `updateOverviewHi`) – שם יש מפה מפורטת, וכבישים מפושטים היו מצוירים כפולים לידה
+  style.sources['overview-hi'] = { type: 'geojson', data: empty };
+  style.layers = style.layers.flatMap((l) => {
+    if (!l.id.startsWith('ov-') || l.id === 'ov-sea') return [l];
+    const hi = { ...l, id: 'ovh-' + l.id.slice(3), source: 'overview-hi', minzoom: 10 };
+    delete hi.maxzoom;
+    return [l, hi];
+  });
 
   // ---------- מפה ----------
   // תוסף ה-RTL נטען מה-thread הראשי (דרך המטמון האופליין) ומועבר ל-MapLibre כ-blob,
@@ -293,7 +303,43 @@
     searchIndex = null;
     await mapReady;
     map.getSource('overview')?.setData(fc);
+    updateOverviewHi();
   }).catch(() => {});
+  // עותק של המפה הכללית בלי מה שבתוך אזורים שמורים (מלבנים): קווים נחתכים בגבול, נקודות שבתוכם – בחוץ
+  function updateOverviewHi() {
+    if (!overviewFC) return;
+    const boxes = (() => { try { return JSON.parse(localStorage.getItem('dlAreas')) || []; } catch { return []; } })().map((a) => a.b);
+    const inBoxP = (p, b) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3];
+    // חלקי קו מחוץ למלבן (Liang–Barsky לכל קטע)
+    const outside = (line, b) => {
+      const out = [];
+      let cur = [];
+      const flush = () => { if (cur.length > 1) out.push(cur); cur = []; };
+      for (let i = 1; i < line.length; i++) {
+        const a = line[i - 1], c = line[i], dx = c[0] - a[0], dy = c[1] - a[1];
+        let t0 = 0, t1 = 1, hit = true;
+        for (const [p, q] of [[-dx, a[0] - b[0]], [dx, b[2] - a[0]], [-dy, a[1] - b[1]], [dy, b[3] - a[1]]]) {
+          if (p === 0) { if (q < 0) { hit = false; break; } } else { const r = q / p; if (p < 0) t0 = Math.max(t0, r); else t1 = Math.min(t1, r); }
+        }
+        if (!hit || t0 >= t1) { if (!cur.length) cur.push(a); cur.push(c); continue; }
+        const at = (t) => [a[0] + dx * t, a[1] + dy * t];
+        if (t0 > 0) { if (!cur.length) cur.push(a); cur.push(at(t0)); }
+        flush();
+        if (t1 < 1) cur.push(at(t1), c);
+      }
+      flush();
+      return out;
+    };
+    const feats = [];
+    for (const f of overviewFC.features) {
+      if (f.properties.k === 'w') continue;
+      if (f.geometry.type === 'Point') { if (!boxes.some((b) => inBoxP(f.geometry.coordinates, b))) feats.push(f); continue; }
+      let lines = [f.geometry.coordinates];
+      for (const b of boxes) lines = lines.flatMap((l) => outside(l, b));
+      for (const l of lines) feats.push({ type: 'Feature', properties: f.properties, geometry: { type: 'LineString', coordinates: l } });
+    }
+    map.getSource('overview-hi')?.setData({ type: 'FeatureCollection', features: feats });
+  }
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 100 }), 'bottom-left');
   map.on('moveend', () => {
     try {
@@ -480,6 +526,7 @@
       + (mapFC ? ` · ${mapFC.features.length.toLocaleString()} קווים ונקודות` : '');
   }
   async function setMapData(fc) {
+    updateOverviewHi(); // האזורים השמורים השתנו (הורדה / מחיקה)
     if (PERF.data == null) PERF.data = performance.now();
     const trailGeoms = markShared(fc);
     buildSharedIdx(fc);
@@ -2342,11 +2389,11 @@
     water: ['water', 'water-label'],
     poi: ['poi-icon', 'poi-label', 'peak'],
     bike: ['bike'],
-    places: ['place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3'],
+    places: ['place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'ovh-place-1', 'ovh-place-2', 'ovh-place-3'],
     parking: ['parking-icon', 'parking-label'],
     route: ['route-casing', 'route-line', 'route-walked', 'route-ends', 'wpts'],
   };
-  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3']);
+  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'ovh-place-1', 'ovh-place-2', 'ovh-place-3']);
   const layerPrefs = Object.assign(
  { sat: 0, labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
@@ -2410,7 +2457,7 @@
       ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
     ['trail-casing', 'line-opacity', 0.85, 1],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
-    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'area-label']
+    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'ovh-place-1', 'ovh-place-2', 'ovh-place-3', 'area-label']
       .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
     ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
     ['road-label', 'text-color', '#555555', '#b9b9b9'],
@@ -2428,6 +2475,7 @@
     ['dim', 'fill-color', '#ffffff', '#000000'],
     ['route-walked', 'line-color', '#ffffff', '#1b1f24'],
   ];
+  for (const t of THEME.slice()) if (t[0].startsWith('ov-') && t[0] !== 'ov-sea') THEME.push(['ovh-' + t[0].slice(3), ...t.slice(1)]);
   function applyTheme(night) {
     document.body.classList.toggle('night', night);
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
