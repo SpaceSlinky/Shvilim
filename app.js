@@ -92,6 +92,7 @@
       sat: { type: 'raster', tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri', tiles: ['esrifb://{z}/{y}/{x}'] },
       overview: { type: 'geojson', data: empty }, // israel.json – כל הארץ, רק בזום רחוק
       'areas-env': { type: 'geojson', data: empty }, // מעטפת האזורים שהורדו (updateEnvelope)
+      'dl-grid': { type: 'geojson', data: empty }, // ריבועי ההורדה שעוד חסרים (checkArea)
       scrub: { type: 'geojson', data: empty },
       detour: { type: 'geojson', data: empty },
       walked: { type: 'geojson', data: empty },
@@ -113,6 +114,8 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
+      { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 11,
+        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': 0.55 } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -181,18 +184,20 @@
         filter: ['all', k('place'), ['!', ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13 },
         paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
-      // שמות היישובים בכל הארץ (זום רחוק), לפי דירוג r: 1 – ערים וגדולים (תמיד), 2 – עיירות (מ-7.5), 3 – יישובים וכפרים (מ-8.5);
-      // שכבה לכל דירוג (ולא שקיפות 0 – שם שקוף עדיין "תופס מקום" ומסתיר אחרים). השכבה העליונה ממוקמת ראשונה ומנצחת
-      // בהתנגשות – לכן הערים אחרונות (למעלה), ובתוך שכבה – לפי גודל (symbol-sort-key); מזום 10 – מהמפה המפורטת
-      ...[[3, 8.5, 11.5], [2, 7.5, 12.5], [1, 0, 14]].map(([r, mz, size]) => ({ id: 'ov-place-' + r, type: 'symbol', source: 'overview', minzoom: mz, maxzoom: 10,
-        filter: ['all', k('p'), ['==', ['get', 'r'], r]],
-        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': size,
+      // שמות: בזום רחוק – רק ערים מרכזיות (m, ~24 לכל הארץ, להתמצאות), ולא בתוך אזור שהורד (שם – רק שם האזור);
+      // מקרוב (11+) מחוץ לאזורים – כל היישובים. כל יישוב אחר – בחיפוש. הגדולים קודמים בהתנגשות (symbol-sort-key)
+      { id: 'ov-city', type: 'symbol', source: 'ov-cities', maxzoom: 11,
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13.5,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
-        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } })),
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
+      { id: 'ovh-place', type: 'symbol', source: 'overview-hi', minzoom: 11, filter: k('p'),
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 12.5,
+          'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
       { id: 'env-label', type: 'symbol', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.5, maxzoom: 11,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
         paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.8, 'text-opacity': ENV_FADE(1) } },
-      { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 10,
+      { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 11,
         filter: ['all', k('place'), ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
           'text-size': ['match', ['get', 't'], ['city', 'town'], 17, 15] },
@@ -240,6 +245,7 @@
   // המפה הכללית מעבר לזום 10: איפה שאין מפה שמורה היא ממשיכה להופיע (אחרת – מסך ריק), מתוך עותק שממנו נחתכו
   // האזורים השמורים (overview-hi, `updateOverviewHi`) – שם יש מפה מפורטת, וכבישים מפושטים היו מצוירים כפולים לידה
   style.sources['overview-hi'] = { type: 'geojson', data: empty };
+  style.sources['ov-cities'] = { type: 'geojson', data: empty };
   for (const l of style.layers) {
     const f = FADES[l.id];
     if (!f) continue;
@@ -247,7 +253,7 @@
     l.paint['line-opacity'] = fade(f[0], f[1], typeof l.paint['line-opacity'] === 'number' ? l.paint['line-opacity'] : 1);
   }
   style.layers = style.layers.flatMap((l) => {
-    if (!l.id.startsWith('ov-') || l.id === 'ov-sea') return [l];
+    if (l.id !== 'ov-coast' && l.id !== 'ov-border') return [l]; // רק קווי המתאר ממשיכים מקרוב
     const hi = { ...l, id: 'ovh-' + l.id.slice(3), source: 'overview-hi', minzoom: 10 };
     delete hi.maxzoom;
     return [l, hi];
@@ -348,8 +354,7 @@
     const ys = [...new Set(boxes.flatMap((b) => [b[1], b[3]]))].sort((a, b) => a - b);
     const cov = (i, j) => i >= 0 && j >= 0 && i < xs.length - 1 && j < ys.length - 1
       && boxes.some((b) => b[0] <= xs[i] && b[2] >= xs[i + 1] && b[1] <= ys[j] && b[3] >= ys[j + 1]);
-    const feats = [], comp = new Map();
-    envGroups = [];
+    const feats = [];
     for (let i = 0; i < xs.length - 1; i++) for (let j = 0; j < ys.length - 1; j++) {
       if (!cov(i, j)) continue;
       const [x0, x1, y0, y1] = [xs[i], xs[i + 1], ys[j], ys[j + 1]];
@@ -359,23 +364,10 @@
       if (!cov(i, j + 1)) edge([x0, y1], [x1, y1]);
       if (!cov(i - 1, j)) edge([x0, y0], [x0, y1]);
       if (!cov(i + 1, j)) edge([x1, y0], [x1, y1]);
-      // קבוצות מחוברות (הצפה)
-      if (comp.has(i + ',' + j)) continue;
-      const g = { bbox: [x0, y0, x1, y1], boxes: new Set() }, stack = [[i, j]];
-      comp.set(i + ',' + j, g);
-      while (stack.length) {
-        const [a, b] = stack.pop();
-        g.bbox = [Math.min(g.bbox[0], xs[a]), Math.min(g.bbox[1], ys[b]), Math.max(g.bbox[2], xs[a + 1]), Math.max(g.bbox[3], ys[b + 1])];
-        for (const bx of boxes) if (bx[0] <= xs[a] && bx[2] >= xs[a + 1] && bx[1] <= ys[b] && bx[3] >= ys[b + 1]) g.boxes.add(bx);
-        for (const [c, d] of [[a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]]) {
-          if (cov(c, d) && !comp.has(c + ',' + d)) { comp.set(c + ',' + d, g); stack.push([c, d]); }
-        }
-      }
-      envGroups.push(g);
     }
+    envGroups = areaGroups();
     for (const g of envGroups) {
-      const big = [...g.boxes].sort((a, b) => (b[2] - b[0]) * (b[3] - b[1]) - (a[2] - a[0]) * (a[3] - a[1]))[0];
-      feats.push({ type: 'Feature', properties: { n: areaName(big) }, geometry: { type: 'Point', coordinates: [(big[0] + big[2]) / 2, (big[1] + big[3]) / 2] } });
+      feats.push({ type: 'Feature', properties: { n: g.name }, geometry: { type: 'Point', coordinates: [(g.big[0] + g.big[2]) / 2, (g.big[1] + g.big[3]) / 2] } });
     }
     map.getSource('areas-env')?.setData({ type: 'FeatureCollection', features: feats });
   }
@@ -419,6 +411,9 @@
       for (const l of lines) feats.push({ type: 'Feature', properties: f.properties, geometry: { type: 'LineString', coordinates: l } });
     }
     map.getSource('overview-hi')?.setData({ type: 'FeatureCollection', features: feats });
+    // ערים מרכזיות (זום רחוק) – לא בתוך אזור שהורד (שם מוצג רק שם האזור)
+    map.getSource('ov-cities')?.setData({ type: 'FeatureCollection',
+      features: overviewFC.features.filter((f) => f.properties.m && !boxes.some((b) => inBoxP(f.geometry.coordinates, b))) });
   }
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 100 }), 'bottom-left');
   map.on('moveend', () => {
@@ -457,7 +452,7 @@
   let dlErr = ''; // ההורדה האחרונה של אזור נכשלה – הסיבה מוצגת על הכפתור
   const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
   // quiet: עדכון ברקע בלי הודעות; area: אזור חדש – ההתקדמות על הכפתור במרכז המסך
-  async function downloadArea(bbox, { quiet = false, area = false } = {}) {
+  async function downloadArea(bbox, { quiet = false, area = false, cells = null } = {}) {
     if (dlJob) {
       if (quiet || !dlJob.quiet) return;
       dlJob.ctl.abort(new DOMException('הופסק', 'AbortError'));
@@ -466,11 +461,11 @@
     if (!navigator.onLine) return quiet || area ? undefined : toast('אין חיבור לאינטרנט');
     const ctl = new AbortController();
     const job = { quiet, ctl };
-    job.done = runDownload(bbox, { quiet, area, signal: ctl.signal }).finally(() => { if (dlJob === job) dlJob = null; });
+    job.done = runDownload(bbox, { quiet, area, cells, signal: ctl.signal }).finally(() => { if (dlJob === job) dlJob = null; });
     dlJob = job;
     return job.done;
   }
-  async function runDownload(bbox, { quiet, area, signal }) {
+  async function runDownload(bbox, { quiet, area, cells, signal }) {
     const say = (m, ms) => { if (area) { dlMsg = m; checkArea(); } else if (!quiet) toast(m, ms); };
     if (area) { dlErr = ''; say('מוריד את מפות האזור…'); }
     try {
@@ -490,7 +485,8 @@
       await withTimeout(Elev.prefetch(bbox).catch(() => 0), 60000);
       if (navigator.storage?.persist) navigator.storage.persist();
       const trails = fc.features.filter((f) => f.properties.k === 'trail').length;
-      markArea(bbox);
+      for (const c of cells || [bbox]) markArea(c); // הורדה בריבועים – כל ריבוע נרשם לבד
+      areasChanged();
       if (area) toast(fresh.features.length ? 'מפות האזור נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓' : 'אין שבילים או דרכים באזור הזה', 3000);
       else say(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
     } catch (e) {
@@ -636,6 +632,36 @@
     try { localStorage.setItem('dlAreas', JSON.stringify(list)); } catch { /* ignore */ }
   }
   const netOk = () => navigator.onLine && !navigator.connection?.saveData;
+  // ---------- הורדה בריבועים קבועים (0.1° ≈ 9×11 ק"מ): בלי חפיפות וחתיכות קטנות; הורדה שנייה – רק מה שחסר ----------
+  const CELL = 0.1, MAX_CELLS = 6;
+  const cellBox = (i, j) => [i * CELL, j * CELL, (i + 1) * CELL, (j + 1) * CELL].map((v) => +v.toFixed(4));
+  const covers = (b, c) => b[0] <= c[0] + 1e-6 && b[1] <= c[1] + 1e-6 && b[2] >= c[2] - 1e-6 && b[3] >= c[3] - 1e-6;
+  function missingCells() {
+    const v = map.getBounds(), areas = dlAreas(), out = [];
+    for (let i = Math.floor(v.getWest() / CELL); i <= Math.floor(v.getEast() / CELL); i++)
+      for (let j = Math.floor(v.getSouth() / CELL); j <= Math.floor(v.getNorth() / CELL); j++) {
+        const c = cellBox(i, j);
+        if (!areas.some((a) => covers(a.b, c))) out.push(c);
+      }
+    return out;
+  }
+  // אזורים שנוגעים או חופפים – אזור אחד (במעטפת וב"מפות שמורות"): שם, גבולות, ותאריך העדכון הישן ביותר
+  function areaGroups() {
+    const list = dlAreas(), par = list.map((_, i) => i);
+    const find = (i) => (par[i] === i ? i : (par[i] = find(par[i])));
+    const touch = (a, b) => a[0] <= b[2] + 1e-6 && b[0] <= a[2] + 1e-6 && a[1] <= b[3] + 1e-6 && b[1] <= a[3] + 1e-6;
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) if (touch(list[i].b, list[j].b)) par[find(i)] = find(j);
+    const groups = new Map();
+    list.forEach((a, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(a); });
+    return [...groups.values()].map((areas) => {
+      const bbox = areas.reduce((u, { b }) => [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])], areas[0].b);
+      const big = areas.map((a) => a.b).sort((a, b) => (b[2] - b[0]) * (b[3] - b[1]) - (a[2] - a[0]) * (a[3] - a[1]))[0];
+      const name = areas.some((a) => a.b.join() === CARMEL.join()) ? 'הכרמל' : areaName(bbox);
+      return { areas, bbox, big, name, t: Math.min(...areas.map((a) => a.t || Date.now())) };
+    });
+  }
+  // האזורים השמורים השתנו – המעטפת, המפה הכללית שמחוצה להם, והריבועים שעוד חסרים
+  function areasChanged() { updateEnvelope(); updateOverviewHi(); checkArea(); }
   Promise.all([db.get('mapdata').catch(() => null), mapReady]).then(([fc]) => {
     if (fc) {
       setMapData(fc);
@@ -672,12 +698,13 @@
   function renderAreas() {
     const box = $('areas-list');
     box.textContent = '';
-    const list = dlAreas().sort((a, b) => b.t - a.t);
+    // אזור = קבוצת ריבועים/מפות שנוגעים זה בזה – שורה אחת, ומחיקה של כולם יחד
+    const list = areaGroups().sort((a, b) => b.t - a.t);
     for (const a of list) {
-      const test = inBox(a.b);
+      const tests = a.areas.map((x) => inBox(x.b));
       let size = 0;
-      for (const f of mapFC?.features || []) if (touchesBox(f, test)) size += JSON.stringify(f).length;
-      const name = areaName(a.b);
+      for (const f of mapFC?.features || []) if (tests.some((t) => touchesBox(f, t))) size += JSON.stringify(f).length;
+      const name = a.name;
       const row = document.createElement('div');
       row.className = 'area-row';
       const go = document.createElement('button');
@@ -688,37 +715,38 @@
       go.append(sm);
       go.addEventListener('click', () => {
         $('areas-dlg').close();
-        map.fitBounds([[a.b[0], a.b[1]], [a.b[2], a.b[3]]], { padding: 20, duration: 600 });
+        map.fitBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]], { padding: 20, duration: 600 });
       });
       const del = document.createElement('button');
       del.className = 'a-del';
       del.textContent = 'מחיקה';
       del.addEventListener('click', async () => {
         if (!(await confirmDlg(`למחוק את המפה של ${name}?`, 'המפה של האזור תימחק מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותה שוב כשיש אינטרנט.'))) return;
-        await deleteArea(a.b);
+        await deleteAreas(a.areas.map((x) => x.b));
       });
       row.append(go, del);
       box.append(row);
     }
   }
   // מוחקים את מה שבתוך האזור – חוץ ממה שנוגע באזור שמור אחר
-  async function deleteArea(b) {
+  async function deleteAreas(bs) {
     if (dlJob?.quiet) { dlJob.ctl.abort(new DOMException('הופסק', 'AbortError')); await dlJob.done; }
-    const rest = dlAreas().filter((a) => a.b.join() !== b.join());
-    const del = inBox(b), keep = rest.map((a) => inBox(a.b));
+    const gone = new Set(bs.map((b) => b.join()));
+    const rest = dlAreas().filter((a) => !gone.has(a.b.join()));
+    const dels = bs.map(inBox), keep = rest.map((a) => inBox(a.b));
     const fc = mapFC || (await db.get('mapdata').catch(() => null)) || { type: 'FeatureCollection', features: [] };
-    const features = fc.features.filter((f) => !touchesBox(f, del) || keep.some((t) => touchesBox(f, t)));
+    const features = fc.features.filter((f) => !dels.some((t) => touchesBox(f, t)) || keep.some((t) => touchesBox(f, t)));
     const bbox = rest.length ? rest.reduce((u, { b: x }) => [Math.min(u[0], x[0]), Math.min(u[1], x[1]), Math.max(u[2], x[2]), Math.max(u[3], x[3])], rest[0].b) : undefined;
     const nfc = { type: 'FeatureCollection', features, ...(bbox ? { bbox } : {}) };
     await db.set('mapdata', nfc); // נשאר גם כשריק – כדי שהכרמל לא יורד שוב לבד
     try { localStorage.setItem('dlAreas', JSON.stringify(rest)); } catch { /* ignore */ }
     // גם נתוני הגובה של האזור (מה שלא משותף לאזור אחר)
     const keepUrls = new Set(rest.flatMap((a) => Elev.tileUrls(a.b)));
-    const drop = Elev.tileUrls(b).filter((u) => !keepUrls.has(u));
+    const drop = [...new Set(bs.flatMap((b) => Elev.tileUrls(b)))].filter((u) => !keepUrls.has(u));
     if (self.caches) for (const k of await caches.keys()) { const c = await caches.open(k); await Promise.all(drop.map((u) => c.delete(u))); }
     await setMapData(nfc);
+    areasChanged();
     renderAreas();
-    checkArea();
   }
 
   // אזור בלי מפה שמורה (למשל אחרי חיפוש): במרכז המסך – "להורדת מפות האזור" (לחיץ)
@@ -729,14 +757,15 @@
     return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
   }
   function checkArea() {
-    // מרחוק (כל הארץ / המעטפת) – בלי כפתור ההורדה באמצע המסך
-    if (map.getZoom() < 11 && !dlMsg) return (dlHere.hidden = true); // רק מקרוב – כשרואים את המפה המפורטת
-    const c = map.getCenter();
-    const inside = dlAreas().some(({ b }) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3]);
-    if (inside && !dlMsg) return (dlHere.hidden = true);
+    // מרחוק (כל הארץ / המעטפת) – בלי כפתור ההורדה ובלי ריבועים
+    if (map.getZoom() < 11 && !dlMsg) { dlHere.hidden = true; map.getSource('dl-grid')?.setData(empty); return; }
+    const miss = missingCells();
+    // הריבועים שעוד לא הורדו – קווים מקווקווים עדינים: ברור מה יירד בלחיצה
+    map.getSource('dl-grid')?.setData({ type: 'FeatureCollection', features: miss.map((c) => ({ type: 'Feature', properties: {},
+      geometry: { type: 'LineString', coordinates: [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]] } })) });
+    if (!miss.length && !dlMsg) return (dlHere.hidden = true);
     dlHere.hidden = false;
-    const b = viewBox();
-    const big = (b[2] - b[0]) * (b[3] - b[1]) > 0.12;
+    const big = miss.length > MAX_CELLS;
     dlHere.disabled = !!dlMsg || !navigator.onLine || big;
     dlHere.textContent = dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
       : big ? 'התקרבו כדי להוריד את מפות האזור'
@@ -744,7 +773,10 @@
   }
   dlHere.addEventListener('click', () => {
     if (dlHere.disabled) return;
-    downloadArea(viewBox(), { area: true });
+    const cells = missingCells();
+    if (!cells.length || cells.length > MAX_CELLS) return;
+    const bbox = cells.reduce((u, b) => [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])], cells[0]);
+    downloadArea(bbox, { area: true, cells });
   });
   map.on('moveend', checkArea);
   addEventListener('online', checkArea);
@@ -2470,11 +2502,11 @@
     water: ['water', 'water-label'],
     poi: ['poi-icon', 'poi-label', 'peak'],
     bike: ['bike'],
-    places: ['place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'ovh-place-1', 'ovh-place-2', 'ovh-place-3'],
+    places: ['place-minor', 'place-major', 'ov-city', 'ovh-place'],
     parking: ['parking-icon', 'parking-label'],
     route: ['route-casing', 'route-line', 'route-walked', 'route-ends', 'wpts'],
   };
-  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'ovh-place-1', 'ovh-place-2', 'ovh-place-3']);
+  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major', 'ov-city', 'ovh-place']);
   const layerPrefs = Object.assign(
  { sat: 0, labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
@@ -2538,10 +2570,11 @@
       ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
     ['trail-casing', 'line-opacity', fade(10, 10.7, 0.85), fade(10, 10.7, 1)],
     ['env-fill', 'fill-color', '#2e7d4f', '#81c784'],
+    ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
     ['env-label', 'text-color', '#1f5f3a', '#a5d6a7'],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
-    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'ovh-place-1', 'ovh-place-2', 'ovh-place-3', 'area-label']
+    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
       .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
     ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
     ['road-label', 'text-color', '#555555', '#b9b9b9'],
@@ -2550,7 +2583,7 @@
     ['peak', 'text-color', '#6d4c2f', '#d9b48c'],
     ['place-minor', 'text-color', '#444444', '#cccccc'],
     ['place-major', 'text-color', '#222222', '#f2f2f2'],
-    ...['ov-place-1', 'ov-place-2', 'ov-place-3'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
+    ...['ov-city', 'ovh-place'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
     ['ov-sea', 'fill-color', '#aad3df', '#1c2f3e'],
     ['ov-coast', 'line-color', '#7fa7c9', '#3d6a8f'],
     ['ov-border', 'line-color', '#7a6f80', '#8d8494'],
@@ -2558,7 +2591,7 @@
     ['dim', 'fill-color', '#ffffff', '#000000'],
     ['route-walked', 'line-color', '#ffffff', '#1b1f24'],
   ];
-  for (const t of THEME.slice()) if (t[0].startsWith('ov-') && t[0] !== 'ov-sea') THEME.push(['ovh-' + t[0].slice(3), ...t.slice(1)]);
+  for (const t of THEME.slice()) if (t[0] === 'ov-coast' || t[0] === 'ov-border') THEME.push(['ovh-' + t[0].slice(3), ...t.slice(1)]);
   function applyTheme(night) {
     document.body.classList.toggle('night', night);
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
