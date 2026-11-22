@@ -120,6 +120,16 @@ def unique_lines(els):
     return out
 
 
+def drop_loops(line):
+    """לולאה קטנה שהקו חוזר בה לאותה נקודה (בגבול ליד טאבה – "קשקוש") – נחתכת: מהמופע הראשון של נקודה ישר לאחרון"""
+    last = {tuple(p): i for i, p in enumerate(line)}
+    out, i = [], 0
+    while i < len(line):
+        out.append(line[i])
+        i = last[tuple(line[i])] + 1
+    return out
+
+
 def join_all(lines, maxgap_m=15000, water=()):
     """מחבר קווים לקו רציף בלי קשר לכיוון (הופך כשצריך), וממלא רווחים קטנים בקו ישר – לגבול (בנתונים חסרים
     לפעמים קטעים). לא מחבר מעל מים (טאבה–אילת)"""
@@ -372,7 +382,7 @@ def main(path):
         if len(c) > 1:
             border.append(c)
     for c in join_all(border, water=water):
-        F({'type': 'LineString', 'coordinates': c}, {'k': 'b'})
+        F({'type': 'LineString', 'coordinates': drop_loops(c)}, {'k': 'b'})
     promote([f for f in feats if f['properties']['k'] == 'p'])
     count = lambda k: sum(1 for f in feats if f['properties']['k'] == k)
     print({k: count(k) for k in 'pwcb'}, file=sys.stderr)
