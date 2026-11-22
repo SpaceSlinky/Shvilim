@@ -91,13 +91,15 @@
       { id: 'bg', type: 'background', paint: { 'background-color': '#e6e1d1' } },
       // תצלום אוויר מתחת למפה – במקום הרקע (חצי העליון של הסליידר)
       { id: 'base-sat', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
-      // מפה כללית של כל הארץ (israel.json, מגיעה עם האפליקציה): קו חוף, גבול, כבישים ראשיים – רק בזום רחוק
+      // מפה כללית של כל הארץ (israel.json, מגיעה עם האפליקציה). הים, מפרץ אילת, הכנרת וים המלח – בכל זום (במפות האזורים
+      // אין ים); קו חוף, גבול וכבישים – רק בזום רחוק. הכול בין שתי שכבות התצלום – הסליידר עובד עליהן כמו על השבילים
+      { id: 'ov-sea', type: 'fill', source: 'overview', filter: k('w'), paint: { 'fill-color': '#aad3df' } },
       { id: 'ov-coast', type: 'line', source: 'overview', maxzoom: 10, filter: k('c'), paint: { 'line-color': '#7fa7c9', 'line-width': 1.2 } },
       { id: 'ov-border', type: 'line', source: 'overview', maxzoom: 10, filter: k('b'),
         paint: { 'line-color': '#9a8f9f', 'line-width': 1, 'line-dasharray': [3, 2] } },
       { id: 'ov-road', type: 'line', source: 'overview', maxzoom: 10, filter: k('r'), layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['match', ['get', 'r'], 'm', '#e09a52', 't', '#e6b071', '#d8c49a'],
-          'line-width': ['interpolate', ['linear'], ['zoom'], 6, ['match', ['get', 'r'], 'p', 0.4, 0.8], 10, ['match', ['get', 'r'], 'p', 1, 1.8]] } },
+        paint: { 'line-color': ['match', ['get', 'r'], 'm', '#e09a52', 't', '#e6b071', 's', '#ddd3bc', '#d8c49a'],
+          'line-width': ['interpolate', ['linear'], ['zoom'], 6, ['match', ['get', 'r'], 's', 0.25, 'p', 0.45, 0.9], 10, ['match', ['get', 'r'], 's', 0.8, 'p', 1.1, 1.9]] } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -166,13 +168,13 @@
         filter: ['all', k('place'), ['!', ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13 },
         paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
-      // שמות היישובים בכל הארץ (זום רחוק): ערים תמיד, עיירות מ-7.5, יישובים וכפרים מ-8.5; מזום 10 – מהמפה המפורטת
-      { id: 'ov-place', type: 'symbol', source: 'overview', maxzoom: 10, filter: k('p'),
-        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
-          'symbol-sort-key': ['match', ['get', 't'], 'c', 0, 't', 1, 2],
-          'text-size': ['match', ['get', 't'], 'c', 14, 't', 12.5, 11.5] },
-        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6,
-          'text-opacity': ['step', ['zoom'], ['match', ['get', 't'], 'c', 1, 0], 7.5, ['match', ['get', 't'], 'v', 0, 1], 8.5, 1] } },
+      // שמות היישובים בכל הארץ (זום רחוק), לפי דירוג r: 1 – ערים וגדולים (תמיד), 2 – עיירות (מ-7.5), 3 – יישובים וכפרים (מ-8.5);
+      // שכבה לכל דירוג (ולא שקיפות 0 – שם שקוף עדיין "תופס מקום" ומסתיר אחרים). הגדולים קודמים; מזום 10 – מהמפה המפורטת
+      ...[[1, 0, 14], [2, 7.5, 12.5], [3, 8.5, 11.5]].map(([r, mz, size]) => ({ id: 'ov-place-' + r, type: 'symbol', source: 'overview', minzoom: mz, maxzoom: 10,
+        filter: ['all', k('p'), ['==', ['get', 'r'], r]],
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': size,
+          'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } })),
       { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 10,
         filter: ['all', k('place'), ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
@@ -2339,11 +2341,11 @@
     water: ['water', 'water-label'],
     poi: ['poi-icon', 'poi-label', 'peak'],
     bike: ['bike'],
-    places: ['place-minor', 'place-major', 'ov-place'],
+    places: ['place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3'],
     parking: ['parking-icon', 'parking-label'],
     route: ['route-casing', 'route-line', 'route-walked', 'route-ends', 'wpts'],
   };
-  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major', 'ov-place']);
+  const LABELS = new Set(['trail-label', 'road-label', 'water-label', 'poi-label', 'parking-label', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3']);
   const layerPrefs = Object.assign(
  { sat: 0, labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
@@ -2407,7 +2409,7 @@
       ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
     ['trail-casing', 'line-opacity', 0.85, 1],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
-    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-place', 'area-label']
+    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'area-label']
       .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
     ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
     ['road-label', 'text-color', '#555555', '#b9b9b9'],
@@ -2416,10 +2418,11 @@
     ['peak', 'text-color', '#6d4c2f', '#d9b48c'],
     ['place-minor', 'text-color', '#444444', '#cccccc'],
     ['place-major', 'text-color', '#222222', '#f2f2f2'],
-    ['ov-place', 'text-color', '#222222', '#f2f2f2'],
+    ...['ov-place-1', 'ov-place-2', 'ov-place-3'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
+    ['ov-sea', 'fill-color', '#aad3df', '#1c2f3e'],
     ['ov-coast', 'line-color', '#7fa7c9', '#3d6a8f'],
     ['ov-border', 'line-color', '#9a8f9f', '#6b6470'],
-    ['ov-road', 'line-color', ['match', ['get', 'r'], 'm', '#e09a52', 't', '#e6b071', '#d8c49a'], ['match', ['get', 'r'], 'm', '#7a5228', 't', '#6e5434', '#5a5040']],
+    ['ov-road', 'line-color', ['match', ['get', 'r'], 'm', '#e09a52', 't', '#e6b071', 's', '#ddd3bc', '#d8c49a'], ['match', ['get', 'r'], 'm', '#7a5228', 't', '#6e5434', 's', '#3d3a35', '#5a5040']],
     ['area-label', 'text-color', '#e06000', '#ffa040'],
     ['dim', 'fill-color', '#ffffff', '#000000'],
     ['route-walked', 'line-color', '#ffffff', '#1b1f24'],
