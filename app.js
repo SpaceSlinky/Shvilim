@@ -287,9 +287,20 @@
   map.touchPitch?.disable?.();
   // זום אאוט נגמר כשכל ישראל (מאילת עד החרמון) על המסך – לפי גודל המסך, מעל הדוק הסגור
   const ISRAEL = [[34.2, 29.45], [35.95, 33.35]];
+  // וגם תזוזה: אי אפשר לגרור אל מחוץ למעטפת של כל הארץ – המלבן שרואים בזום הכי רחוק (setMaxBounds)
   function israelMinZoom() {
     const cam = map.cameraForBounds(ISRAEL, { padding: { top: 70, bottom: 100, left: 10, right: 10 } });
-    if (cam && isFinite(cam.zoom)) map.setMinZoom(Math.max(4, Math.min(9, cam.zoom)));
+    if (!cam || !isFinite(cam.zoom)) return cam;
+    const z = Math.max(4, Math.min(9, cam.zoom));
+    const { width: W, height: H } = map.getCanvas().getBoundingClientRect();
+    const c = maplibregl.LngLat.convert(cam.center);
+    const scale = (512 * 2 ** z) / (2 * Math.PI) / 1.01; // פיקסלים לרדיאן (+1% מרווח)
+    const my = Math.log(Math.tan(Math.PI / 4 + (c.lat * Math.PI) / 360));
+    const lat = (y) => (360 / Math.PI) * Math.atan(Math.exp(y)) - 90;
+    const dLon = (W / 2 / scale) * (180 / Math.PI);
+    map.setMaxBounds(null);
+    map.setMinZoom(z);
+    map.setMaxBounds([[c.lng - dLon, lat(my - H / 2 / scale)], [c.lng + dLon, lat(my + H / 2 / scale)]]);
     return cam;
   }
   const israelCam = israelMinZoom();
