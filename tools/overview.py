@@ -153,12 +153,15 @@ def unique_lines(els):
 
 def drop_loops(line):
     """לולאה קטנה שהקו חוזר בה לאותה נקודה (בגבול ליד טאבה – "קשקוש") – נחתכת: מהמופע הראשון של נקודה ישר לאחרון"""
+    closed = len(line) > 2 and line[0] == line[-1]
+    if closed:
+        line = line[:-1]  # טבעת: נקודת הסגירה היא לא "חזרה"
     last = {tuple(p): i for i, p in enumerate(line)}
     out, i = [], 0
     while i < len(line):
         out.append(line[i])
         i = last[tuple(line[i])] + 1
-    return out
+    return out + [out[0]] if closed else out
 
 
 def join_all(lines, maxgap_m=15000, water=()):
@@ -368,11 +371,56 @@ def lines(els, tol, prec):
     return res
 
 
-def main(path):
+def from_pbf(path):
+    """קובץ מוכן של Geofabrik (ישראל ופלסטין): יישובים, ודרכי הגבול של IL ו-PS – בלי שרת ציבורי עמוס"""
+    import osmium
+
+    class Rel(osmium.SimpleHandler):
+        def __init__(self):
+            super().__init__()
+            self.il, self.ps = set(), set()
+
+        def relation(self, r):
+            iso = r.tags.get('ISO3166-1')
+            if r.tags.get('admin_level') == '2' and iso in ('IL', 'PS'):
+                (self.il if iso == 'IL' else self.ps).update(m.ref for m in r.members if m.type == 'w')
+
+    rel = Rel()
+    rel.apply_file(path)
+
+    class H(osmium.SimpleHandler):
+        def __init__(self):
+            super().__init__()
+            self.places, self.il, self.ps = [], [], []
+
+        def node(self, n):
+            t = n.tags
+            if t.get('place') in ('city', 'town', 'village') and (t.get('name:he') or t.get('name')):
+                self.places.append({'lon': n.location.lon, 'lat': n.location.lat, 'tags': {k: v for k, v in t}})
+
+        def way(self, w):
+            if (w.id in rel.il or w.id in rel.ps) and w.tags.get('maritime') != 'yes':
+                try:
+                    el = {'geometry': [{'lon': nd.lon, 'lat': nd.lat} for nd in w.nodes]}
+                except osmium.InvalidLocationError:
+                    return
+                if w.id in rel.il:
+                    self.il.append(el)
+                if w.id in rel.ps:
+                    self.ps.append(el)
+
+    h = H()
+    h.apply_file(path, locations=True)
+    print('pbf:', len(h.places), 'places,', len(h.il), 'IL ways,', len(h.ps), 'PS ways', file=sys.stderr)
+    return h
+
+
+def main(path, pbf=None):
     feats = []
     F = lambda geom, props: feats.append({'type': 'Feature', 'geometry': geom, 'properties': props})
+    src = from_pbf(pbf) if pbf else None
     print('places…', file=sys.stderr)
-    for el in overpass(QUERIES['places'], need=800):
+    for el in (src.places if src else overpass(QUERIES['places'], need=800)):
         t = el.get('tags', {})
         n = t.get('name:he') or t.get('name')
         if not n:
@@ -384,8 +432,14 @@ def main(path):
         # דירוג: 1 – עיר / מעל 40 אלף (תמיד), 2 – עיירה (מזום 7.5), 3 – יישוב/כפר (מזום 8.5)
         rank = 1 if t['place'] == 'city' or pop >= 40000 else 2 if t['place'] == 'town' else 3
         F({'type': 'Point', 'coordinates': [round(el['lon'], 4), round(el['lat'], 4)]}, {'k': 'p', 'r': rank, 'pop': pop, 'n': n})
-    print('seas…', file=sys.stderr)
-    for b, probe in SEAS:
+    if src:
+        # ים, חוף ואגמים לא משתנים – נשארים מהקובץ הקיים (בקובץ של ישראל אין את החוף של לבנון וסיני, שצריך לסגירת הים)
+        with open(path, encoding='utf-8') as f:
+            for x in json.load(f)['features']:
+                if x['properties']['k'] in ('w', 'c'):
+                    feats.append(x)
+    for b, probe in ([] if src else SEAS):
+        print('seas…', file=sys.stderr)
         coast = overpass(coast_q(b), need=5)
         for ring in sea_polygons(coast, b, probe):
             r = ring_clean(ring, 20, 4)
@@ -393,10 +447,11 @@ def main(path):
                 F({'type': 'Polygon', 'coordinates': [r]}, {'k': 'w'})
         for c in lines(coast, 20, 4):
             F({'type': 'LineString', 'coordinates': c}, {'k': 'c'})
-    F({'type': 'Polygon', 'coordinates': [FILL]}, {'k': 'w'})
+    if not src:
+        F({'type': 'Polygon', 'coordinates': [FILL]}, {'k': 'w'})
     print('lakes…', file=sys.stderr)
-    lakes = overpass(QUERIES['lakes'], need=1)
-    if not any(32.6 < (el.get('bounds') or {}).get('minlat', 0) < 33 for el in lakes):  # הכנרת לא נמצאה בשם העברי
+    lakes = [] if src else overpass(QUERIES['lakes'], need=1)
+    if not src and not any(32.6 < (el.get('bounds') or {}).get('minlat', 0) < 33 for el in lakes):  # הכנרת לא נמצאה בשם העברי
         lakes += overpass(QUERIES['kinneret'], need=1)
     for el in lakes:
         if el['type'] == 'way':
@@ -412,8 +467,9 @@ def main(path):
     # קו גבול רציף ושלם (רווחים בנתונים – בקו ישר)
     water = [f['geometry']['coordinates'][0] for f in feats if f['properties']['k'] == 'w']
     border = []
-    for l in outer_border(overpass(QUERIES['border_il'], need=3), overpass(QUERIES['border_ps'], need=2)):
-        c = [[round(x, 3), round(y, 3)] for x, y in simplify(l, 60)]
+    for l in (outer_border(src.il, src.ps) if src else outer_border(overpass(QUERIES['border_il'], need=3), overpass(QUERIES['border_ps'], need=2))):
+        pts = (simplify(l[:len(l) // 2 + 1], 60) + simplify(l[len(l) // 2:], 60)[1:]) if l[0] == l[-1] else simplify(l, 60)
+        c = [[round(x, 3), round(y, 3)] for x, y in pts]
         if len(c) > 1:
             border.append(c)
     for c in join_all(border, water=water):
@@ -440,4 +496,6 @@ def main(path):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1] if len(sys.argv) > 1 else 'israel.json')
+    args = sys.argv[1:]
+    pbf = args[args.index('--pbf') + 1] if '--pbf' in args else None
+    main(args[0] if args and not args[0].startswith('--') else 'israel.json', pbf)

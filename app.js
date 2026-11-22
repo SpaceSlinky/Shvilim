@@ -196,7 +196,7 @@
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
       { id: 'env-label', type: 'symbol', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.5, maxzoom: 11,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
-        paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.8, 'text-opacity': ENV_FADE(1) } },
+        paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1, 'text-halo-blur': 0.5, 'text-opacity': ENV_FADE(1) } },
       { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 11,
         filter: ['all', k('place'), ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
@@ -2573,6 +2573,7 @@
     ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
     ['env-label', 'text-color', '#1f5f3a', '#a5d6a7'],
+    ['env-label', 'text-halo-color', 'rgba(255,255,255,.8)', 'rgba(16,19,23,.8)'], // הילה דקה בצבע הרקע – לא קו מתאר לבן גס בלילה
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
     ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
       .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),

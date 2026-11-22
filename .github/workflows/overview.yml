@@ -16,10 +16,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - run: python3 tools/overview.py israel.json
+      # קובץ מוכן של כל ישראל ופלסטין (Geofabrik, מתעדכן כל יום) – מהיר ואמין, במקום שרת Overpass הציבורי העמוס
+      - run: curl -sSfL --retry 3 -o il.osm.pbf https://download.geofabrik.de/asia/israel-and-palestine-latest.osm.pbf && ls -la il.osm.pbf
+      - run: pip install -q osmium
+      - run: python3 tools/overview.py israel.json --pbf il.osm.pbf
       - name: commit + גרסה חדשה לאפליקציה
         run: |
           ls -la israel.json
+          rm -f il.osm.pbf
           # הבנייה לוקחת זמן – בינתיים main אולי התקדם: מעבירים את הקובץ החדש על הגרסה העדכנית
           cp israel.json "$RUNNER_TEMP/israel.json"
           git fetch -q origin main && git reset -q --hard origin/main
