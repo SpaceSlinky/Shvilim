@@ -1,10 +1,14 @@
-# בונה מחדש את israel.json (המפה הכללית של כל הארץ, מ-OpenStreetMap) ושומר ב-main.
-# מריצים ידנית (Actions → overview → Run workflow) כשרוצים לרענן; האפליקציה מקבלת אותה בעדכון הבא.
+# בונה מחדש את israel.json (המפה הכללית של כל הארץ, מ-OpenStreetMap) – אוטומטית פעם בחודש (וגם ידנית:
+# Actions → overview → Run workflow). אם הנתונים השתנו: שומר ב-main ומעלה את גרסת האפליקציה (CACHE ב-sw.js),
+# כך שהמפה החדשה מגיעה לטלפון לבד בפתיחה הבאה. אם לא השתנה כלום – לא נוגע בכלום.
 name: overview
 on:
+  schedule:
+    - cron: '23 2 1 * *' # ב-1 לכל חודש, 02:23 UTC
   workflow_dispatch:
 permissions:
   contents: write
+concurrency: overview
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,10 +17,14 @@ jobs:
         with:
           ref: main
       - run: python3 tools/overview.py israel.json
-      - run: |
+      - name: commit + גרסה חדשה לאפליקציה
+        run: |
           ls -la israel.json
+          git diff --quiet -- israel.json && { echo "אין שינוי"; exit 0; }
+          n=$(grep -oP "shvilim-v\K[0-9]+" sw.js | head -1); m=$((n + 1))
+          sed -i "s/shvilim-v$n\b/shvilim-v$m/g" sw.js CLAUDE.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add israel.json
-          git diff --cached --quiet || git commit -m "מפה כללית של כל הארץ (israel.json) מ-OpenStreetMap"
+          git add israel.json sw.js CLAUDE.md
+          git commit -m "מפה כללית של כל הארץ (israel.json) מ-OpenStreetMap – גרסה v$m"
           git push

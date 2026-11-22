@@ -123,6 +123,14 @@ def main(path):
         print(key + '…', file=sys.stderr)
         for c in lines(overpass(QUERIES[key]), 80, 3):
             feats.append({'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': c}, 'properties': {'k': k}})
+    # בלי שינוי בנתונים – לא נוגעים בקובץ (אחרת כל הרצה "משנה" רק את התאריך ומעלה גרסה סתם)
+    try:
+        with open(path, encoding='utf-8') as f:
+            if json.load(f).get('features') == json.loads(json.dumps(feats, ensure_ascii=False)):
+                print('no change', file=sys.stderr)
+                return
+    except (OSError, ValueError):
+        pass
     fc = {'type': 'FeatureCollection', 'built': time.strftime('%Y-%m-%d'), 'features': feats}
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(fc, f, ensure_ascii=False, separators=(',', ':'))
