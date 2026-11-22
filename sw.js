@@ -1,7 +1,7 @@
 /* Service Worker: שומר את האפליקציה, הספריות והגופנים לשימוש אופליין.
    נתוני המפה עצמם נשמרים ב-IndexedDB (ראו app.js).
    קבצי האפליקציה: מוגשים מהמטמון ומתעדכנים ברקע. ספריות וגופנים מ-CDN: מהמטמון בלבד אחרי הפעם הראשונה. */
-const CACHE = 'shvilim-v103';
+const CACHE = 'shvilim-v104';
 const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'router.js', 'elev.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png',
   'fonts/noto-sans-hebrew-hebrew.woff2', 'fonts/noto-sans-hebrew-latin.woff2', 'fonts/noto-sans-hebrew-latin-ext.woff2'];
@@ -19,6 +19,8 @@ self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     await c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })));
+    // המפה הכללית של כל הארץ – מתעדכנת עם כל גרסה (אם עוד לא נבנתה – בלי לעצור את ההתקנה)
+    await c.add(new Request('israel.json', { cache: 'reload' })).catch(() => {});
     const d = await caches.open(DATA);
     await Promise.all(CDN.map(async (u) => (await d.match(u)) || d.add(new Request(u, { mode: 'cors' })).catch(() => {})));
     await self.skipWaiting();

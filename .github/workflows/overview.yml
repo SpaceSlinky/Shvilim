@@ -1,0 +1,22 @@
+# בונה מחדש את israel.json (המפה הכללית של כל הארץ, מ-OpenStreetMap) ושומר ב-main.
+# מריצים ידנית (Actions → overview → Run workflow) כשרוצים לרענן; האפליקציה מקבלת אותה בעדכון הבא.
+name: overview
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - run: python3 tools/overview.py israel.json
+      - run: |
+          ls -la israel.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add israel.json
+          git diff --cached --quiet || git commit -m "מפה כללית של כל הארץ (israel.json) מ-OpenStreetMap"
+          git push
