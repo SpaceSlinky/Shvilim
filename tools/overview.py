@@ -12,7 +12,8 @@ SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.sys
 AREA = '(area["ISO3166-1"="IL"][admin_level=2];area["ISO3166-1"="PS"][admin_level=2];)->.a;'
 QUERIES = {
     'places': AREA + 'node[place~"^(city|town|village)$"](area.a);out;',
-    'border': 'relation["ISO3166-1"="IL"][admin_level=2];way(r)[!"maritime"];out geom;',
+    'border_il': 'relation["ISO3166-1"="IL"][admin_level=2];way(r)[!"maritime"];out geom;',
+    'border_ps': 'relation["ISO3166-1"="PS"][admin_level=2];way(r)[!"maritime"];out geom;',
     'lakes': 'nwr["natural"="water"]["name:he"~"^((ים )?כי?נרת|ים המלח)$"](29.4,34.8,33.4,35.8);out geom;',
     'kinneret': 'nwr["natural"="water"]["name:en"~"^(Sea of Galilee|Lake Kinneret|Lake Tiberias)$"](32.6,35.4,33.0,35.8);out geom;',
 }
@@ -88,6 +89,36 @@ def chain(lines, maxgap_m=12000):
         _, i, j = best
         lines[i] = lines[i] + lines[j][1:] if lines[i][-1] == lines[j][0] else lines[i] + lines[j]
         del lines[j]
+
+
+# ערים מרכזיות – השמות היחידים שמוצגים בזום רחוק (להתמצאות; השאר בחיפוש, ומקרוב)
+MAJOR = {'ירושלים', 'תל אביב–יפו', 'חיפה', 'באר שבע', 'אילת', 'נתניה', 'אשדוד', 'אשקלון', 'חדרה', 'טבריה', 'צפת',
+         'קרית שמונה', 'נהריה', 'עפולה', 'בית שאן', 'נצרת', 'ערד', 'דימונה', 'מצפה רמון', 'קצרין', 'עין גדי', 'יטבתה',
+         'עין יהב', 'שדה בוקר'}
+GAZA = (34.2, 31.2, 34.6, 31.6)  # הגבול עם עזה נשאר (אליה אי אפשר להגיע)
+
+
+def seg_key(a, b):
+    return (a, b) if a <= b else (b, a)
+
+
+def segments(els):
+    out = set()
+    for el in els:
+        g = [(round(p['lon'], 5), round(p['lat'], 5)) for p in el.get('geometry', [])]
+        for a, b in zip(g, g[1:]):
+            if a != b:
+                out.add(seg_key(a, b))
+    return out
+
+
+def outer_border(il_els, ps_els):
+    """קו המתאר "המעשי": הגבולות החיצוניים של ישראל ויהודה ושומרון יחד – בלי הקו הירוק באמצע (קטע שמשותף לשני
+    הגבולות = גבול פנימי), חוץ מהגבול עם עזה"""
+    il, ps = segments(il_els), segments(ps_els)
+    inside = lambda s: all(GAZA[0] <= p[0] <= GAZA[2] and GAZA[1] <= p[1] <= GAZA[3] for p in s)
+    keep = (il ^ ps) | {s for s in il & ps if inside(s)}
+    return unique_lines([{'geometry': [{'lon': a[0], 'lat': a[1]}, {'lon': b[0], 'lat': b[1]}]} for a, b in keep])
 
 
 def unique_lines(els):
@@ -381,13 +412,15 @@ def main(path):
     # קו גבול רציף ושלם (רווחים בנתונים – בקו ישר)
     water = [f['geometry']['coordinates'][0] for f in feats if f['properties']['k'] == 'w']
     border = []
-    for l in unique_lines(overpass(QUERIES['border'], need=3)):
+    for l in outer_border(overpass(QUERIES['border_il'], need=3), overpass(QUERIES['border_ps'], need=2)):
         c = [[round(x, 3), round(y, 3)] for x, y in simplify(l, 60)]
         if len(c) > 1:
             border.append(c)
     for c in join_all(border, water=water):
         F({'type': 'LineString', 'coordinates': drop_loops(c)}, {'k': 'b'})
-    promote([f for f in feats if f['properties']['k'] == 'p'])
+    for f in feats:
+        if f['properties']['k'] == 'p' and f['properties']['n'] in MAJOR:
+            f['properties']['m'] = 1
     count = lambda k: sum(1 for f in feats if f['properties']['k'] == k)
     print({k: count(k) for k in 'pwcb'}, file=sys.stderr)
     if count('p') < 800 or count('b') < 1 or count('w') < 2:
