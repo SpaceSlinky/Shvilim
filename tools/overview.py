@@ -59,14 +59,47 @@ def simplify(pts, tol_m):
     return [p for p, k in zip(pts, keep) if k]
 
 
-def line(el, tol):
-    pts = [[round(g['lon'], 4), round(g['lat'], 4)] for g in el.get('geometry', [])]
-    pts = simplify(pts, tol)
-    out = [pts[0]] if pts else []
-    for p in pts[1:]:
-        if p != out[-1]:
-            out.append(p)
-    return out if len(out) > 1 else None
+def merge(lines):
+    """מחבר קווים שנוגעים בקצוות לקווים ארוכים (פחות קווים – הרבה פחות נפח)"""
+    lines = [l for l in lines if len(l) > 1]
+    ends = {}
+    for i, l in enumerate(lines):
+        for p in (tuple(l[0]), tuple(l[-1])):
+            ends.setdefault(p, []).append(i)
+    used = [False] * len(lines)
+    out = []
+    for i in range(len(lines)):
+        if used[i]:
+            continue
+        used[i] = True
+        cur = list(lines[i])
+        for forward in (True, False):
+            while True:
+                p = tuple(cur[-1] if forward else cur[0])
+                nxt = next((j for j in ends.get(p, []) if not used[j]), None)
+                if nxt is None:
+                    break
+                used[nxt] = True
+                l = lines[nxt]
+                if tuple(l[0]) != p:
+                    l = l[::-1]
+                cur = cur + l[1:] if forward else l[:-1] + cur
+        out.append(cur)
+    return out
+
+
+def lines(els, tol, prec):
+    raw = [[[round(g['lon'], 5), round(g['lat'], 5)] for g in el.get('geometry', [])] for el in els]
+    res = []
+    for l in merge(raw):
+        pts = [[round(x, prec), round(y, prec)] for x, y in simplify(l, tol)]
+        out = [pts[0]]
+        for p in pts[1:]:
+            if p != out[-1]:
+                out.append(p)
+        if len(out) > 1:
+            res.append(out)
+    return res
 
 
 def main(path):
@@ -81,17 +114,15 @@ def main(path):
         feats.append({'type': 'Feature', 'geometry': {'type': 'Point', 'coordinates': [round(el['lon'], 4), round(el['lat'], 4)]},
                       'properties': {'k': 'p', 't': kind, 'n': n}})
     print('roads…', file=sys.stderr)
-    for el in overpass(QUERIES['roads']):
-        c = line(el, 40)
-        if c:
-            r = {'motorway': 'm', 'trunk': 't', 'primary': 'p'}[el['tags']['highway']]
+    roads = overpass(QUERIES['roads'])
+    for hw, r in (('motorway', 'm'), ('trunk', 't'), ('primary', 'p')):
+        # רק לזום רחוק (עד 10, ~130 מ' לפיקסל): פישוט 100 מ', דיוק 3 ספרות (~100 מ'), קווים מחוברים
+        for c in lines([el for el in roads if el['tags']['highway'] == hw], 100, 3):
             feats.append({'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': c}, 'properties': {'k': 'r', 'r': r}})
     for key, k in (('coast', 'c'), ('border', 'b')):
         print(key + '…', file=sys.stderr)
-        for el in overpass(QUERIES[key]):
-            c = line(el, 60)
-            if c:
-                feats.append({'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': c}, 'properties': {'k': k}})
+        for c in lines(overpass(QUERIES[key]), 80, 3):
+            feats.append({'type': 'Feature', 'geometry': {'type': 'LineString', 'coordinates': c}, 'properties': {'k': k}})
     fc = {'type': 'FeatureCollection', 'built': time.strftime('%Y-%m-%d'), 'features': feats}
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(fc, f, ensure_ascii=False, separators=(',', ':'))
