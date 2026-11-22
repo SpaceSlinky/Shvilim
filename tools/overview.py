@@ -381,9 +381,16 @@ def from_pbf(path):
             self.il, self.ps = set(), set()
 
         def relation(self, r):
-            iso = r.tags.get('ISO3166-1')
-            if r.tags.get('admin_level') == '2' and iso in ('IL', 'PS'):
-                (self.il if iso == 'IL' else self.ps).update(m.ref for m in r.members if m.type == 'w')
+            t = r.tags
+            if t.get('admin_level') != '2' or t.get('boundary') not in ('administrative', None):
+                return
+            iso = t.get('ISO3166-1') or t.get('ISO3166-1:alpha2') or ''
+            en = t.get('name:en') or ''
+            print('  admin2:', r.id, iso, en, file=sys.stderr)
+            if iso == 'IL' or en == 'Israel':
+                self.il.update(m.ref for m in r.members if m.type == 'w')
+            elif iso == 'PS' or 'Palestin' in en:
+                self.ps.update(m.ref for m in r.members if m.type == 'w')
 
     rel = Rel()
     rel.apply_file(path)
