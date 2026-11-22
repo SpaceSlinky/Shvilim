@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """בונה את israel.json – מפה כללית של כל הארץ שמגיעה עם האפליקציה:
 שמות ערים, עיירות, יישובים וכפרים (עם דירוג לפי גודל); הים התיכון, מפרץ אילת, הכנרת וים המלח (משטחים);
-קו החוף; הגבול; כבישים ראשיים ומשניים (מפושטים).
+קו החוף; קו הגבול (רציף). בלי כבישים.
 מקור: OpenStreetMap דרך Overpass. מריצים מ-GitHub Actions (overview.yml) ושומרים ברפו.
 
 שימוש: python3 tools/overview.py israel.json
@@ -12,7 +12,6 @@ SERVERS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.sys
 AREA = '(area["ISO3166-1"="IL"][admin_level=2];area["ISO3166-1"="PS"][admin_level=2];)->.a;'
 QUERIES = {
     'places': AREA + 'node[place~"^(city|town|village)$"](area.a);out;',
-    'roads': AREA + 'way[highway~"^(motorway|trunk|primary|secondary)$"](area.a);out geom;',
     'border': 'relation["ISO3166-1"="IL"][admin_level=2];way(r)[!"maritime"];out geom;',
     'lakes': 'nwr["natural"="water"]["name:he"~"^((ים )?כי?נרת|ים המלח)$"](29.4,34.8,33.4,35.8);out geom;',
     'kinneret': 'nwr["natural"="water"]["name:en"~"^(Sea of Galilee|Lake Kinneret|Lake Tiberias)$"](32.6,35.4,33.0,35.8);out geom;',
@@ -89,6 +88,78 @@ def chain(lines, maxgap_m=12000):
         _, i, j = best
         lines[i] = lines[i] + lines[j][1:] if lines[i][-1] == lines[j][0] else lines[i] + lines[j]
         del lines[j]
+
+
+def unique_lines(els):
+    """קווים מתוך דרכים, כשכל קטע נספר פעם אחת (בגבול יש דרכים כפולות – אחרת הקו הולך וחוזר על עצמו)"""
+    adj = {}
+    seen = set()
+    for el in els:
+        g = [(round(p['lon'], 5), round(p['lat'], 5)) for p in el.get('geometry', [])]
+        for a, b in zip(g, g[1:]):
+            if a == b or (a, b) in seen or (b, a) in seen:
+                continue
+            seen.add((a, b))
+            adj.setdefault(a, []).append(b)
+            adj.setdefault(b, []).append(a)
+    used, out = set(), []
+    def walk(a, b):
+        line = [a, b]
+        used.add(frozenset((a, b)))
+        while len(adj[line[-1]]) == 2:
+            nxt = next((n for n in adj[line[-1]] if frozenset((line[-1], n)) not in used), None)
+            if nxt is None:
+                break
+            used.add(frozenset((line[-1], nxt)))
+            line.append(nxt)
+        return [list(p) for p in line]
+    for start in [n for n in adj if len(adj[n]) != 2] + list(adj):
+        for n in adj[start]:
+            if frozenset((start, n)) not in used:
+                out.append(walk(start, n))
+    return out
+
+
+def join_all(lines, maxgap_m=15000, water=()):
+    """מחבר קווים לקו רציף בלי קשר לכיוון (הופך כשצריך), וממלא רווחים קטנים בקו ישר – לגבול (בנתונים חסרים
+    לפעמים קטעים). לא מחבר מעל מים (טאבה–אילת)"""
+    lines = [list(l) for l in lines if len(l) > 1]
+    kx = 111320 * math.cos(math.radians(31.5))
+    d = lambda p, q: math.hypot((p[0] - q[0]) * kx, (p[1] - q[1]) * 110540)
+    while len(lines) > 1:
+        best = None
+        for i in range(len(lines)):
+            for j in range(i + 1, len(lines)):
+                a, b2 = lines[i], lines[j]
+                for g, ra, rb in ((d(a[-1], b2[0]), False, False), (d(a[-1], b2[-1]), False, True),
+                                  (d(a[0], b2[-1]), True, True), (d(a[0], b2[0]), True, False)):
+                    if g < maxgap_m and (best is None or g < best[0]):
+                        p = (a[0] if ra else a[-1]); q = (b2[-1] if rb else b2[0])
+                        mid = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
+                        if not any(inside_ring(mid, r) for r in water):
+                            best = (g, i, j, ra, rb)
+        if not best:
+            break
+        _, i, j, ra, rb = best
+        a = lines[i][::-1] if ra else lines[i]
+        b2 = lines[j][::-1] if rb else lines[j]
+        lines[i] = a + (b2[1:] if a[-1] == b2[0] else b2)
+        del lines[j]
+    return lines
+
+
+def promote(places, gap_km=22):
+    """באזורים ריקים (נגב, ערבה) – יישובים נוספים מוצגים כבר בזום הרחוק: עוברים מהגדול לקטן, וכל יישוב שרחוק
+    יותר מ-gap_km מכל יישוב שכבר מוצג (r=1) – עולה לדירוג 1"""
+    kx = 111320 * math.cos(math.radians(31.5))
+    shown = [f['geometry']['coordinates'] for f in places if f['properties']['r'] == 1]
+    for f in sorted(places, key=lambda f: -f['properties'].get('pop', 0)):
+        if f['properties']['r'] == 1:
+            continue
+        x, y = f['geometry']['coordinates']
+        if all(math.hypot((x - a) * kx, (y - b) * 110540) > gap_km * 1000 for a, b in shown):
+            f['properties']['r'] = 1
+            shown.append([x, y])
 
 
 def sea_polygons(els, b, probe):
@@ -292,17 +363,20 @@ def main(path):
                 r = ring_clean(ring, 20, 4)
                 if r:
                     F({'type': 'Polygon', 'coordinates': [r]}, {'k': 'w'})
-    print('roads…', file=sys.stderr)
-    roads = overpass(QUERIES['roads'], need=1000)
-    for hw, r, tol in (('motorway', 'm', 80), ('trunk', 't', 80), ('primary', 'p', 80), ('secondary', 's', 100)):
-        for c in lines([el for el in roads if el['tags']['highway'] == hw], tol, 3):
-            F({'type': 'LineString', 'coordinates': c}, {'k': 'r', 'r': r})
     print('border…', file=sys.stderr)
-    for c in lines(overpass(QUERIES['border'], need=3), 60, 3):
+    # קו גבול רציף ושלם (רווחים בנתונים – בקו ישר)
+    water = [f['geometry']['coordinates'][0] for f in feats if f['properties']['k'] == 'w']
+    border = []
+    for l in unique_lines(overpass(QUERIES['border'], need=3)):
+        c = [[round(x, 3), round(y, 3)] for x, y in simplify(l, 60)]
+        if len(c) > 1:
+            border.append(c)
+    for c in join_all(border, water=water):
         F({'type': 'LineString', 'coordinates': c}, {'k': 'b'})
+    promote([f for f in feats if f['properties']['k'] == 'p'])
     count = lambda k: sum(1 for f in feats if f['properties']['k'] == k)
-    print({k: count(k) for k in 'pwcrb'}, file=sys.stderr)
-    if count('p') < 800 or count('r') < 300 or count('w') < 2:
+    print({k: count(k) for k in 'pwcb'}, file=sys.stderr)
+    if count('p') < 800 or count('b') < 1 or count('w') < 2:
         sys.exit('חסרים נתונים – לא שומר')
     # בלי שינוי בנתונים – לא נוגעים בקובץ (אחרת כל הרצה "משנה" רק את התאריך ומעלה גרסה סתם)
     try:

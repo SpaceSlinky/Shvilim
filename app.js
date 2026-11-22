@@ -91,15 +91,12 @@
       // תצלום אוויר מתחת למפה – במקום הרקע (חצי העליון של הסליידר)
       { id: 'base-sat', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       // מפה כללית של כל הארץ (israel.json, מגיעה עם האפליקציה). הים, מפרץ אילת, הכנרת וים המלח – בכל זום (במפות האזורים
-      // אין ים); קו חוף, גבול וכבישים – רק בזום רחוק. הכול בין שתי שכבות התצלום – הסליידר עובד עליהן כמו על השבילים
+      // אין ים); קו חוף, גבול ושמות יישובים (בלי כבישים). הכול בין שתי שכבות התצלום – הסליידר עובד עליהן כמו על השבילים
       { id: 'ov-sea', type: 'fill', source: 'overview', filter: k('w'), paint: { 'fill-color': '#aad3df' } },
       { id: 'ov-coast', type: 'line', source: 'overview', maxzoom: 10, filter: k('c'), paint: { 'line-color': '#7fa7c9', 'line-width': 1.2 } },
-      { id: 'ov-border', type: 'line', source: 'overview', maxzoom: 10, filter: k('b'),
-        paint: { 'line-color': '#9a8f9f', 'line-width': 1, 'line-dasharray': [3, 2] } },
-      { id: 'ov-road', type: 'line', source: 'overview', maxzoom: 10, filter: k('r'), layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['match', ['get', 'r'], 'm', '#e09a52', 't', '#e6b071', 's', '#ddd3bc', '#d8c49a'],
-          'line-width': ['interpolate', ['linear'], ['zoom'], 6, ['match', ['get', 'r'], 's', 0.25, 'p', 0.45, 0.9], 10, ['match', ['get', 'r'], 's', 0.8, 'p', 1.1, 1.9],
-            15, ['match', ['get', 'r'], 's', 2.5, 'p', 3.5, 5]] } },
+      // קו הגבול – רציף וברור (קו המתאר של הארץ)
+      { id: 'ov-border', type: 'line', source: 'overview', maxzoom: 10, filter: k('b'), layout: { 'line-join': 'round' },
+        paint: { 'line-color': '#7a6f80', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.4, 12, 2.2] } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -2480,8 +2477,7 @@
     ...['ov-place-1', 'ov-place-2', 'ov-place-3'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
     ['ov-sea', 'fill-color', '#aad3df', '#1c2f3e'],
     ['ov-coast', 'line-color', '#7fa7c9', '#3d6a8f'],
-    ['ov-border', 'line-color', '#9a8f9f', '#6b6470'],
-    ['ov-road', 'line-color', ['match', ['get', 'r'], 'm', '#e09a52', 't', '#e6b071', 's', '#ddd3bc', '#d8c49a'], ['match', ['get', 'r'], 'm', '#7a5228', 't', '#6e5434', 's', '#3d3a35', '#5a5040']],
+    ['ov-border', 'line-color', '#7a6f80', '#8d8494'],
     ['area-label', 'text-color', '#e06000', '#ffa040'],
     ['dim', 'fill-color', '#ffffff', '#000000'],
     ['route-walked', 'line-color', '#ffffff', '#1b1f24'],
