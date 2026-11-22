@@ -66,6 +66,15 @@
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
+  // דהייה לפי זום: מופיע בין z0 ל-z1 (שקיפות 0 → max). המפה המפורטת מתרוקנת בשלבים בהתרחקות
+  const fade = (z0, z1, max = 1) => ['interpolate', ['linear'], ['zoom'], z0, 0, z1, max];
+  // המעטפת: מופיעה 8.5–9, נעלמת 10.3–11 (בדיוק כשהשבילים המסומנים מופיעים, 10–10.7)
+  const ENV_FADE = (max) => ['interpolate', ['linear'], ['zoom'], 8.5, 0, 9, max, 10.3, max, 11, 0];
+  const FADES = { // שכבה: [מתחיל להופיע, מלא]
+    'minor-casing': [11.5, 12], minor: [11.5, 12], path: [11.5, 12], track: [11, 11.5], bike: [11, 11.5],
+    water: [10.5, 11], 'medium-casing': [10.5, 11.2], medium: [10.5, 11.2], 'major-casing': [10.5, 11.2], major: [10.5, 11.2],
+    'trail-casing': [10, 10.7], trail: [10, 10.7],
+  };
   const style = {
     version: 8,
     transition: { duration: 0, delay: 0 }, // החלפת בהיר/כהה ושינויי צבע – מיד
@@ -82,6 +91,7 @@
       // "Map data not yet available" – מגדילים את החלק המתאים מהרמה הקודמת שיש בה צילום (מפוקסל, אבל אמיתי)
       sat: { type: 'raster', tileSize: 256, maxzoom: 19, attribution: 'Imagery © Esri', tiles: ['esrifb://{z}/{y}/{x}'] },
       overview: { type: 'geojson', data: empty }, // israel.json – כל הארץ, רק בזום רחוק
+      'areas-env': { type: 'geojson', data: empty }, // מעטפת האזורים שהורדו (updateEnvelope)
       scrub: { type: 'geojson', data: empty },
       detour: { type: 'geojson', data: empty },
       walked: { type: 'geojson', data: empty },
@@ -97,6 +107,12 @@
       // קו הגבול – רציף וברור (קו המתאר של הארץ)
       { id: 'ov-border', type: 'line', source: 'overview', maxzoom: 10, filter: k('b'), layout: { 'line-join': 'round' },
         paint: { 'line-color': '#7a6f80', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.4, 12, 2.2] } },
+      // מעטפת המפות שהורדו (זום בינוני): כשהשבילים דוהים בהתרחקות – נשאר קו סביב האזורים השמורים (איחוד, בלי קווים
+      // פנימיים), עם גוון קל ושם; בהתרחקות נוספת גם היא נעלמת (ובהתקרבות – מתחלפת בשבילים עצמם)
+      { id: 'env-fill', type: 'fill', source: 'areas-env', filter: ['==', ['geometry-type'], 'Polygon'], minzoom: 8.5, maxzoom: 11,
+        paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
+      { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
+        layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -173,6 +189,9 @@
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': size,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } })),
+      { id: 'env-label', type: 'symbol', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.5, maxzoom: 11,
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
+        paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.8, 'text-opacity': ENV_FADE(1) } },
       { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 10,
         filter: ['all', k('place'), ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
@@ -221,6 +240,12 @@
   // המפה הכללית מעבר לזום 10: איפה שאין מפה שמורה היא ממשיכה להופיע (אחרת – מסך ריק), מתוך עותק שממנו נחתכו
   // האזורים השמורים (overview-hi, `updateOverviewHi`) – שם יש מפה מפורטת, וכבישים מפושטים היו מצוירים כפולים לידה
   style.sources['overview-hi'] = { type: 'geojson', data: empty };
+  for (const l of style.layers) {
+    const f = FADES[l.id];
+    if (!f) continue;
+    l.minzoom = f[0];
+    l.paint['line-opacity'] = fade(f[0], f[1], typeof l.paint['line-opacity'] === 'number' ? l.paint['line-opacity'] : 1);
+  }
   style.layers = style.layers.flatMap((l) => {
     if (!l.id.startsWith('ov-') || l.id === 'ov-sea') return [l];
     const hi = { ...l, id: 'ovh-' + l.id.slice(3), source: 'overview-hi', minzoom: 10 };
@@ -314,6 +339,52 @@
     map.getSource('overview')?.setData(fc);
     updateOverviewHi();
   }).catch(() => {});
+  // מעטפת האזורים שהורדו: איחוד המלבנים (רשת לפי כל קווי הקצה) – משטח (תאים), קו המתאר (רק צלעות שבצד השני שלהן
+  // אין אזור) ושם לכל קבוצה מחוברת (של האזור הגדול בה, במרכזו). נגיעה – מתקרבים לקבוצה
+  let envGroups = [];
+  function updateEnvelope() {
+    const boxes = dlAreas().map((a) => a.b);
+    const xs = [...new Set(boxes.flatMap((b) => [b[0], b[2]]))].sort((a, b) => a - b);
+    const ys = [...new Set(boxes.flatMap((b) => [b[1], b[3]]))].sort((a, b) => a - b);
+    const cov = (i, j) => i >= 0 && j >= 0 && i < xs.length - 1 && j < ys.length - 1
+      && boxes.some((b) => b[0] <= xs[i] && b[2] >= xs[i + 1] && b[1] <= ys[j] && b[3] >= ys[j + 1]);
+    const feats = [], comp = new Map();
+    envGroups = [];
+    for (let i = 0; i < xs.length - 1; i++) for (let j = 0; j < ys.length - 1; j++) {
+      if (!cov(i, j)) continue;
+      const [x0, x1, y0, y1] = [xs[i], xs[i + 1], ys[j], ys[j + 1]];
+      feats.push({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]] } });
+      const edge = (a, b) => feats.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [a, b] } });
+      if (!cov(i, j - 1)) edge([x0, y0], [x1, y0]);
+      if (!cov(i, j + 1)) edge([x0, y1], [x1, y1]);
+      if (!cov(i - 1, j)) edge([x0, y0], [x0, y1]);
+      if (!cov(i + 1, j)) edge([x1, y0], [x1, y1]);
+      // קבוצות מחוברות (הצפה)
+      if (comp.has(i + ',' + j)) continue;
+      const g = { bbox: [x0, y0, x1, y1], boxes: new Set() }, stack = [[i, j]];
+      comp.set(i + ',' + j, g);
+      while (stack.length) {
+        const [a, b] = stack.pop();
+        g.bbox = [Math.min(g.bbox[0], xs[a]), Math.min(g.bbox[1], ys[b]), Math.max(g.bbox[2], xs[a + 1]), Math.max(g.bbox[3], ys[b + 1])];
+        for (const bx of boxes) if (bx[0] <= xs[a] && bx[2] >= xs[a + 1] && bx[1] <= ys[b] && bx[3] >= ys[b + 1]) g.boxes.add(bx);
+        for (const [c, d] of [[a + 1, b], [a - 1, b], [a, b + 1], [a, b - 1]]) {
+          if (cov(c, d) && !comp.has(c + ',' + d)) { comp.set(c + ',' + d, g); stack.push([c, d]); }
+        }
+      }
+      envGroups.push(g);
+    }
+    for (const g of envGroups) {
+      const big = [...g.boxes].sort((a, b) => (b[2] - b[0]) * (b[3] - b[1]) - (a[2] - a[0]) * (a[3] - a[1]))[0];
+      feats.push({ type: 'Feature', properties: { n: areaName(big) }, geometry: { type: 'Point', coordinates: [(big[0] + big[2]) / 2, (big[1] + big[3]) / 2] } });
+    }
+    map.getSource('areas-env')?.setData({ type: 'FeatureCollection', features: feats });
+  }
+  map.on('click', 'env-fill', (e) => {
+    if (map.getZoom() >= 10.8) return;
+    const { lng, lat } = e.lngLat;
+    const g = envGroups.find((x) => lng >= x.bbox[0] && lng <= x.bbox[2] && lat >= x.bbox[1] && lat <= x.bbox[3]);
+    if (g) map.fitBounds([[g.bbox[0], g.bbox[1]], [g.bbox[2], g.bbox[3]]], { padding: 40, duration: 900 });
+  });
   // עותק של המפה הכללית בלי מה שבתוך אזורים שמורים (מלבנים): קווים נחתכים בגבול, נקודות שבתוכם – בחוץ
   function updateOverviewHi() {
     if (!overviewFC) return;
@@ -541,6 +612,7 @@
     buildSharedIdx(fc);
     pieceCache = null; // הקטעים המשותפים השתנו
     mapFC = fc;
+    updateEnvelope(); // אחרי mapFC – שמות האזורים לפי היישובים שבהם
     searchIndex = null;
     const lvl = smoothLevel();
     smoother = lvl ? Geo.makeSmoother(fc, lvl) : null;
@@ -657,8 +729,8 @@
     return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
   }
   function checkArea() {
-    // מבט על כל הארץ (המפה הכללית) – בלי "התקרבו כדי להוריד" באמצע המסך
-    if (map.getZoom() < 9 && !dlMsg) return (dlHere.hidden = true);
+    // מרחוק (כל הארץ / המעטפת) – בלי כפתור ההורדה באמצע המסך
+    if (map.getZoom() < 11 && !dlMsg) return (dlHere.hidden = true); // רק מקרוב – כשרואים את המפה המפורטת
     const c = map.getCenter();
     const inside = dlAreas().some(({ b }) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3]);
     if (inside && !dlMsg) return (dlHere.hidden = true);
@@ -2464,7 +2536,10 @@
     // בלילה: שביל שחור נשאר שחור אבל מקבל מסגרת בהירה בולטת
     ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
       ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
-    ['trail-casing', 'line-opacity', 0.85, 1],
+    ['trail-casing', 'line-opacity', fade(10, 10.7, 0.85), fade(10, 10.7, 1)],
+    ['env-fill', 'fill-color', '#2e7d4f', '#81c784'],
+    ['env-line', 'line-color', '#2e7d4f', '#81c784'],
+    ['env-label', 'text-color', '#1f5f3a', '#a5d6a7'],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
     ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-place-1', 'ov-place-2', 'ov-place-3', 'ovh-place-1', 'ovh-place-2', 'ovh-place-3', 'area-label']
       .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
