@@ -254,7 +254,8 @@ body.night .go.warn { background: #6d4c1a; }
 
 body.night #ri-stats.hot .v, body.night #ri-stats.hot .lbl { color: #e0e0e0; }
 /* חיצי עלייה/ירידה – גדולים, באלכסון */
-.lbl .arr { font-size: 1.45em; line-height: 0; vertical-align: -0.12em; font-weight: 700; }
+/* חצי עלייה/ירידה – אייקון בגובה האותיות שלידו (בתווית ובערך) */
+.arr { width: 0.9em; height: 0.9em; vertical-align: -0.05em; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 /* שכבות: שלושה רקעים, והשאר תחת "עוד" */
 .seg { display: flex; gap: 0; border: 1px solid #ccc; border-radius: 10px; overflow: hidden; margin: 6px 0 4px; }

@@ -1193,8 +1193,18 @@
       if (marks.from != null) {
         // שתי אצבעות: הפרש הגובה, באמצע
         const dh = Math.round(eleAt(p, clampD(marks.touch)) - eleAt(p, clampD(marks.from)));
+        // המספר, ומימינו חץ מצויר בגובה הטקסט (התו ↗↘ בגופן קטן ודק)
+        const cx = (X(marks.from) + X(marks.touch)) / 2, txt = Math.abs(dh) + " מ'";
         g.textAlign = 'center';
-        g.fillText(signed(dh), (X(marks.from) + X(marks.touch)) / 2, 12);
+        g.fillText(txt, cx, 12);
+        if (dh) {
+          const w = g.measureText(txt).width, ax = cx + w / 2 + 4, s9 = 9, top = 3;
+          g.save(); g.strokeStyle = hot; g.lineWidth = 1.7; g.lineCap = g.lineJoin = 'round';
+          g.beginPath();
+          if (dh > 0) { g.moveTo(ax, top + s9); g.lineTo(ax + s9, top); g.moveTo(ax + 2.5, top); g.lineTo(ax + s9, top); g.lineTo(ax + s9, top + s9 - 2.5); }
+          else { g.moveTo(ax, top); g.lineTo(ax + s9, top + s9); g.moveTo(ax + s9, top + 2.5); g.lineTo(ax + s9, top + s9); g.lineTo(ax + 2.5, top + s9); }
+          g.stroke(); g.restore();
+        }
       } else {
         // הגובה בנקודה, מעל האצבע
         const x = X(marks.touch);
@@ -1363,22 +1373,25 @@
   // בתצוגה – של כל המסלול; בניווט – מה שנשאר; בגרירה על הגרף – עד האצבע (בכתום), וחוזרת בעזיבה.
   const fmtClock = (min) => { const t = new Date(Date.now() + min * 60000); return `\u2066~${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}\u2069`; }; // בידוד LTR בתוך טקסט עברי
   const mtr = (v) => Math.round(v) + " מ'";
-  // חץ בתחילת התווית (↗ ↘) – גדול יותר
+  // חץ עלייה/ירידה (↗ ↘) בתחילת תווית או ערך – אייקון בגובה הטקסט שלידו (התו עצמו קטן ודק בגופן)
+  const ARROW = { '↗': 'M2.5 9.5L9.5 2.5M4 2.5h5.5V8', '↘': 'M2.5 2.5l7 7M9.5 4v5.5H4' };
+  const arrowSvg = (ch) => `<svg class="arr" viewBox="0 0 12 12" aria-hidden="true"><path d="${ARROW[ch]}"/></svg>`;
   function setLabel(el, l) {
     const m = /^([↗↘])\s*(.*)$/.exec(l);
     if (!m) return void (el.textContent = l);
-    const a = document.createElement('span');
-    a.className = 'arr'; a.textContent = m[1];
-    el.replaceChildren(a, ' ' + m[2]);
+    el.innerHTML = arrowSvg(m[1]);
+    el.append(' ' + m[2]);
   }
   function setStats(cells, hot) {
     cells.forEach(([l, v], i) => {
       setLabel($('st-l' + (i + 1)), l);
-      $('st-v' + (i + 1)).textContent = v;
+      setLabel($('st-v' + (i + 1)), v);
     });
     $('ri-stats').classList.toggle('hot', !!hot);
     const l4 = cells[3]?.[0] || '';
-    $('ri-pace').hidden = !/זמן|סיום|מגיעים/.test(l4);
+    // גלולת הקצב – כשאין זמן (טווח בגרף) רק מוסתרת ושומרת את המקום, כדי שהדוק לא יקפוץ
+    $('ri-pace').hidden = false;
+    $('ri-pace').style.visibility = /זמן|סיום|מגיעים/.test(l4) ? '' : 'hidden';
     $('ri-pace').textContent = paceLabel(!!active?.opts?.bike);
   }
   function renderRouteInfo() {
@@ -1398,7 +1411,7 @@
     if (scrub && prof && scrub.a != null) {
       // שתי אצבעות: הטווח שביניהן
       const L = legInfo(prof, scrub.a, scrub.b, bike, active.segs);
-      setStats([['בין האצבעות', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
+      setStats([['טווח', Geo.fmtDist(L.len)], ['↗ עלייה', mtr(L.gain)], ['↘ ירידה', mtr(L.loss)],
         ['הפרש גובה', signed(eleAt(prof, scrub.b) - eleAt(prof, scrub.a))]], true);
       setScrubMap(active.segs, route, prof, scrub.a, scrub.b, true);
     } else if (scrub && prof) {
@@ -1787,7 +1800,7 @@
     const L = legInfo(plan.prof, from, to, plan.opts.bike, plan.rawSegs);
     if (plan.hint == null) plan.hint = $('pl-hint').textContent;
     $('pl-hint').textContent = range
-      ? `בין האצבעות: ${Geo.fmtDist(L.len)} · ↗${Math.round(L.gain)} ↘${Math.round(L.loss)} · הפרש ${signed(eleAt(plan.prof, to) - eleAt(plan.prof, from))}`
+      ? `טווח: ${Geo.fmtDist(L.len)} · ↗${Math.round(L.gain)} ↘${Math.round(L.loss)} · הפרש ${signed(eleAt(plan.prof, to) - eleAt(plan.prof, from))}`
       : `עד כאן: ${Geo.fmtDist(L.len)} · ↗${Math.round(L.gain)} ↘${Math.round(L.loss)} · ${fmtTime(L.time)}`;
     drawProfile($('pl-profile'), plan.prof, { touch: to, from: range ? from : null });
   }, () => {
