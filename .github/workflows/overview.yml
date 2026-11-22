@@ -20,6 +20,10 @@ jobs:
       - name: commit + גרסה חדשה לאפליקציה
         run: |
           ls -la israel.json
+          # הבנייה לוקחת זמן – בינתיים main אולי התקדם: מעבירים את הקובץ החדש על הגרסה העדכנית
+          cp israel.json "$RUNNER_TEMP/israel.json"
+          git fetch -q origin main && git reset -q --hard origin/main
+          cp "$RUNNER_TEMP/israel.json" israel.json
           git diff --quiet -- israel.json && { echo "אין שינוי"; exit 0; }
           n=$(grep -oP "shvilim-v\K[0-9]+" sw.js | head -1); m=$((n + 1))
           sed -i "s/shvilim-v$n\b/shvilim-v$m/g" sw.js CLAUDE.md
