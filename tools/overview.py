@@ -14,7 +14,8 @@ QUERIES = {
     'places': AREA + 'node[place~"^(city|town|village)$"](area.a);out;',
     'roads': AREA + 'way[highway~"^(motorway|trunk|primary|secondary)$"](area.a);out geom;',
     'border': 'relation["ISO3166-1"="IL"][admin_level=2];way(r)[!"maritime"];out geom;',
-    'lakes': 'nwr["natural"="water"]["name:he"~"^(ים כנרת|כנרת|ים המלח)$"](29.4,34.8,33.4,35.8);out geom;',
+    'lakes': 'nwr["natural"="water"]["name:he"~"^((ים )?כי?נרת|ים המלח)$"](29.4,34.8,33.4,35.8);out geom;',
+    'kinneret': 'nwr["natural"="water"]["name:en"~"^(Sea of Galilee|Lake Kinneret|Lake Tiberias)$"](32.6,35.4,33.0,35.8);out geom;',
 }
 # ימים: קו החוף בתוך מלבן, נחתך לגבולותיו ונסגר לאורכם (המים מימין לקו החוף ב-OSM). נקודה שחייבת להיות בתוך הים – בדיקה
 SEAS = [  # (מערב, דרום, מזרח, צפון), נקודה בים
@@ -66,6 +67,26 @@ def clip(line, b):
     return [p for p in pieces if len(p) > 1]
 
 
+def chain(lines, maxgap_m=12000):
+    """מחבר קטעי קו חוף שיש ביניהם רווח (סוף של אחד → התחלה של אחר, עד 12 ק"מ) – בנתונים חסרים לפעמים קטעים"""
+    lines = [list(l) for l in lines]
+    kx = 111320 * math.cos(math.radians(32))
+    d = lambda p, q: math.hypot((p[0] - q[0]) * kx, (p[1] - q[1]) * 110540)
+    while True:
+        best = None
+        for i, a in enumerate(lines):
+            for j, b2 in enumerate(lines):
+                if i != j:
+                    g = d(a[-1], b2[0])
+                    if g < maxgap_m and (best is None or g < best[0]):
+                        best = (g, i, j)
+        if not best:
+            return lines
+        _, i, j = best
+        lines[i] = lines[i] + lines[j][1:] if lines[i][-1] == lines[j][0] else lines[i] + lines[j]
+        del lines[j]
+
+
 def sea_polygons(els, b, probe):
     w, s, e, n = b
     W, H = e - w, n - s
@@ -82,9 +103,9 @@ def sea_polygons(els, b, probe):
     corners = [(0, [w, n]), (W, [e, n]), (W + H, [e, s]), (2 * W + H, [w, s])]
     raw = [[[g['lon'], g['lat']] for g in el.get('geometry', [])] for el in els]
     pieces = []
-    for l in merge(raw):
+    for l in chain([l for l in merge(raw) if l[0] != l[-1]]):  # בלי איים (טבעות סגורות)
         if l[0] == l[-1]:
-            continue  # אי (טבעת סגורה) – לא חלק מהקו
+            continue
         for pc in clip(l, b):
             ts, te = t(pc[0]), t(pc[-1])
             if ts is not None and te is not None:
@@ -253,7 +274,10 @@ def main(path):
         for c in lines(coast, 20, 4):
             F({'type': 'LineString', 'coordinates': c}, {'k': 'c'})
     print('lakes…', file=sys.stderr)
-    for el in overpass(QUERIES['lakes'], need=1):
+    lakes = overpass(QUERIES['lakes'], need=1)
+    if not any(32.6 < (el.get('bounds') or {}).get('minlat', 0) < 33 for el in lakes):  # הכנרת לא נמצאה בשם העברי
+        lakes += overpass(QUERIES['kinneret'], need=1)
+    for el in lakes:
         if el['type'] == 'way':
             rings = [[[g['lon'], g['lat']] for g in el.get('geometry', [])]]
         else:
