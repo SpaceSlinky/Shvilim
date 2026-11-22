@@ -2,7 +2,6 @@
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
-  const DEFAULT_VIEW = { center: [35.03, 32.75], zoom: 13.5 }; // שוויצריה הקטנה
   const CARMEL = [34.94, 32.60, 35.13, 32.84]; // הכרמל, כולל שוויצריה הקטנה (מערב, דרום, מזרח, צפון)
   const FONT = ['Noto Sans Regular'];
   const GLYPHS = 'https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf';
@@ -265,8 +264,9 @@
   const map = new maplibregl.Map({
     container: 'map',
     style,
-    center: saved?.center || DEFAULT_VIEW.center,
-    zoom: saved?.zoom || DEFAULT_VIEW.zoom,
+    // פתיחה ראשונה – כל הארץ (מתוקן מיד ל-israelMinZoom); אחר כך – איפה שהיית
+    center: saved?.center || [35.0, 31.4],
+    zoom: saved?.zoom || 6,
     minZoom: 6, // מעודכן מיד לפי גודל המסך (israelMinZoom)
     maxZoom: 19,
     dragRotate: true,
@@ -280,8 +280,10 @@
   function israelMinZoom() {
     const cam = map.cameraForBounds(ISRAEL, { padding: { top: 70, bottom: 100, left: 10, right: 10 } });
     if (cam && isFinite(cam.zoom)) map.setMinZoom(Math.max(4, Math.min(9, cam.zoom)));
+    return cam;
   }
-  israelMinZoom();
+  const israelCam = israelMinZoom();
+  if (!saved && israelCam) map.jumpTo(israelCam); // פתיחה ראשונה – כל הארץ
   map.on('resize', israelMinZoom);
   // מפה כללית של כל הארץ – קובץ שמגיע עם האפליקציה (במטמון; מתעדכן עם כל גרסה)
   let overviewFC = null;
@@ -343,7 +345,6 @@
     return job.done;
   }
   async function runDownload(bbox, { quiet, area, signal }) {
-    $('nodata').hidden = true;
     const say = (m, ms) => { if (area) { dlMsg = m; checkArea(); } else if (!quiet) toast(m, ms); };
     if (area) { dlErr = ''; say('מוריד את מפות האזור…'); }
     try {
@@ -374,7 +375,6 @@
       const msg = e.message || String(e);
       if (area) dlErr = msg;
       else if (!quiet) toast('ההורדה נכשלה: ' + msg + '. נסו שוב.', 6000);
-      if (!(await db.get('mapdata').catch(() => null))) $('nodata').hidden = false;
     } finally {
       if (area) { dlMsg = ''; checkArea(); }
     }
@@ -520,8 +520,9 @@
       // נתוני הגובה של כל האזורים השמורים – משלימים ברקע מה שחסר (מה שכבר במטמון חוזר מיד, בלי רשת)
       if (netOk()) setTimeout(() => Promise.all(dlAreas().map((ar) => Elev.prefetch(ar.b).catch(() => 0)))
         .then(() => { if (active && prof === false) loadProfile(); }), 12000);
-    } else if (navigator.onLine) downloadArea(CARMEL); // פעם ראשונה – מורידים לבד
-    else $('nodata').hidden = false;
+    }
+    // פעם ראשונה: אין הורדה אוטומטית ואין מסך פתיחה – המפה הכללית של כל הארץ כבר באפליקציה; מתקרבים לאזור ומורידים אותו
+    checkArea();
   });
   // ---------- מפות שמורות: רשימה ומחיקה (בחלון השכבות, תחת "עוד") ----------
   const inBox = (b) => (c) => c[0] >= b[0] && c[0] <= b[2] && c[1] >= b[1] && c[1] <= b[3];
@@ -600,7 +601,8 @@
     return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
   }
   function checkArea() {
-    if (!mapFC && !dlJob) return (dlHere.hidden = true); // עוד אין מפה בכלל – המסך הראשון מטפל בזה
+    // מבט על כל הארץ (המפה הכללית) – בלי "התקרבו כדי להוריד" באמצע המסך
+    if (map.getZoom() < 9 && !dlMsg) return (dlHere.hidden = true);
     const c = map.getCenter();
     const inside = dlAreas().some(({ b }) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3]);
     if (inside && !dlMsg) return (dlHere.hidden = true);
@@ -2204,7 +2206,6 @@
 
   // ---------- כפתורים ותפריט ----------
   $('btn-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
-  $('w-carmel').addEventListener('click', () => downloadArea(CARMEL));
 
   // ---------- סיבוב ומצפן ----------
   let compassMode = false;

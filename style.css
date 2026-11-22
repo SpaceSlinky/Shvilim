@@ -76,8 +76,6 @@ button.primary { background: var(--green); color: #fff; border-color: var(--gree
 .row input { width: 20px; height: 20px; }
 .muted { color: #666; font-size: 14px; }
 .small { font-size: 12px; }
-#nodata { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(0,0,0,.35); }
-#nodata[hidden] { display: none; }
 .card { background: #fff; border-radius: 16px; padding: 20px; width: min(92vw, 380px); line-height: 1.5; }
 
 /* MapLibre */
