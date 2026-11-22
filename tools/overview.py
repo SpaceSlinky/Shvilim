@@ -19,7 +19,7 @@ QUERIES = {
 # ימים: קו החוף בתוך מלבן, נחתך לגבולותיו ונסגר לאורכם (המים מימין לקו החוף ב-OSM). נקודה שחייבת להיות בתוך הים – בדיקה
 SEAS = [  # (מערב, דרום, מזרח, צפון), נקודה בים
     ((32.0, 30.9, 35.3, 33.6), (33.0, 32.5)),   # הים התיכון
-    ((34.4, 28.9, 35.2, 29.65), (34.9, 29.3)),  # מפרץ אילת
+    ((34.4, 28.9, 35.2, 29.65), (34.93, 29.45)),  # מפרץ אילת (בין טאבה לחוף אילת)
 ]
 
 
@@ -125,7 +125,10 @@ def inside_ring(p, ring):
 
 
 def ring_clean(r, tol, prec):
-    pts = [[round(x, prec), round(y, prec)] for x, y in simplify(r, tol)]
+    # טבעת סגורה: הקצוות זהים – לפשט כל חצי בנפרד (אחרת כל הנקודות "על הקו" ונמחקות)
+    mid = len(r) // 2
+    pts = simplify(r[:mid + 1], tol) + simplify(r[mid:], tol)[1:]
+    pts = [[round(x, prec), round(y, prec)] for x, y in pts]
     out = [pts[0]]
     for p in pts[1:]:
         if p != out[-1]:
@@ -242,14 +245,15 @@ def main(path):
         F({'type': 'Point', 'coordinates': [round(el['lon'], 4), round(el['lat'], 4)]}, {'k': 'p', 'r': rank, 'pop': pop, 'n': n})
     print('seas…', file=sys.stderr)
     for b, probe in SEAS:
-        for ring in sea_polygons(overpass(coast_q(b), need=5), b, probe):
+        coast = overpass(coast_q(b), need=5)
+        for ring in sea_polygons(coast, b, probe):
             r = ring_clean(ring, 20, 4)
             if r:
                 F({'type': 'Polygon', 'coordinates': [r]}, {'k': 'w'})
-        for c in lines(overpass(coast_q(b), need=5), 20, 4):
+        for c in lines(coast, 20, 4):
             F({'type': 'LineString', 'coordinates': c}, {'k': 'c'})
     print('lakes…', file=sys.stderr)
-    for el in overpass(QUERIES['lakes'], need=2):
+    for el in overpass(QUERIES['lakes'], need=1):
         if el['type'] == 'way':
             rings = [[[g['lon'], g['lat']] for g in el.get('geometry', [])]]
         else:
