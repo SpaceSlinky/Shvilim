@@ -158,13 +158,17 @@ def join_all(lines, maxgap_m=15000, water=()):
     return lines
 
 
+# שמות פחות מוכרים שלא יעלו לזום הרחוק – במקומם עולה השכן המוכר (מדרשת בן גוריון → שדה בוקר)
+NOT_PROMOTED = {'מדרשת בן גוריון'}
+
+
 def promote(places, gap_km=22):
     """באזורים ריקים (נגב, ערבה) – יישובים נוספים מוצגים כבר בזום הרחוק: עוברים מהגדול לקטן, וכל יישוב שרחוק
     יותר מ-gap_km מכל יישוב שכבר מוצג (r=1) – עולה לדירוג 1"""
     kx = 111320 * math.cos(math.radians(31.5))
     shown = [f['geometry']['coordinates'] for f in places if f['properties']['r'] == 1]
     for f in sorted(places, key=lambda f: -f['properties'].get('pop', 0)):
-        if f['properties']['r'] == 1:
+        if f['properties']['r'] == 1 or f['properties']['n'] in NOT_PROMOTED:
             continue
         x, y = f['geometry']['coordinates']
         if all(math.hypot((x - a) * kx, (y - b) * 110540) > gap_km * 1000 for a, b in shown):

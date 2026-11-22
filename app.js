@@ -166,8 +166,9 @@
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13 },
         paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
       // שמות היישובים בכל הארץ (זום רחוק), לפי דירוג r: 1 – ערים וגדולים (תמיד), 2 – עיירות (מ-7.5), 3 – יישובים וכפרים (מ-8.5);
-      // שכבה לכל דירוג (ולא שקיפות 0 – שם שקוף עדיין "תופס מקום" ומסתיר אחרים). הגדולים קודמים; מזום 10 – מהמפה המפורטת
-      ...[[1, 0, 14], [2, 7.5, 12.5], [3, 8.5, 11.5]].map(([r, mz, size]) => ({ id: 'ov-place-' + r, type: 'symbol', source: 'overview', minzoom: mz, maxzoom: 10,
+      // שכבה לכל דירוג (ולא שקיפות 0 – שם שקוף עדיין "תופס מקום" ומסתיר אחרים). השכבה העליונה ממוקמת ראשונה ומנצחת
+      // בהתנגשות – לכן הערים אחרונות (למעלה), ובתוך שכבה – לפי גודל (symbol-sort-key); מזום 10 – מהמפה המפורטת
+      ...[[3, 8.5, 11.5], [2, 7.5, 12.5], [1, 0, 14]].map(([r, mz, size]) => ({ id: 'ov-place-' + r, type: 'symbol', source: 'overview', minzoom: mz, maxzoom: 10,
         filter: ['all', k('p'), ['==', ['get', 'r'], r]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': size,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
