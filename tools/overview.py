@@ -121,6 +121,25 @@ def outer_border(il_els, ps_els):
     return unique_lines([{'geometry': [{'lon': a[0], 'lat': a[1]}, {'lon': b[0], 'lat': b[1]}]} for a, b in keep])
 
 
+WB_EAST = (35.3, 31.3, 35.65, 32.6)  # רצועת הירדן וים המלח הצפוני – הגבול של יהודה ושומרון עם ירדן
+
+
+def practical_border(il_els, nb):
+    """קו המתאר "המעשי" מקובץ ישראל: הגבולות הבינלאומיים של ישראל (קטע שמשותף לגבול ישראל ולגבול שכנה – לבנון,
+    סוריה, ירדן, מצרים); הגבול עם עזה (וגבול עזה–מצרים); והגבול של ירדן לאורך הירדן וים המלח מול יהודה ושומרון.
+    בלי הקו הירוק (גבול של ישראל שאין לו שכנה מעבר לו). ב-OSM אין יחס admin_level=2 לפלסטין"""
+    il = segments(il_els)
+    nbs = {c: segments(v) for c, v in nb.items()}
+    allnb = set().union(*nbs.values()) if nbs else set()
+    box = lambda b: (lambda sg: all(b[0] <= p[0] <= b[2] and b[1] <= p[1] <= b[3] for p in sg))
+    gaza, wb = box(GAZA), box(WB_EAST)
+    keep = {sg for sg in il if sg in allnb or gaza(sg)}
+    keep |= {sg for sg in nbs.get('EG', set()) - il if gaza(sg)}
+    keep |= {sg for sg in nbs.get('JO', set()) - il if wb(sg)}
+    print('  border segments:', len(il), 'IL,', len(keep), 'kept', file=sys.stderr)
+    return unique_lines([{'geometry': [{'lon': a[0], 'lat': a[1]}, {'lon': b[0], 'lat': b[1]}]} for a, b in keep])
+
+
 def unique_lines(els):
     """קווים מתוך דרכים, כשכל קטע נספר פעם אחת (בגבול יש דרכים כפולות – אחרת הקו הולך וחוזר על עצמו)"""
     adj = {}
@@ -378,7 +397,7 @@ def from_pbf(path):
     class Rel(osmium.SimpleHandler):
         def __init__(self):
             super().__init__()
-            self.il, self.ps = set(), set()
+            self.il, self.nb = set(), {}
 
         def relation(self, r):
             t = r.tags
@@ -387,10 +406,11 @@ def from_pbf(path):
             iso = t.get('ISO3166-1') or t.get('ISO3166-1:alpha2') or ''
             en = t.get('name:en') or ''
             print('  admin2:', r.id, iso, en, file=sys.stderr)
-            if iso == 'IL' or en == 'Israel':
-                self.il.update(m.ref for m in r.members if m.type == 'w')
-            elif iso == 'PS' or 'Palestin' in en:
-                self.ps.update(m.ref for m in r.members if m.type == 'w')
+            ways = {m.ref for m in r.members if m.type == 'w'}
+            if iso == 'IL':
+                self.il |= ways
+            elif iso in ('JO', 'EG', 'LB', 'SY'):
+                self.nb.setdefault(iso, set()).update(ways)
 
     rel = Rel()
     rel.apply_file(path)
@@ -398,7 +418,7 @@ def from_pbf(path):
     class H(osmium.SimpleHandler):
         def __init__(self):
             super().__init__()
-            self.places, self.il, self.ps = [], [], []
+            self.places, self.il, self.nb = [], [], {}
 
         def node(self, n):
             t = n.tags
@@ -406,19 +426,20 @@ def from_pbf(path):
                 self.places.append({'lon': n.location.lon, 'lat': n.location.lat, 'tags': {k: v for k, v in t}})
 
         def way(self, w):
-            if (w.id in rel.il or w.id in rel.ps) and w.tags.get('maritime') != 'yes':
+            mine = [c for c, ids in rel.nb.items() if w.id in ids]
+            if (w.id in rel.il or mine) and w.tags.get('maritime') != 'yes':
                 try:
                     el = {'geometry': [{'lon': nd.lon, 'lat': nd.lat} for nd in w.nodes]}
                 except osmium.InvalidLocationError:
                     return
                 if w.id in rel.il:
                     self.il.append(el)
-                if w.id in rel.ps:
-                    self.ps.append(el)
+                for c in mine:
+                    self.nb.setdefault(c, []).append(el)
 
     h = H()
     h.apply_file(path, locations=True)
-    print('pbf:', len(h.places), 'places,', len(h.il), 'IL ways,', len(h.ps), 'PS ways', file=sys.stderr)
+    print('pbf:', len(h.places), 'places,', len(h.il), 'IL ways,', {c: len(v) for c, v in h.nb.items()}, file=sys.stderr)
     return h
 
 
@@ -474,7 +495,7 @@ def main(path, pbf=None):
     # קו גבול רציף ושלם (רווחים בנתונים – בקו ישר)
     water = [f['geometry']['coordinates'][0] for f in feats if f['properties']['k'] == 'w']
     border = []
-    for l in (outer_border(src.il, src.ps) if src else outer_border(overpass(QUERIES['border_il'], need=3), overpass(QUERIES['border_ps'], need=2))):
+    for l in (practical_border(src.il, src.nb) if src else outer_border(overpass(QUERIES['border_il'], need=3), overpass(QUERIES['border_ps'], need=2))):
         pts = (simplify(l[:len(l) // 2 + 1], 60) + simplify(l[len(l) // 2:], 60)[1:]) if l[0] == l[-1] else simplify(l, 60)
         c = [[round(x, 3), round(y, 3)] for x, y in pts]
         if len(c) > 1:
