@@ -137,33 +137,50 @@ out center tags;`;
     return [...set].sort((a, b) => a - b).map((s) => `${s}-${s + 255}`);
   }
 
-  const why = (st) => (st === 429 || st === 503 || st === 504 ? `השרת עמוס (${st})` : `שגיאת שרת ${st}`);
-  /** הורדה: מנסים שרת אחרי שרת. signal – ביטול מבחוץ (למשל כשהמשתמש מבקש אזור אחר) */
+  const why = (st) => (st === 429 || st === 503 || st === 504 ? `עמוס (${st})` : `שגיאה ${st}`);
+  const short = (url) => new URL(url).hostname.replace(/^overpass[.-]/, '').replace(/\.(de|coffee|systems)$/, '');
+  // fetch שנכשל ב-TypeError: רשת חסומה / אין חיבור – או ששרת עמוס החזיר שגיאה בלי כותרות CORS (הדפדפן לא מראה אותה).
+  // בדיקה: בקשה בלי CORS (opaque) – אם השרת ענה, הוא חי ודחה אותנו; אם נכשלה – אין אליו דרך
+  async function probe(url) {
+    try { await fetch(url + '?data=' + encodeURIComponent('[out:json];out count;'), { mode: 'no-cors', signal: AbortSignal.timeout(8000) }); return 'דחה (עמוס?)'; }
+    catch { return navigator.onLine ? 'לא נגיש' : 'אין רשת'; }
+  }
+  /** הורדה: מנסים שרת אחרי שרת (ועד שני סבבים כשהשרתים עמוסים). signal – ביטול מבחוץ (למשל כשהמשתמש מבקש אזור אחר) */
   async function download(bbox, onProgress, signal) {
-    let last;
-    for (const url of OVERPASS) {
-      if (signal?.aborted) throw signal.reason;
-      const ctl = new AbortController();
-      const stop = () => ctl.abort();
-      signal?.addEventListener('abort', stop);
-      const timer = setTimeout(stop, big(bbox) ? 330000 : 120000); // שרת שלא עונה – עוברים לבא
-      try {
-        onProgress?.('מוריד נתונים מ-OpenStreetMap…');
-        const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query(bbox) }), signal: ctl.signal });
-        if (!res.ok) throw new Error(why(res.status));
-        onProgress?.('מעבד…');
-        const json = await res.json();
-        // שגיאה באמצע (זמן, זיכרון) מגיעה עם 200 ונתונים חלקיים – לא שומרים מפה חסרה
-        if (/error/i.test(json.remark || '')) throw new Error('השרת לא סיים');
-        const fc = convert(json);
-        fc.bbox = bbox;
-        return fc;
-      } catch (e) {
+    let reasons = [];
+    for (let pass = 0; pass < 2; pass++) {
+      reasons = [];
+      let busy = false;
+      for (const url of OVERPASS) {
         if (signal?.aborted) throw signal.reason;
-        last = e.name === 'AbortError' ? new Error('אין תשובה מהשרת') : e.name === 'TypeError' ? new Error('אין חיבור לשרת') : e;
-      } finally { clearTimeout(timer); signal?.removeEventListener('abort', stop); }
+        const ctl = new AbortController();
+        const stop = () => ctl.abort();
+        signal?.addEventListener('abort', stop);
+        const timer = setTimeout(stop, big(bbox) ? 330000 : 120000); // שרת שלא עונה – עוברים לבא
+        try {
+          onProgress?.(pass ? 'מנסה שוב…' : 'מוריד נתונים מ-OpenStreetMap…');
+          const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: query(bbox) }), signal: ctl.signal });
+          if (!res.ok) { busy = busy || [429, 503, 504].includes(res.status); throw new Error(why(res.status)); }
+          onProgress?.('מעבד…');
+          const json = await res.json();
+          // שגיאה באמצע (זמן, זיכרון) מגיעה עם 200 ונתונים חלקיים – לא שומרים מפה חסרה
+          if (/error/i.test(json.remark || '')) { busy = true; throw new Error('השרת לא סיים'); }
+          const fc = convert(json);
+          fc.bbox = bbox;
+          return fc;
+        } catch (e) {
+          if (signal?.aborted) throw signal.reason;
+          let r = e.name === 'AbortError' ? 'אין תשובה' : e.message;
+          if (e.name === 'TypeError') { r = await probe(url); busy = busy || r.startsWith('דחה'); }
+          if (e.name === 'AbortError') busy = true;
+          reasons.push(`${short(url)}: ${r}`);
+          console.warn('Overpass', url, e);
+        } finally { clearTimeout(timer); signal?.removeEventListener('abort', stop); }
+      }
+      if (!busy || pass) break;
+      await new Promise((r) => setTimeout(r, 5000)); // כולם עמוסים – ממתינים רגע וחוזרים על כל הסבב
     }
-    throw last;
+    throw new Error(reasons.join('\n'));
   }
 
   /** מיזוג הורדה חדשה לתוך המפה הקיימת: מה שבתוך האזור החדש מוחלף, השאר נשמר */

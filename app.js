@@ -855,7 +855,7 @@
     return b;
   }
   const dlLabel = () => dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
-    : dlErr ? `ההורדה נכשלה: ${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
+    : dlErr ? `ההורדה נכשלה:\n${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
   function placeDlHere() {
     const W = innerWidth, H = innerHeight, top = 110, bottom = H - ($('dock')?.offsetHeight || 120) - 10;
     const lat = map.getCenter().lat, cw = Math.abs(map.project([CELL, lat]).x - map.project([0, lat]).x); // רוחב ריבוע במסך
