@@ -116,8 +116,9 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
-      { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 11,
-        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': 0.55 } },
+      // נראה כבר מרחוק ומתמזג בהדרגה: לא נראה מתחת ל-9.2, מלא מ-10.2
+      { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 9,
+        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 9.2, 0, 10.2, 0.55] } },
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -788,11 +789,13 @@
   }
   function checkArea() {
     // מרחוק (כל הארץ / המעטפת) – בלי כפתור ההורדה ובלי ריבועים
-    if (map.getZoom() < 11 && !dlMsg) { dlHere.hidden = true; map.getSource('dl-grid')?.setData(empty); return; }
+    const z = map.getZoom();
+    if (z < 9 && !dlMsg) { dlHere.hidden = true; map.getSource('dl-grid')?.setData(empty); return; }
     const miss = missingCells();
     // הריבועים שעוד לא הורדו – קווים מקווקווים עדינים: ברור מה יירד בלחיצה
     map.getSource('dl-grid')?.setData({ type: 'FeatureCollection', features: miss.map((c) => ({ type: 'Feature', properties: {},
       geometry: { type: 'LineString', coordinates: [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]] } })) });
+    if (z < 11 && !dlMsg) return (dlHere.hidden = true); // הכפתור – רק מזום 11; הריבועים נראים מרחוק יותר
     if (!miss.length && !dlMsg) return (dlHere.hidden = true);
     dlHere.hidden = false;
     const big = miss.length > MAX_CELLS;
