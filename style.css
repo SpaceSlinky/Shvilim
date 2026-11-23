@@ -507,9 +507,11 @@ body.night .cat { border-bottom-color: #343a40; }
 #lib-list > .cat:last-child, #lib-list > :last-child .lib-row:last-child, #lib-list > .lib-loose:last-child > .lib-row:last-child { border-bottom: 0; }
 
 /* ===== שורות כפתורים: קבוצה אחת ממורכזת, מחוברת, עם קצוות גלולה; לכפתורים שבקצוות – עוד מקום מהעיגול ===== */
-.tgrp button { width: auto; min-width: 58px; padding: 7px 10px 6px; }
-.tgrp button:first-child { padding-inline-start: 18px; }
-.tgrp button:last-child { padding-inline-end: 18px; }
+/* כל הכפתורים באותו רוחב (לא לפי הטקסט); רק הקיצוניים מעט ארוכים יותר – בצד החיצוני */
+.tgrp button { width: 66px; min-width: 0; padding: 7px 0 6px; }
+.tgrp button:first-child { width: 72px; padding-inline-start: 6px; }
+.tgrp button:last-child { width: 72px; padding-inline-end: 6px; }
+.tgrp button:only-child { width: 78px; padding-inline: 6px; }
 .tgrp button.primary { background: var(--green); color: #fff; border: 0; }
 body.night .tgrp button.primary { background: #2e7d4f; color: #fff; }
 .tgrp button:disabled { opacity: 1; color: #9aa3a0; }
@@ -523,13 +525,13 @@ body.night .tgrp button.primary:disabled { background: #31473b; color: #8fa597; 
 body.night .tgrp .tog.off { color: #7b848c; }
 .pl-tools { margin-top: 6px; }
 
-.cf-btns, .ls-btns, .dt-btns, .dt-modes { display: flex; width: fit-content; max-width: 100%; margin: 12px auto 0; gap: 1px; padding: 0;
+.cf-btns, .ls-btns, .dt-btns, .dt-modes { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; width: fit-content; max-width: 100%; margin: 12px auto 0; gap: 1px; padding: 0;
   border: 1px solid #ddd; background: #ddd; border-radius: 999px; overflow: hidden; }
 .cf-btns button, #style-dlg .ls-btns button, .ls-btns button, .dt-btns button, .dt-btns #dt-cancel, .dt-modes button {
-  flex: none; width: auto; min-width: 92px; margin: 0; padding: 11px 16px; border: 0; border-radius: 0; background: #f7f7f7;
+  width: auto; min-width: 104px; margin: 0; padding: 11px 16px; border: 0; border-radius: 0; background: #f7f7f7;
   font: inherit; font-size: 15px; color: inherit; }
-.cf-btns button:first-child, .ls-btns button:first-child, .dt-btns button:first-child, .dt-modes button:first-child { padding-inline-start: 24px; }
-.cf-btns button:last-child, .ls-btns button:last-child, .dt-btns button:last-child, .dt-modes button:last-child { padding-inline-end: 24px; }
+.cf-btns button:first-child, .ls-btns button:first-child, .dt-btns button:first-child, .dt-modes button:first-child { padding-inline-start: 22px; }
+.cf-btns button:last-child, .ls-btns button:last-child, .dt-btns button:last-child, .dt-modes button:last-child { padding-inline-end: 22px; }
 .cf-btns button.primary, .ls-btns button.primary, .dt-btns button.primary { background: var(--green); color: #fff; font-weight: 700; }
 .dt-modes button + button:not([hidden]) { border: 0; }
 .dt-modes button.on { background: #d81b60; color: #fff; }
