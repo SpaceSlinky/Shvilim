@@ -239,10 +239,10 @@
         layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d81b60', 'line-width': 5, 'line-dasharray': [1.6, 1.2] } },
       { id: 'detour-pt', type: 'circle', source: 'detour', filter: ['==', '$type', 'Point'],
         paint: { 'circle-radius': 8, 'circle-color': '#d81b60', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
-      // האצבע על הגרף: הקטע המסומן על המסלול "זוהר" – המסגרת בצבע השביל (במקום לבן) והקו עצמו בגוון בהיר שלו (lc);
+      // האצבע על הגרף: הקטע המסומן על המסלול – אותו צבע של השביל, רק בהיר יותר (lc), עם המסגרת הלבנה הרגילה;
       // אצבע אחת – שברון לבן בקצה שזז עם האצבע, בכיוון ההליכה; שתי אצבעות – שני קווים לבנים ניצבים בקצוות הטווח
       { id: 'scrub-glow-casing', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(4.5, 9.5), 'line-offset': SHARED_OFFSET } },
+        paint: { 'line-color': '#fff', 'line-width': zw(4.5, 9.5), 'line-offset': SHARED_OFFSET } },
       { id: 'scrub-glow', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: { 'line-color': ['coalesce', ['get', 'lc'], '#ff8ad0'], 'line-width': zw(2.6, 5.4), 'line-offset': SHARED_OFFSET } },
       { id: 'scrub-mark', type: 'symbol', source: 'scrub', filter: ['==', ['geometry-type'], 'Point'],
@@ -1377,9 +1377,12 @@
     map.getSource('scrub')?.setData({ type: 'FeatureCollection', features: feats });
   }
   function clearScrub() { scrub = null; setScrubMap(null); }
-  // גוון בהיר של צבע השביל (45% לבן) – הקטע המסומן "זוהר"
+  // גוון בהיר של צבע השביל (45% לבן) – הקטע המסומן בגרירה על הגרף
   function lighten(c) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(c || '#d4148f');
+    // כל צבע (גם שם, כמו "red") – לקסדצימלי דרך הדפדפן
+    const cx = lighten.cx || (lighten.cx = document.createElement('canvas').getContext('2d'));
+    cx.fillStyle = '#d4148f'; cx.fillStyle = c || '#d4148f';
+    const m = /^#([0-9a-f]{6})$/i.exec(cx.fillStyle);
     if (!m) return '#ffffff';
     const n = parseInt(m[1], 16), mix = (v) => Math.round(v + (255 - v) * 0.45);
     return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((v) => mix(v).toString(16).padStart(2, '0')).join('');
