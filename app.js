@@ -218,10 +218,11 @@
       { id: 'dim', type: 'fill', source: 'dim', layout: { visibility: 'none' }, paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } },
       { id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
+        paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'], 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
       { id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
         layout: { 'line-join': 'round', 'line-cap': 'round' },
-        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(2.4, 5), 'line-offset': SHARED_OFFSET,
+        // שביל לבן – אפור בהיר עם מסגרת כהה; בהדגשה (גרירה על הגרף) – לבן מלא עם מסגרת לבנה
+        paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#d3d6d9', ['coalesce', ['get', 'c'], '#d4148f']], 'line-width': zw(2.4, 5), 'line-offset': SHARED_OFFSET,
           'line-dasharray': ['case', ['==', ['get', 'h'], 'free'], ['literal', [1, 1]], ['literal', [1, 0]]] } },
       // מה שכבר הלכת: קו בצבע הרקע מעל המסלול, כך שהחלק הזה נראה דהוי
       { id: 'route-walked', type: 'line', source: 'walked', layout: { 'line-join': 'round', 'line-cap': 'round' },
@@ -242,9 +243,9 @@
       // האצבע על הגרף: הקטע המסומן על המסלול – אותו צבע של השביל, רק בהיר יותר (lc), עם המסגרת הלבנה הרגילה;
       // אצבע אחת – שברון לבן בקצה שזז עם האצבע, בכיוון ההליכה; שתי אצבעות – שני קווים לבנים ניצבים בקצוות הטווח
       { id: 'scrub-glow-casing', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#fff', 'line-width': zw(4.5, 9.5), 'line-offset': SHARED_OFFSET } },
+        paint: { 'line-color': '#fff', 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
       { id: 'scrub-glow', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': ['coalesce', ['get', 'lc'], '#ff8ad0'], 'line-width': zw(2.6, 5.4), 'line-offset': SHARED_OFFSET } },
+        paint: { 'line-color': ['coalesce', ['get', 'lc'], '#ff8ad0'], 'line-width': zw(2.4, 5), 'line-offset': SHARED_OFFSET } },
       { id: 'scrub-mark', type: 'symbol', source: 'scrub', filter: ['==', ['geometry-type'], 'Point'],
         layout: { 'icon-image': ['get', 'k'], 'icon-rotate': ['get', 'rot'], 'icon-rotation-alignment': 'map',
           'icon-allow-overlap': true, 'icon-ignore-placement': true } },
@@ -1372,7 +1373,7 @@
     if (!segs || !r) return map.getSource('scrub')?.setData(empty);
     const ra = profToRoute(p, r, a), rb = profToRoute(p, r, b);
     const feats = rb - ra > 1 ? overlayFeatures(segs, ra, rb, 'hl').map((f) => ({ ...f, properties: { ...f.properties, lc: lighten(f.properties.c) } })) : [];
-    const mark = (d, k) => { const at = routeAt(r, d); if (at) feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: at.p }, properties: { k, rot: at.brg } }); };
+    const mark = (d, k) => { const at = pieceAt(segs, d) || routeAt(r, d); if (at) feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: at.p }, properties: { k, rot: at.brg } }); };
     if (both) { mark(ra, 'scrub-tick'); mark(rb, 'scrub-tick'); } else mark(rb, 'scrub-chev');
     map.getSource('scrub')?.setData({ type: 'FeatureCollection', features: feats });
   }
@@ -1386,6 +1387,27 @@
     if (!m) return '#ffffff';
     const n = parseInt(m[1], 16), mix = (v) => Math.round(v + (255 - v) * 0.45);
     return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((v) => mix(v).toString(16).padStart(2, '0')).join('');
+  }
+  // נקודה וכיוון במרחק d – על הקו המצויר עצמו (המעוגל, ומוזז הצידה בקטע משותף כמו line-offset), כדי שהשברון
+  // וקווי הטווח יישבו בדיוק על קצה הקטע המסומן ולא "ירקדו" בין הקו הגולמי לקו המצויר
+  function pieceAt(segs, d) {
+    const pcs = routePieces(segs);
+    const pc = pcs.find((x) => x.cum[x.cum.length - 1] >= d) || pcs[pcs.length - 1];
+    if (!pc || pc.coords.length < 2) return null;
+    let j = 1;
+    while (j < pc.coords.length - 1 && pc.cum[j] < d) j++;
+    const a = pc.coords[j - 1], b = pc.coords[j], seg = pc.cum[j] - pc.cum[j - 1], t = seg ? Math.max(0, Math.min(1, (d - pc.cum[j - 1]) / seg)) : 0;
+    let p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const k = Math.cos((a[1] * Math.PI) / 180), brg = (Math.atan2((b[0] - a[0]) * k, b[1] - a[1]) * 180) / Math.PI;
+    const v = sharedV(pc.props) * (pc.props.tf ?? 1);
+    if (v) {
+      const z = map.getZoom(), f = Math.max(0, Math.min(1, (1.5 ** (z - 11) - 1) / (1.5 ** 5 - 1)));
+      const off = (1.5 + 3 * f) * SHARED_STEP * v; // כמו SHARED_OFFSET, בפיקסלים
+      const pa = map.project(a), pb = map.project(b), dx = pb.x - pa.x, dy = pb.y - pa.y, n = Math.hypot(dx, dy) || 1;
+      const pp = map.project(p), q = map.unproject([pp.x - (dy / n) * off, pp.y + (dx / n) * off]);
+      p = [q.lng, q.lat];
+    }
+    return { p, brg };
   }
   // נקודה וכיוון (מעלות מהצפון) במרחק d לאורך המסלול
   function routeAt(r, d) {
