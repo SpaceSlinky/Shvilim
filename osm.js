@@ -14,8 +14,11 @@
   };
 
   const big = ([w, s, e, n]) => (e - w) * (n - s) > 0.02; // למשל כל הכרמל
+  // הגאומטריה נמשכת מעט מעבר לקצה האזור (PAD), ואז נחתכת בדיוק בקצה (clipToBox) – כך שבשולי ריבועים סמוכים
+  // השבילים רציפים. בלי זה Overpass משמיט כל נקודה שמחוץ לאזור, ובין הריבועים נשאר חור בגודל הקטע שחוצה את הקצה
+  const PAD = 0.004;
   function query([w, s, e, n]) {
-    const b = `${s},${w},${n},${e}`;
+    const b = `${s - PAD},${w - PAD},${n + PAD},${e + PAD}`;
     const hw = Object.keys(ROAD_CLASS).join('|');
     // אזור קטן – זמן קצוב צנוע: שרת עמוס דוחה מראש שאילתות שמבקשות הרבה זמן
     const t = big([w, s, e, n]) ? 300 : 90;
@@ -137,6 +140,49 @@ out center tags;`;
     return [...set].sort((a, b) => a - b).map((s) => `${s}-${s + 255}`);
   }
 
+  // ---------- חיתוך קווים למלבן (עם נקודות חיתוך מדויקות בקצה) ----------
+  const eq2 = (u, v) => u[0] === v[0] && u[1] === v[1];
+  function segParts(a, b, [w, s, e, n]) { // חלקי הקטע: בתוך / מחוץ למלבן (Liang–Barsky)
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    let t0 = 0, t1 = 1;
+    const P = [-dx, dx, -dy, dy], Q = [a[0] - w, e - a[0], a[1] - s, n - a[1]];
+    for (let i = 0; i < 4; i++) {
+      if (P[i] === 0) { if (Q[i] < 0) return [{ p: a, q: b, in: false }]; continue; }
+      const r = Q[i] / P[i];
+      if (P[i] < 0) { if (r > t1) return [{ p: a, q: b, in: false }]; if (r > t0) t0 = r; }
+      else { if (r < t0) return [{ p: a, q: b, in: false }]; if (r < t1) t1 = r; }
+    }
+    if (t0 > t1) return [{ p: a, q: b, in: false }];
+    const at = (t) => (t === 0 ? a : t === 1 ? b : [r6(a[0] + dx * t), r6(a[1] + dy * t)]);
+    const m0 = at(t0), m1 = at(t1), out = [];
+    if (t0 > 0) out.push({ p: a, q: m0, in: false });
+    out.push({ p: m0, q: m1, in: true });
+    if (t1 < 1) out.push({ p: m1, q: b, in: false });
+    return out;
+  }
+  /** החלקים של קו שבתוך המלבן (wantIn) או מחוץ לו – רצפים רציפים */
+  function clipLine(coords, box, wantIn) {
+    const out = [];
+    let cur = null;
+    for (let i = 1; i < coords.length; i++) {
+      for (const pt of segParts(coords[i - 1], coords[i], box)) {
+        if (pt.in !== wantIn || eq2(pt.p, pt.q)) { if (pt.in !== wantIn) cur = null; continue; }
+        if (cur && eq2(cur[cur.length - 1], pt.p)) cur.push(pt.q); else { cur = [pt.p, pt.q]; out.push(cur); }
+      }
+    }
+    return out;
+  }
+  const inHalfOpen = ([w, s, e, n], c) => c[0] >= w && c[0] < e && c[1] >= s && c[1] < n; // נקודה שעל הקצה שייכת לריבוע אחד בלבד
+  /** משאירים רק מה שבתוך האזור: קווים נחתכים בקצה, נקודות מחוץ לו נזרקות */
+  function clipToBox(fc, box) {
+    const feats = [];
+    for (const f of fc.features) {
+      if (f.geometry.type === 'Point') { if (inHalfOpen(box, f.geometry.coordinates)) feats.push(f); continue; }
+      for (const c of clipLine(f.geometry.coordinates, box, true)) feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: c }, properties: f.properties });
+    }
+    return { type: 'FeatureCollection', features: feats };
+  }
+
   const why = (st) => (st === 429 || st === 503 || st === 504 ? `עמוס (${st})` : `שגיאה ${st}`);
   const short = (url) => new URL(url).hostname.replace(/^overpass[.-]/, '').replace(/\.(de|coffee|systems)$/, '');
   // fetch שנכשל ב-TypeError: רשת חסומה / אין חיבור – או ששרת עמוס החזיר שגיאה בלי כותרות CORS (הדפדפן לא מראה אותה).
@@ -165,7 +211,7 @@ out center tags;`;
           const json = await res.json();
           // שגיאה באמצע (זמן, זיכרון) מגיעה עם 200 ונתונים חלקיים – לא שומרים מפה חסרה
           if (/error/i.test(json.remark || '')) { busy = true; throw new Error('השרת לא סיים'); }
-          const fc = convert(json);
+          const fc = clipToBox(convert(json), bbox);
           fc.bbox = bbox;
           return fc;
         } catch (e) {
@@ -185,10 +231,18 @@ out center tags;`;
 
   /** מיזוג הורדה חדשה לתוך המפה הקיימת: מה שבתוך האזור החדש מוחלף, השאר נשמר */
   function merge(old, fresh) {
-    const [w, s, e, n] = fresh.bbox;
-    const inside = (c) => c[0] >= w && c[0] <= e && c[1] >= s && c[1] <= n;
-    const touches = (f) => (f.geometry.type === 'Point' ? inside(f.geometry.coordinates) : f.geometry.coordinates.some(inside));
-    const feats = old.features.filter((f) => !touches(f)).concat(fresh.features);
+    const box = fresh.bbox, [w, s, e, n] = box;
+    const feats = [];
+    for (const f of old.features) {
+      if (f.geometry.type === 'Point') { if (!inHalfOpen(box, f.geometry.coordinates)) feats.push(f); continue; }
+      const cs = f.geometry.coordinates;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const c of cs) { if (c[0] < x0) x0 = c[0]; if (c[0] > x1) x1 = c[0]; if (c[1] < y0) y0 = c[1]; if (c[1] > y1) y1 = c[1]; }
+      if (x1 < w || x0 > e || y1 < s || y0 > n) { feats.push(f); continue; } // לא נוגע באזור החדש
+      // נוגע: משאירים רק את החלקים שמחוץ לאזור החדש (בתוכו – ההורדה החדשה), חתוכים בדיוק בקצה
+      for (const c of clipLine(cs, box, false)) feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: c }, properties: f.properties });
+    }
+    feats.push(...fresh.features);
     feats.sort((a, b) => (a.properties.k === 'trail') - (b.properties.k === 'trail'));
     const ob = old.bbox || fresh.bbox;
     return { type: 'FeatureCollection', features: feats,

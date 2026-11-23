@@ -99,6 +99,7 @@
       overview: { type: 'geojson', data: empty }, // israel.json – כל הארץ, רק בזום רחוק
       'areas-env': { type: 'geojson', data: empty }, // מעטפת האזורים שהורדו (updateEnvelope)
       'dl-grid': { type: 'geojson', data: empty }, // ריבועי ההורדה שעוד חסרים (checkArea)
+      'areas-del': { type: 'geojson', data: empty }, // מפות שמורות: האזורים שהורדו, כשרואים את כל הארץ (renderAreasMap)
       'dl-grid-c': { type: 'geojson', data: empty }, // הגריד המאוחד (2×2, 4×4, 8×8 ריבועים) – כך שבכל זום יש גריד על המפה
       scrub: { type: 'geojson', data: empty },
       detour: { type: 'geojson', data: empty },
@@ -121,6 +122,8 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
+      { id: 'ad-fill', type: 'fill', source: 'areas-del', paint: { 'fill-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', paint: { 'line-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'line-width': 1.5 } },
       // הגריד תמיד על המפה וידוע מראש (buildGrids – לא מתעדכן בזום ובתנועה): מרחוק – 0.6°, ומזום ~8.4 הוא מתחלף
       // בפייד בריבועי ההורדה הרגילים (רק החסרים)
       { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
@@ -773,39 +776,61 @@
     return best || 'אזור ללא שם';
   }
   const fmtSize = (n) => '\u2066' + (n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB') + '\u2069'; // בידוד: "KB 1" → "1 KB"
-  function renderAreas() {
-    const box = $('areas-list');
-    box.textContent = '';
-    // אזור = קבוצת ריבועים/מפות שנוגעים זה בזה – שורה אחת, ומחיקה של כולם יחד
-    const list = areaGroups().sort((a, b) => b.t - a.t);
-    for (const a of list) {
-      const tests = a.areas.map((x) => inBox(x.b));
+  // ---------- מפות שמורות: מבט על כל הארץ עם האזורים שהורדו (נגיעה באזור – בחירה; "מחיקה" – מוחקת אותו) ----------
+  let areasMode = false, areaSel = null; // areaSel – אינדקס הקבוצה הנבחרת
+  function renderAreasMap() {
+    const groups = areaGroups(), feats = [];
+    groups.forEach((g, gi) => g.areas.forEach(({ b }) => feats.push({ type: 'Feature', properties: { sel: gi === areaSel ? 1 : 0 },
+      geometry: { type: 'Polygon', coordinates: [[[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]], [b[0], b[1]]]] } })));
+    map.getSource('areas-del')?.setData({ type: 'FeatureCollection', features: areasMode ? feats : [] });
+    const info = $('ab-info'), g = groups[areaSel];
+    $('ab-del').hidden = !g;
+    if (!groups.length) info.textContent = 'אין מפות שמורות';
+    else if (!g) info.textContent = `${groups.length === 1 ? 'אזור אחד שמור' : groups.length + ' אזורים שמורים'} · נגעו באזור כדי לבחור`;
+    else {
+      const tests = g.areas.map((x) => inBox(x.b));
       let size = 0;
       for (const f of mapFC?.features || []) if (tests.some((t) => touchesBox(f, t))) size += JSON.stringify(f).length;
-      const name = a.name;
-      const row = document.createElement('div');
-      row.className = 'area-row';
-      const go = document.createElement('button');
-      go.className = 'a-name';
-      go.textContent = name;
-      const sm = document.createElement('small');
-      sm.textContent = `${fmtSize(size)} · ${a.t ? 'עודכן ' + new Date(a.t).toLocaleDateString('he-IL') : ''}`;
-      go.append(sm);
-      go.addEventListener('click', () => {
-        $('areas-dlg').close();
-        map.fitBounds([[a.bbox[0], a.bbox[1]], [a.bbox[2], a.bbox[3]]], { padding: 20, duration: 600 });
-      });
-      const del = document.createElement('button');
-      del.className = 'a-del';
-      del.textContent = 'מחיקה';
-      del.addEventListener('click', async () => {
-        if (!(await confirmDlg(`למחוק את המפה של ${name}?`, 'המפה של האזור תימחק מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותה שוב כשיש אינטרנט.'))) return;
-        await deleteAreas(a.areas.map((x) => x.b));
-      });
-      row.append(go, del);
-      box.append(row);
+      info.replaceChildren(Object.assign(document.createElement('b'), { textContent: g.name }),
+        document.createTextNode(` · ${fmtSize(size)}${g.t ? ' · עודכן ' + new Date(g.t).toLocaleDateString('he-IL') : ''}`));
     }
   }
+  function enterAreasMode() {
+    if (areasMode) return;
+    areasMode = true; areaSel = null;
+    document.body.classList.add('areas-mode');
+    if (typeof setKnife === 'function') setKnife(false);
+    closeSearch();
+    $('areas-bar').hidden = false;
+    placeDlHere();
+    renderAreasMap();
+    if (farCam) map.easeTo({ center: maplibregl.LngLat.convert(farCam.center), zoom: map.getMinZoom(), bearing: 0, duration: 700 });
+    setTimeout(syncBack);
+  }
+  function exitAreasMode() {
+    if (!areasMode) return;
+    areasMode = false; areaSel = null;
+    document.body.classList.remove('areas-mode');
+    $('areas-bar').hidden = true;
+    renderAreasMap();
+    placeDlHere();
+    setTimeout(syncBack);
+  }
+  map.on('click', (e) => {
+    if (!areasMode) return;
+    const gi = areaGroups().findIndex((g) => g.areas.some(({ b }) => e.lngLat.lng >= b[0] && e.lngLat.lng <= b[2] && e.lngLat.lat >= b[1] && e.lngLat.lat <= b[3]));
+    areaSel = gi < 0 || gi === areaSel ? null : gi;
+    renderAreasMap();
+  });
+  $('ab-close').addEventListener('click', exitAreasMode);
+  $('ab-del').addEventListener('click', async () => {
+    const g = areaGroups()[areaSel];
+    if (!g) return;
+    if (!(await confirmDlg(`למחוק את המפה של ${g.name}?`, 'המפה של האזור תימחק מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותה שוב כשיש אינטרנט.'))) return;
+    await deleteAreas(g.areas.map((x) => x.b));
+    areaSel = null;
+    renderAreasMap();
+  });
   // מוחקים את מה שבתוך האזור – חוץ ממה שנוגע באזור שמור אחר
   async function deleteAreas(bs) {
     if (dlJob?.quiet) { dlJob.ctl.abort(new DOMException('הופסק', 'AbortError')); await dlJob.done; }
@@ -824,7 +849,7 @@
     if (self.caches) for (const k of await caches.keys()) { const c = await caches.open(k); await Promise.all(drop.map((u) => c.delete(u))); }
     await setMapData(nfc);
     areasChanged();
-    renderAreas();
+    renderAreasMap();
   }
 
   // אזור בלי מפה שמורה (למשל אחרי חיפוש): במרכז המסך – "להורדת מפות האזור" (לחיץ)
@@ -857,6 +882,7 @@
   const dlLabel = () => dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
     : dlErr ? `ההורדה נכשלה:\n${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
   function placeDlHere() {
+    if (areasMode) { for (const b of dlBtns.values()) b.hidden = true; return; }
     const W = innerWidth, H = innerHeight, top = 110, bottom = H - ($('dock')?.offsetHeight || 120) - 10;
     const lat = map.getCenter().lat, cw = Math.abs(map.project([CELL, lat]).x - map.project([0, lat]).x); // רוחב ריבוע במסך
     const o = dlMsg ? 1 : Math.max(0, Math.min(1, (cw / W - DL_SHOW[0]) / (DL_SHOW[1] - DL_SHOW[0])));
@@ -2782,8 +2808,7 @@
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
   function smoothLevel() { return layerPrefs.smooth ? 2 : 0; }
-  $('btn-areas').addEventListener('click', () => { renderAreas(); $('areas-dlg').showModal(); });
-  $('areas-close').addEventListener('click', () => $('areas-dlg').close());
+  $('btn-areas').addEventListener('click', enterAreasMode);
   mapReady.then(applyLayers);
 
   // ---------- מצב לילה ----------
@@ -3205,7 +3230,7 @@
   // כשאין לאן לחזור – הרשומה יורדת, ו"חזור" הבא יוצא מהאפליקציה כרגיל.
   const openDialog = () => [...document.querySelectorAll('dialog[open]')].pop(); // העליון (אישור מעל השכבות)
   function canGoBack() {
-    return !!(openDialog() || !$('dock-ask').hidden || $('search-input').value || dockMode() !== 'lib' || dock.libOpen);
+    return !!(openDialog() || areasMode || !$('dock-ask').hidden || $('search-input').value || dockMode() !== 'lib' || dock.libOpen);
   }
   let backArmed = false, backIgnore = false;
   function syncBack() {
@@ -3218,6 +3243,7 @@
     backArmed = false;
     const d = openDialog();
     if (d) d.close();
+    else if (areasMode) exitAreasMode();
     else if (!$('dock-ask').hidden) $('dock-ask').hidden = true;
     else if ($('search-input').value) closeSearch();
     else dockBack();

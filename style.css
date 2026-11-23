@@ -547,3 +547,13 @@ body.night .dt-modes button.on { background: #ad1457; }
 
 /* תכנון: גובה הדוק משתנה ברכות (הנחיה של שורה/שתיים, הגרף) – בלי קפיצות */
 #dock[data-mode="plan"] { transition: height .3s cubic-bezier(.22,1,.36,1); }
+
+/* מפות שמורות: מבט על כל הארץ; הפס מעל הדוק */
+#areas-bar { position: fixed; left: 0; right: 0; bottom: calc(var(--dock-h, 60px) + 10px); z-index: 8; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+#areas-bar > * { pointer-events: auto; }
+#areas-bar .ab-info { max-width: 88vw; padding: 8px 16px; border-radius: 999px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.25); font-size: 14px; text-align: center; line-height: 1.4; }
+#areas-bar .ab-info b { font-weight: 700; }
+#areas-bar .credits { margin: 0; padding: 0 12px; font-size: 10.5px; color: #555; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; pointer-events: none; }
+body.night #areas-bar .ab-info { background: #262c32; color: #e6e6e6; }
+body.night #areas-bar .credits { color: #aaa; text-shadow: 0 0 3px #000, 0 0 3px #000; }
+body.areas-mode .maplibregl-ctrl-scale { display: none; }

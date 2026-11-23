@@ -137,13 +137,15 @@
     <ul id="search-results"></ul>
   </div>
 
-  <!-- מפות שמורות (מעיגול "מפות שמורות" במצב השכבות) -->
-  <dialog id="areas-dlg">
-    <h2>מפות שמורות</h2>
-    <div id="areas-list"></div>
+  <!-- מפות שמורות: מבט על כל הארץ עם האזורים שהורדו; נגיעה באזור בוחרת אותו, "מחיקה" מוחקת -->
+  <div id="areas-bar" hidden>
+    <div id="ab-info" class="ab-info"></div>
+    <div class="tgrp ab-btns">
+      <button id="ab-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>סגירה</span></button>
+      <button id="ab-del" class="danger" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>מחיקה</span></button>
+    </div>
     <p class="credits">נתוני המפה © תורמי OpenStreetMap · גובה: Mapzen/AWS · תצלום אוויר © Esri</p>
-    <button id="areas-close" class="primary">סגור</button>
-  </dialog>
+  </div>
 
   <!-- עיצוב רשימת המסלולים: גודל ומשקל לכל סוג טקסט, ומרווח השורות -->
   <!-- פיתוח (זמני – יימחק בסוף): נקודה קטנה משמאל למעלה – עיצוב הרשימה וזמני הפתיחה -->
