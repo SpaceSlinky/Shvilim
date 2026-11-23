@@ -646,12 +646,28 @@
   const CELL = 0.1, MAX_CELLS = 6;
   const cellBox = (i, j) => [i * CELL, j * CELL, (i + 1) * CELL, (j + 1) * CELL].map((v) => +v.toFixed(4));
   const covers = (b, c) => b[0] <= c[0] + 1e-6 && b[1] <= c[1] + 1e-6 && b[2] >= c[2] - 1e-6 && b[3] >= c[3] - 1e-6;
+  // מלבן פחות מלבן – מה שנשאר (עד 4 מלבנים)
+  function rectMinus(r, b) {
+    if (b[0] >= r[2] || b[2] <= r[0] || b[1] >= r[3] || b[3] <= r[1]) return [r];
+    const out = [], y0 = Math.max(r[1], b[1]), y1 = Math.min(r[3], b[3]);
+    if (b[1] > r[1]) out.push([r[0], r[1], r[2], b[1]]);
+    if (b[3] < r[3]) out.push([r[0], b[3], r[2], r[3]]);
+    if (b[0] > r[0]) out.push([r[0], y0, b[0], y1]);
+    if (b[2] < r[2]) out.push([b[2], y0, r[2], y1]);
+    return out;
+  }
+  // ריבוע חסר = החלק שלו שעל המסך לא מכוסה במפות שהורדו (כולן יחד). אזור שלא מיושר לרשת (הכרמל)
+  // לא "מחסיר" את הריבועים שבקצוות שלו כשרואים רק את החלק שבתוכו; פס דק (~300 מ') – לא נחשב
   function missingCells() {
-    const v = map.getBounds(), areas = dlAreas(), out = [];
-    for (let i = Math.floor(v.getWest() / CELL); i <= Math.floor(v.getEast() / CELL); i++)
-      for (let j = Math.floor(v.getSouth() / CELL); j <= Math.floor(v.getNorth() / CELL); j++) {
+    const v = map.getBounds(), areas = dlAreas(), out = [], MIN = 0.003;
+    const vb = [v.getWest(), v.getSouth(), v.getEast(), v.getNorth()];
+    for (let i = Math.floor(vb[0] / CELL); i <= Math.floor(vb[2] / CELL); i++)
+      for (let j = Math.floor(vb[1] / CELL); j <= Math.floor(vb[3] / CELL); j++) {
         const c = cellBox(i, j);
-        if (!areas.some((a) => covers(a.b, c))) out.push(c);
+        if (areas.some((a) => covers(a.b, c))) continue;
+        let left = [[Math.max(c[0], vb[0]), Math.max(c[1], vb[1]), Math.min(c[2], vb[2]), Math.min(c[3], vb[3])]];
+        for (const a of areas) left = left.flatMap((r) => rectMinus(r, a.b));
+        if (left.some((r) => r[2] - r[0] > MIN && r[3] - r[1] > MIN)) out.push(c);
       }
     return out;
   }
