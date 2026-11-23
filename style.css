@@ -499,3 +499,7 @@ body.night .pace { border-color: #4a535b; color: #b9c0c6; }
 /* חוצצים בין המסלולים, גם בתוך קטגוריה */
 .cat-body .lib-row { border-bottom: 1px solid #e8e8e8; }
 body.night .cat-body .lib-row { border-bottom-color: #343a40; }
+/* חוצץ גם בין הקטגוריות (ובין מסלול בלי קטגוריה לקטגוריה) – כמו בין המסלולים */
+.cat { border-bottom: 1px solid #e8e8e8; }
+.cat.open { border-bottom: 0; }
+body.night .cat { border-bottom-color: #343a40; }
