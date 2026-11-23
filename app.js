@@ -1088,7 +1088,7 @@
     return raw ? t : t / (paceRow()[2] * calOf(bike).f);
   }
   // הכפתור מתחת לזמן: הקצב הנוכחי; נגיעה מחליפה רגיל → מהיר → עם ילדים
-  function paceLabel(bike) { return paceRow()[1] + (calOf(bike).n ? ' · מותאם לך' : '') + ' ⌄'; }
+  function paceLabel(bike) { return paceRow()[1] + (calOf(bike).n ? ' · מותאם לך' : ''); }
   function cyclePace() {
     pace = PACES[(PACES.indexOf(paceRow()) + 1) % PACES.length][0];
     try { localStorage.setItem('pace', pace); } catch { /* ignore */ }
