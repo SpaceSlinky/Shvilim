@@ -346,7 +346,9 @@
     if (!cam || !isFinite(cam.zoom)) return cam;
     const z = Math.max(4, Math.min(9, cam.zoom));
     const { width: W, height: H } = map.getCanvas().getBoundingClientRect();
-    const c = maplibregl.LngLat.convert(cam.center);
+    const c0 = maplibregl.LngLat.convert(cam.center), COL = 0.6; // הגריד הרחוק סימטרי: מרכז המסך = מרכז עמודה (לא פס גריד)
+    const c = new maplibregl.LngLat((Math.floor(c0.lng / COL) + 0.5) * COL, c0.lat);
+    cam.center = c;
     const scale = (512 * 2 ** z) / (2 * Math.PI) / 1.01; // פיקסלים לרדיאן (+1% מרווח)
     const my = Math.log(Math.tan(Math.PI / 4 + (c.lat * Math.PI) / 360));
     const lat = (y) => (360 / Math.PI) * Math.atan(Math.exp(y)) - 90;
@@ -365,20 +367,44 @@
   const FAR_EPS = 0.25;
   let farLocked = false;
   const isFar = () => map.getZoom() <= map.getMinZoom() + FAR_EPS;
+  // סיבוב בזמן זום אאוט: מותר רק כשהמלבן המסובב של המסך עדיין נכנס בתוך מה שרואים בזום הכי רחוק (קרופ נכון של ישראל).
+  // בזום הכי רחוק – 0 (ישרה), ומשם הזווית המותרת גדלה עד שאין הגבלה (ממש מעט אחרי שהמפה מגדילה פי ~2.3)
+  let clampingBearing = false;
+  function maxBearing(z) {
+    const k = 2 ** (z - map.getMinZoom()), { width: W, height: H } = map.getCanvas().getBoundingClientRect();
+    let ok = 0;
+    for (let a = 1; a <= 90; a++) {
+      const t = (a * Math.PI) / 180, c = Math.cos(t), sn = Math.sin(t);
+      if (W * c + H * sn <= W * k + 1e-6 && W * sn + H * c <= H * k + 1e-6) ok = a; else break;
+    }
+    return ok >= 90 ? 180 : ok;
+  }
+  function clampBearing() {
+    if (clampingBearing) return;
+    const lim = maxBearing(map.getZoom());
+    if (lim >= 180) return;
+    let b = map.getBearing();
+    b = ((b + 540) % 360) - 180; // (-180, 180]
+    if (Math.abs(b) <= lim + 0.01) return;
+    clampingBearing = true;
+    map.setBearing(Math.sign(b) * lim);
+    clampingBearing = false;
+  }
+  map.on('move', clampBearing);
   function syncFarLock() {
     const far = isFar();
     if (far === farLocked) return;
     farLocked = far;
     if (far) {
-      map.dragPan.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
+      map.dragPan.disable();
       if (typeof compassMode !== 'undefined' && compassMode) { compassMode = false; updateCompassIcon(); }
-      if (farCam) { // מיישרים: צפון למעלה, ואיפה שכל הארץ בדיוק על המסך
+      if (farCam) { // מיישרים: איפה שכל הארץ בדיוק על המסך
         const c = maplibregl.LngLat.convert(farCam.center), m = map.getCenter();
-        if (Math.abs(map.getBearing()) > 0.01 || map.getZoom() > map.getMinZoom() + 0.01 || Math.abs(m.lng - c.lng) > 1e-4 || Math.abs(m.lat - c.lat) > 1e-4)
+        if (map.getZoom() > map.getMinZoom() + 0.01 || Math.abs(m.lng - c.lng) > 1e-4 || Math.abs(m.lat - c.lat) > 1e-4)
           map.easeTo({ center: c, zoom: map.getMinZoom(), bearing: 0, duration: 350 });
       }
     } else {
-      map.dragPan.enable(); map.dragRotate.enable(); map.touchZoomRotate.enableRotation();
+      map.dragPan.enable();
     }
   }
   map.once('load', syncFarLock);
@@ -2685,7 +2711,7 @@
   }
 
   $('btn-compass').addEventListener('click', async () => {
-    if (isFar()) return toast('במבט על כל הארץ – צפון תמיד למעלה', 1800);
+    if (isFar()) return Math.abs(map.getBearing()) > 0.5 ? map.rotateTo(0, { duration: 300 }) : toast('במבט על כל הארץ – צפון תמיד למעלה', 1800);
     if (compassMode) {
       compassMode = false;
       map.rotateTo(0, { duration: 400 });
