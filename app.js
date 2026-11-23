@@ -240,12 +240,15 @@
         layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d81b60', 'line-width': 5, 'line-dasharray': [1.6, 1.2] } },
       { id: 'detour-pt', type: 'circle', source: 'detour', filter: ['==', '$type', 'Point'],
         paint: { 'circle-radius': 8, 'circle-color': '#d81b60', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
-      // האצבע על הגרף: הקטע המסומן על המסלול – אותו צבע של השביל, רק בהיר יותר (lc), עם המסגרת הלבנה הרגילה;
+      // האצבע על הגרף: הקטע המסומן – רצועה מלאה בצבע השביל לכל הרוחב (בלי מסגרת לבנה; שביל לבן – לבן עם קו מתאר כהה דק),
+      // ושאר המסלול דוהה בינתיים (SCRUB_FADE);
       // אצבע אחת – שברון לבן בקצה שזז עם האצבע, בכיוון ההליכה; שתי אצבעות – שני קווים לבנים ניצבים בקצוות הטווח
       { id: 'scrub-glow-casing', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#fff', 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
+        paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', ['coalesce', ['get', 'c'], '#d4148f']], 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
       { id: 'scrub-glow', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': ['coalesce', ['get', 'lc'], '#ff8ad0'], 'line-width': zw(2.4, 5), 'line-offset': SHARED_OFFSET } },
+        paint: { 'line-color': ['case', ['==', ['get', 'c'], '#ffffff'], '#ffffff', ['coalesce', ['get', 'c'], '#d4148f']],
+          'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 11, ['case', ['==', ['get', 'c'], '#ffffff'], 2.8, 4], 16, ['case', ['==', ['get', 'c'], '#ffffff'], 6.6, 8.5]],
+          'line-offset': SHARED_OFFSET } },
       { id: 'scrub-mark', type: 'symbol', source: 'scrub', filter: ['==', ['geometry-type'], 'Point'],
         layout: { 'icon-image': ['get', 'k'], 'icon-rotate': ['get', 'rot'], 'icon-rotation-alignment': 'map',
           'icon-allow-overlap': true, 'icon-ignore-placement': true } },
@@ -1368,26 +1371,25 @@
     if (!args[0]) { cancelAnimationFrame(scrubRaf); scrubRaf = 0; return drawScrubMap(); }
     if (!scrubRaf) scrubRaf = requestAnimationFrame(() => { scrubRaf = 0; drawScrubMap(); });
   }
+  // בזמן הגרירה – שאר המסלול דוהה, כך שרואים רק את הקטע המסומן
+  const SCRUB_FADE = 0.35;
+  let routeFaded = false;
+  function fadeRoute(on) {
+    if (on === routeFaded) return;
+    routeFaded = on;
+    for (const id of ['route-casing', 'route-line']) if (map.getLayer(id)) map.setPaintProperty(id, 'line-opacity', on ? SCRUB_FADE : 1);
+  }
   function drawScrubMap() {
     const [segs, r, p, a, b, both] = scrubPending || [];
+    fadeRoute(!!(segs && r));
     if (!segs || !r) return map.getSource('scrub')?.setData(empty);
     const ra = profToRoute(p, r, a), rb = profToRoute(p, r, b);
-    const feats = rb - ra > 1 ? overlayFeatures(segs, ra, rb, 'hl').map((f) => ({ ...f, properties: { ...f.properties, lc: lighten(f.properties.c) } })) : [];
+    const feats = rb - ra > 1 ? overlayFeatures(segs, ra, rb, 'hl') : [];
     const mark = (d, k) => { const at = pieceAt(segs, d) || routeAt(r, d); if (at) feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: at.p }, properties: { k, rot: at.brg } }); };
     if (both) { mark(ra, 'scrub-tick'); mark(rb, 'scrub-tick'); } else mark(rb, 'scrub-chev');
     map.getSource('scrub')?.setData({ type: 'FeatureCollection', features: feats });
   }
   function clearScrub() { scrub = null; setScrubMap(null); }
-  // גוון בהיר של צבע השביל (45% לבן) – הקטע המסומן בגרירה על הגרף
-  function lighten(c) {
-    // כל צבע (גם שם, כמו "red") – לקסדצימלי דרך הדפדפן
-    const cx = lighten.cx || (lighten.cx = document.createElement('canvas').getContext('2d'));
-    cx.fillStyle = '#d4148f'; cx.fillStyle = c || '#d4148f';
-    const m = /^#([0-9a-f]{6})$/i.exec(cx.fillStyle);
-    if (!m) return '#ffffff';
-    const n = parseInt(m[1], 16), mix = (v) => Math.round(v + (255 - v) * 0.45);
-    return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((v) => mix(v).toString(16).padStart(2, '0')).join('');
-  }
   // נקודה וכיוון במרחק d – על הקו המצויר עצמו (המעוגל, ומוזז הצידה בקטע משותף כמו line-offset), כדי שהשברון
   // וקווי הטווח יישבו בדיוק על קצה הקטע המסומן ולא "ירקדו" בין הקו הגולמי לקו המצויר
   function pieceAt(segs, d) {
