@@ -387,7 +387,8 @@
     b = ((b + 540) % 360) - 180; // (-180, 180]
     if (Math.abs(b) <= lim + 0.01) return;
     clampingBearing = true;
-    map.setBearing(Math.sign(b) * lim);
+    // לא map.setBearing – הוא עוצר את אנימציית הזום (הזום "נתקע" באמצע התרחקות בהטלה). משנים ישירות את המצלמה
+    if (map.transform?.setBearing) { map.transform.setBearing(Math.sign(b) * lim); map.triggerRepaint(); } else map.setBearing(Math.sign(b) * lim);
     clampingBearing = false;
   }
   map.on('move', clampBearing);
