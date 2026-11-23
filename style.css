@@ -303,17 +303,17 @@ body.night .edit-in { border-color: #4caf50; }
 
 /* ===== מסלולים: טבלה לפי קטגוריות ===== */
 #lib-list { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-.lib-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: var(--ls-pad, 11px) 4px; border-bottom: 1px solid #eee; cursor: pointer; }
-.c-len { font-size: var(--ls-len-s, 15px); font-weight: var(--ls-len-w, 700); color: #444; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lib-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: var(--ls-pad, 8px) 4px; border-bottom: 1px solid #eee; cursor: pointer; }
+.c-len { font-size: var(--ls-len-s, 16px); font-weight: var(--ls-len-w, 400); color: #444; white-space: nowrap; font-variant-numeric: tabular-nums; }
 body.night .c-len { color: #ccc; }
-.c-name { font-size: var(--ls-row-s, 16px); font-weight: var(--ls-row-w, 600); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-name { font-size: var(--ls-row-s, 16px); font-weight: var(--ls-row-w, 400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lib-row.sel { background: rgba(46,125,79,.12); border-radius: 8px; border-color: transparent; }
 .dh { display: grid; place-items: center; width: 34px; height: 40px; margin: -10px -6px; touch-action: none; cursor: grab; color: #aaa; }
 .dh svg { width: 10px; height: 16px; fill: currentColor; }
 /* קטגוריה: כותרת ממורכזת; נגיעה פותחת/סוגרת ברכות */
 .cat { margin-top: 6px; }
 .cat-head { display: grid; grid-template-columns: 26px minmax(0, 1fr) 26px; align-items: center; gap: 6px; padding: 10px 4px 6px; cursor: pointer; }
-.cat-name { text-align: center; font-size: var(--ls-cat-s, 16px); font-weight: var(--ls-cat-w, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .2s; }
+.cat-name { text-align: center; font-size: var(--ls-cat-s, 16px); font-weight: var(--ls-cat-w, 400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .2s; }
 .cat-count { font-size: 12px; color: #999; text-align: center; }
 .cat.sel .cat-name { color: var(--green); }
 .cat.sel .cat-head { background: rgba(46,125,79,.12); border-radius: 8px; }
@@ -367,7 +367,7 @@ body.night .dock-ask .no { background: #2a3036; color: #eee; }
 section[data-mode="lib"] > .grip { margin-bottom: 0; }
 #dock[data-mode="lib"] #dock-in > section { padding-top: 6px; padding-bottom: 6px; } /* סגור – צמוד לגובה הטקסט */
 .lib-head { display: block; width: 100%; margin-top: 0; padding: 3px 6px 5px; line-height: 1.15; border: 0; background: none; text-align: center;
-  font: inherit; font-size: var(--ls-head-s, 20px); font-weight: var(--ls-head-w, 800); color: inherit; touch-action: none; cursor: pointer; }
+  font: inherit; font-size: var(--ls-head-s, 20px); font-weight: var(--ls-head-w, 300); color: inherit; touch-action: none; cursor: pointer; }
 .lib-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1); }
 .lib-body > div { overflow: hidden; min-height: 0; }
 section.open .lib-body { grid-template-rows: 1fr; }

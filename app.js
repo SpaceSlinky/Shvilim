@@ -3026,12 +3026,12 @@
 
   // ---------- עיצוב רשימת המסלולים (localStorage `libStyle`) – משתני CSS על :root ----------
   const LS = [
-    { k: 'head', name: 'כותרת "מסלולים"', min: 14, max: 30, s: 20, w: 800 },
-    { k: 'cat', name: 'כותרת קטגוריה', min: 12, max: 26, s: 16, w: 700 },
-    { k: 'row', name: 'שם מסלול', min: 12, max: 24, s: 16, w: 600 },
-    { k: 'len', name: 'אורך (ק"מ)', min: 11, max: 22, s: 15, w: 700 },
+    { k: 'head', name: 'כותרת "מסלולים"', min: 14, max: 30, s: 20, w: 300 },
+    { k: 'cat', name: 'כותרת קטגוריה', min: 12, max: 26, s: 16, w: 400 },
+    { k: 'row', name: 'שם מסלול', min: 12, max: 24, s: 16, w: 400 },
+    { k: 'len', name: 'אורך (ק"מ)', min: 11, max: 22, s: 16, w: 400 },
   ];
-  const LS_PAD = { min: 4, max: 22, def: 11 };
+  const LS_PAD = { min: 4, max: 22, def: 8 };
   let libStyle = {};
   try { libStyle = JSON.parse(localStorage.getItem('libStyle')) || {}; } catch { /* ignore */ }
   function applyLibStyle() {
