@@ -3084,6 +3084,14 @@
   });
   $('ls-reset').addEventListener('click', () => { libStyle = {}; saveLibStyle(); renderStyleDlg(); });
   $('ls-close').addEventListener('click', () => $('style-dlg').close());
+  // העתקת הערכים (להדבקה בצ'אט – כדי שיהפכו לברירת המחדל באפליקציה)
+  $('ls-copy').addEventListener('click', async () => {
+    const vals = { pad: libStyle.pad ?? LS_PAD.def };
+    for (const it of LS) vals[it.k] = { s: libStyle[it.k]?.s ?? it.s, w: libStyle[it.k]?.w ?? it.w };
+    const txt = 'libStyle ' + JSON.stringify(vals);
+    try { await navigator.clipboard.writeText(txt); toast('הועתק – אפשר להדביק בצ׳אט'); }
+    catch { $('ls-perf').textContent = txt; toast('לא הצלחתי להעתיק – הערכים למעלה'); }
+  });
 
   // ---------- כפתור "חזור" של הטלפון ----------
   // כשיש לאן לחזור, יש בהיסטוריה רשומה אחת שלנו; "חזור" מוריד אותה (popstate), ואנחנו עושים צעד אחד אחורה.
