@@ -57,9 +57,7 @@
   const road = (r) => ['all', k('road'), ['==', ['get', 'r'], r]];
   // רמות הגריד המאוחד: m = כמה ריבועים בצלע; op = עצירות [זום, שקיפות] – נכנס כשהרמה שמעליו יוצאת (פייד מוצלב)
   const GRID_LEVELS = [
-    { m: 2, op: [8, 0, 8.6, 0.5, 9, 0.5, 9.8, 0] },
-    { m: 4, op: [7, 0, 7.6, 0.5, 8, 0.5, 8.8, 0] },
-    { m: 8, op: [5, 0, 5.6, 0.5, 7, 0.5, 7.8, 0] },
+    { m: 5, op: [5, 0, 5.4, 0.5, 9, 0.5, 9.8, 0] }, // 0.5° – ארבע עמודות לרוחב כל ישראל, קבוע מהזום הכי רחוק
   ];
   const zw = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, a, 16, b];
   // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
@@ -818,29 +816,63 @@
   }
 
   // אזור בלי מפה שמורה (למשל אחרי חיפוש): במרכז המסך – "להורדת מפות האזור" (לחיץ)
-  const dlHere = $('dl-here');
   let dlMsg = '';
   function viewBox() {
     const v = map.getBounds(), pad = 0.01; // קצת מעבר למסך
     return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
   }
-  // הכפתור יושב במרכז הריבוע שיירד (הקרוב ביותר למרכז המסך), ומופיע בפייד כשהריבוע תופס 45–60% מרוחב המסך
-  let dlCell = null;
+  // כפתור הורדה על כל ריבוע חסר שרואים – באמצע שלו, בשורה אחת; כולם מופיעים יחד בפייד כשהריבוע תופס 45–60% מרוחב המסך
+  let dlCell = null, dlMiss = [];
   const DL_SHOW = [0.45, 0.6];
+  const dlBtns = new Map(); // מפתח ריבוע → כפתור
+  function dlButton(c) {
+    const key = c.join();
+    let b = dlBtns.get(key);
+    if (!b) {
+      b = document.createElement('button');
+      b.className = 'dl-here';
+      b.hidden = true;
+      b.addEventListener('click', () => {
+        if (b.disabled) return;
+        dlCell = c;
+        downloadArea(c, { area: true, cells: [c] });
+      });
+      document.body.appendChild(b);
+      dlBtns.set(key, b);
+    }
+    return b;
+  }
+  const dlLabel = () => dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
+    : dlErr ? `ההורדה נכשלה: ${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
   function placeDlHere() {
-    if (!dlCell) return (dlHere.hidden = true);
-    const c = dlCell, W = innerWidth, H = innerHeight;
-    const a = map.project([c[0], c[1]]), b = map.project([c[2], c[3]]); // SW, NE
-    const x0 = Math.max(Math.min(a.x, b.x), 0), x1 = Math.min(Math.max(a.x, b.x), W);
-    const y0 = Math.max(Math.min(a.y, b.y), 0), y1 = Math.min(Math.max(a.y, b.y), H);
-    const f = Math.abs(b.x - a.x) / W; // כמה מהמסך הריבוע תופס (לרוחב)
-    const o = dlMsg ? 1 : Math.max(0, Math.min(1, (f - DL_SHOW[0]) / (DL_SHOW[1] - DL_SHOW[0])));
-    if (o <= 0 || x1 <= x0 || y1 <= y0) return (dlHere.hidden = true);
-    dlHere.hidden = false;
-    dlHere.style.opacity = o;
-    dlHere.style.pointerEvents = o < 0.6 ? 'none' : '';
-    dlHere.style.left = (x0 + x1) / 2 + 'px';
-    dlHere.style.top = (y0 + y1) / 2 + 'px';
+    const W = innerWidth, H = innerHeight, top = 110, bottom = H - ($('dock')?.offsetHeight || 120) - 10;
+    const cells = dlMsg && dlCell ? [dlCell] : dlMiss;
+    const show = new Set();
+    if (cells.length && cells.length <= 60) {
+      const c0 = cells[0], a = map.project([c0[0], c0[1]]), b = map.project([c0[2], c0[3]]);
+      const cw = Math.abs(b.x - a.x);
+      const o = dlMsg ? 1 : Math.max(0, Math.min(1, (cw / W - DL_SHOW[0]) / (DL_SHOW[1] - DL_SHOW[0])));
+      if (o > 0) for (const c of cells) {
+        const p = map.project([(c[0] + c[2]) / 2, (c[1] + c[3]) / 2]);
+        if (p.x < 0 || p.x > W || p.y < top || p.y > bottom) continue; // באמצע שלו – רק כשהאמצע על המסך
+        const btn = dlButton(c);
+        btn.hidden = false;
+        btn.textContent = dlLabel();
+        btn.disabled = !!dlMsg || !navigator.onLine;
+        btn.style.scale = 1;
+        const sc = Math.min(1, (0.88 * cw) / (btn.offsetWidth || 1)); // לא רחב מהריבוע שלו
+        btn.style.scale = sc;
+        // נכנס/יוצא בפייד כשהאמצע של הריבוע מתקרב לקצה המסך – לא נחתך ולא קופץ
+        const e = Math.max(0, Math.min(1, Math.min(Math.min(p.x, W - p.x) / (btn.offsetWidth * sc / 2 + 8), Math.min(p.y - top, bottom - p.y) / (btn.offsetHeight * sc / 2 + 8))));
+        if (e <= 0) { btn.hidden = true; continue; }
+        btn.style.opacity = o * e;
+        btn.style.pointerEvents = o * e < 0.6 ? 'none' : '';
+        btn.style.left = p.x + 'px';
+        btn.style.top = p.y + 'px';
+        show.add(c.join());
+      }
+    }
+    for (const [k, b] of dlBtns) if (!show.has(k)) b.hidden = true;
   }
   // הגריד המאוחד: קווים מלאים (מרידיאנים ומקבילים בכפולות של m×0.1°) על פני המסך ועוד חצי מסך מכל צד
   function updateCoarseGrid(z) {
@@ -860,28 +892,14 @@
   function checkArea() {
     const z = map.getZoom();
     updateCoarseGrid(z);
-    if (z < 9 && !dlMsg) { dlCell = null; dlHere.hidden = true; map.getSource('dl-grid')?.setData(empty); return; }
+    if (z < 9 && !dlMsg) { dlMiss = []; map.getSource('dl-grid')?.setData(empty); return placeDlHere(); }
     const miss = missingCells();
+    dlMiss = miss;
     // הריבועים שעוד לא הורדו – קווים מקווקווים עדינים: ברור מה יירד בלחיצה
     map.getSource('dl-grid')?.setData({ type: 'FeatureCollection', features: miss.map((c) => ({ type: 'Feature', properties: {},
       geometry: { type: 'LineString', coordinates: [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]] } })) });
-    if (!(dlMsg && dlCell)) { // בזמן הורדה הכפתור נשאר על הריבוע שיורד
-      const m = map.getCenter(), k = Math.cos((m.lat * Math.PI) / 180);
-      dlCell = miss.reduce((best, c) => {
-        const d = Math.hypot(((c[0] + c[2]) / 2 - m.lng) * k, (c[1] + c[3]) / 2 - m.lat);
-        return !best || d < best.d ? { c, d } : best;
-      }, null)?.c || null;
-    }
-    if (!dlCell) return (dlHere.hidden = true);
-    dlHere.disabled = !!dlMsg || !navigator.onLine;
-    dlHere.textContent = dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
-      : dlErr ? `ההורדה נכשלה: ${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
     placeDlHere();
   }
-  dlHere.addEventListener('click', () => {
-    if (dlHere.disabled || !dlCell) return;
-    downloadArea(dlCell, { area: true, cells: [dlCell] });
-  });
   map.on('move', placeDlHere);
   map.on('moveend', checkArea);
   addEventListener('online', checkArea);
