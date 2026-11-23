@@ -341,12 +341,12 @@ body.night .c-len { color: #ccc; }
 .tgrp { display: flex; gap: 1px; border-radius: 12px; overflow: hidden; border: 1px solid #ddd; background: #ddd; }
 .tgrp button { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 58px; padding: 7px 0 6px; border: 0; background: #f7f7f7;
   color: var(--green); font: inherit; font-size: 12px; }
-.tgrp button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tgrp button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
 .tgrp button.danger { color: #c62828; }
 .tgrp button.armed, .tgrp button.danger.armed { background: #c62828; color: #fff; }
 .tgrp button:active:not(:disabled) { background: #e7efe9; }
 
-body.night .lib-row { border-color: #2c3136; }
+body.night .lib-row { border-color: #343a40; }
 body.night .lib-row.sel, body.night .cat.sel .cat-head { background: rgba(76,175,80,.18); }
 body.night .cat.open .cat-name { color: #81c784; }
 body.night .ghost { background: #252b31; }
@@ -488,3 +488,14 @@ body.night #controls button.pressed, body.night #controls #btn-compass.active, b
 .pace { display: block; margin: 3px auto 0; padding: 2px 9px; border: 1px solid #cfd4d1; border-radius: 999px; background: none;
   font: inherit; font-size: 11px; font-weight: 600; color: #5b6560; white-space: nowrap; }
 body.night .pace { border-color: #4a535b; color: #b9c0c6; }
+
+/* שם המסלול בתכנון: הטקסט עצמו נערך, עט קטן לידו */
+.pl-name-row { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 2px 0 4px; cursor: text; }
+.pl-name-row input { min-width: 0; max-width: 75%; field-sizing: content; border: 0; border-bottom: 1px solid transparent; background: none; color: inherit;
+  font: inherit; font-size: 17px; font-weight: 700; text-align: center; padding: 2px 4px; outline: none; }
+.pl-name-row input:focus { border-bottom-color: #9aa3ab; }
+.pl-name-row input::placeholder { color: #9aa3ab; }
+.pl-name-row svg { width: 15px; height: 15px; flex: none; fill: none; stroke: #8a939b; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+/* חוצצים בין המסלולים, גם בתוך קטגוריה */
+.cat-body .lib-row { border-bottom: 1px solid #e8e8e8; }
+body.night .cat-body .lib-row { border-bottom-color: #343a40; }

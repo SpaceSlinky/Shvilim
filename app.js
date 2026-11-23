@@ -1839,6 +1839,7 @@
     setFollow(false);
     plan = { wps: from?.wps ? from.wps.map((p) => [...p]) : [], opts: { snap: true, bike: false, ...(from?.opts || {}) },
       name: from?.name || '', folder: from?.folder, libId: from?.libId, markers: [] };
+    $('pl-name').value = plan.name;
     $('pl-snap').checked = plan.opts.snap;
     for (const r of document.querySelectorAll('input[name="pl-mode"]')) r.checked = r.value === (plan.opts.bike ? 'bike' : 'walk');
     $('pl-pace').textContent = paceLabel(plan.opts.bike);
@@ -1899,18 +1900,26 @@
     $('plan-dlg-title').textContent = mode === 'plan' ? 'שמירת המסלול' : 'שמירה בספרייה';
     $('plan-dlg').showModal();
   }
-  $('pl-done').addEventListener('click', () => openSaveDlg('plan', { name: plan.name, folder: plan.folder, coords: plan.wps }));
+  // שם המסלול – בדוק, נוגעים ועורכים (בלי כפתור "עריכת שם")
+  $('pl-name').addEventListener('input', (e) => { if (plan) plan.name = e.target.value; });
+  $('pl-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
+  // מסלול קיים – נשמר במקומו (השם כבר בדוק); חדש – חלון עם שם וקטגוריה
+  $('pl-done').addEventListener('click', async () => {
+    if (plan.libId && plan.name.trim()) return savePlan(plan.name.trim(), plan.folder || '');
+    openSaveDlg('plan', { name: plan.name, folder: plan.folder, coords: plan.wps });
+  });
+  async function savePlan(name, folder) {
+    const a = { kind: 'plan', name, folder, wps: plan.wps, opts: plan.opts, segs: plan.segs, waypoints: [], libId: plan.libId || Date.now() };
+    endPlan();
+    await libPut(a);
+    await setActive(a, { fit: true });
+    toast(`"${name}" נשמר${folder ? ` ב"${folder}"` : ''} · ${Geo.fmtDist(route.total)}`, 4000);
+  }
   $('plan-dlg').addEventListener('close', async () => {
     if ($('plan-dlg').returnValue !== 'ok') return;
     const name = $('plan-name').value.trim() || 'מסלול מתוכנן';
     const folder = $('plan-folder').value.trim();
-    if (saveMode === 'plan' && plan) {
-      const a = { kind: 'plan', name, folder, wps: plan.wps, opts: plan.opts, segs: plan.segs, waypoints: [], libId: plan.libId || Date.now() };
-      endPlan();
-      await libPut(a);
-      await setActive(a, { fit: true });
-      toast(`"${name}" נשמר${folder ? ` ב"${folder}"` : ''} · ${Geo.fmtDist(route.total)}`, 4000);
-    }
+    if (saveMode === 'plan' && plan) await savePlan(name, folder);
   });
 
   // ---------- ספריית מסלולים (לפי אזורים) ----------
@@ -1985,6 +1994,7 @@
     const name = sel && lsel.editing ? editField(r.name, (v) => renameRoute(r.id, v)) : el('div', 'c-name', r.name);
     row.append(g, name, el('span', 'c-len', (r.len / 1000).toFixed(1) + ' ק"מ'));
     row.addEventListener('click', () => { if (dragJustEnded) return; if (!(sel && lsel.editing)) libSelect(r.id); });
+    row.addEventListener('dblclick', () => { if (!lsel.editing) openFromLib(r.id); }); // נגיעה כפולה – פותחת
     g.addEventListener('pointerdown', (e) => startDrag(e, row, 'route', r.id, true));
     // לחיצה ארוכה בכל מקום בשורה – גם מתחילה גרירה
     row.addEventListener('pointerdown', (e) => { if (!e.target.closest('.dh, input')) startDrag(e, row, 'route', r.id, false); });
@@ -2205,7 +2215,7 @@
   const ctxFolder = (lib) => (lsel.kind === 'folder' ? lsel.folder : lsel.kind === 'route' ? lib.find((x) => x.id === lsel.id)?.folder || '' : '');
   // כמו בשירותים ב-ezpz: מופיעים רק הכפתורים שרלוונטיים למה שנבחר (לא כבויים)
   //  כלום:    + מסלול · + קטגוריה
-  //  מסלול:   פתח · עריכה · מסלול (רק למתוכנן) · מחיקה | + מסלול (באותה קטגוריה)
+  //  מסלול:   עריכה · מחיקה | + מסלול (באותה קטגוריה)
   //  קטגוריה: עריכה · מחיקה | + מסלול (בתוכה) · + קטגוריה
   function renderLibTools(lib, cats) {
     const tools = $('lib-tools');
@@ -2239,9 +2249,11 @@
     const addCatBtn = (g) => btn(g, 'cat', 'קטגוריה', () => addCat(cats));
     if (r) {
       const g1 = grp();
-      btn(g1, 'open', 'פתח', () => openFromLib(r.id));
-      btn(g1, 'edit', 'עריכה', () => { lsel.editing = true; renderLibrary(); });
-      if (r.kind === 'plan') btn(g1, 'route', 'מסלול', () => { clearSel(); startPlan({ ...r, libId: r.id }); });
+      // בלי "פתח" (נגיעה שנייה / כפולה פותחת) ובלי "מסלול": "עריכה" פותחת את המסלול לעריכה – הדרך והשם (בדוק);
+      // מסלול שלא תוכנן כאן (בלי נקודות) – רק השם, במקום
+      btn(g1, 'edit', 'עריכה', () => {
+        if (r.kind === 'plan' && r.wps?.length) { clearSel(); startPlan({ ...r, libId: r.id }); } else { lsel.editing = true; renderLibrary(); }
+      });
       delBtn(g1);
       addRoute(grp());
     } else if (c) {
