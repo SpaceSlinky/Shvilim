@@ -1805,7 +1805,6 @@
       : plan.wps.length === 1 ? 'הקישו על נקודה נוספת – המסלול יימשך לאורך השבילים'
       : free && plan.opts.snap ? 'חלק מהקטעים לא נמצאו על שבילים – מוצגים כקו מקווקו' : 'גררו נקודה להזזה · הקשה על נקודה מוחקת אותה';
     $('pl-done').disabled = plan.wps.length < 2;
-    $('pl-undo').disabled = !plan.wps.length;
     clearTimeout(profTimer);
     plan.prof = null; plan.scrubAt = null; setScrubMap(null);
     $('pl-up').textContent = $('pl-down').textContent = $('pl-time').textContent = '–';
@@ -1856,14 +1855,18 @@
     plan = { wps: from?.wps ? from.wps.map((p) => [...p]) : [], opts: { snap: true, bike: false, ...(from?.opts || {}) },
       name: from?.name || '', folder: from?.folder, libId: from?.libId, markers: [] };
     $('pl-name').value = plan.name;
-    $('pl-snap').checked = plan.opts.snap;
-    for (const r of document.querySelectorAll('input[name="pl-mode"]')) r.checked = r.value === (plan.opts.bike ? 'bike' : 'walk');
+    planToggles();
     $('pl-pace').textContent = paceLabel(plan.opts.bike);
     clearScrub();
     document.body.classList.add('planning');
+    // עד אז – התוכן כבר בגודל הסופי (הנחיה ונתונים ריקים), כדי שהגובה לא ישתנה אחר כך
+    $('pl-hint').textContent = plan.wps.length > 1 ? 'גררו נקודה להזזה · הקשה על נקודה מוחקת אותה' : 'הקישו על המפה כדי לסמן נקודת התחלה';
+    for (const id of ['pl-len', 'pl-up', 'pl-down', 'pl-time']) $(id).textContent = '–';
+    drawProfile($('pl-profile'), null);
     renderDock();
     if (!plan.wps.length) map.getSource('route').setData(empty);
-    if (plan.opts.snap) { toast('מכין את רשת השבילים…', 1500); setTimeout(() => { getGraph(plan.opts.bike); renderPlan(); }, 30); }
+    // בניית הרשת תוקעת את הדף – אחרי שהדוק סיים לגדול (אחרת הוא "קופץ")
+    if (plan.opts.snap && plan.wps.length) { if (!graphKey) toast('מכין את רשת השבילים…', 1500); setTimeout(() => { if (!plan) return; getGraph(plan.opts.bike); renderPlan(); }, 380); }
     else renderPlan();
     applyLayers();
   }
@@ -1884,12 +1887,23 @@
     plan.wps.push(snapWp([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]));
     renderPlan();
   });
-  $('pl-undo').addEventListener('click', () => { plan.wps.pop(); renderPlan(); });
-  $('pl-clear').addEventListener('click', () => { plan.wps = []; renderPlan(); });
   $('pl-cancel').addEventListener('click', endPlan);
-  $('pl-snap').addEventListener('change', (e) => { plan.opts.snap = e.target.checked; renderPlan(); });
-  for (const r of document.querySelectorAll('input[name="pl-mode"]')) r.addEventListener('change', () => {
-    plan.opts.bike = r.value === 'bike';
+  // הליכה / אופניים – כפתור אחד שמתחלף (מראה את המצב הנוכחי); הצמדה לשבילים – דלוק/כבוי
+  const MODE_ICON = {
+    walk: '<circle cx="13" cy="4.5" r="1.8"/><path d="M12.5 8l-2 6 3 3 1 4.5M10.5 14l-2 7M11.5 9.5L8 11.5v3M12.5 8.5l2.5 3 3 1"/>',
+    bike: '<circle cx="5.5" cy="16" r="3.5"/><circle cx="18.5" cy="16" r="3.5"/><path d="M5.5 16l3.5-7h7l2.5 7M9 9l3.5 7h-7M15 9l-1.5-3H11"/>',
+  };
+  function planToggles() {
+    const m = plan.opts.bike ? 'bike' : 'walk';
+    $('pl-mode').querySelector('svg').innerHTML = MODE_ICON[m];
+    $('pl-mode').querySelector('span').textContent = m === 'bike' ? 'אופניים' : 'הליכה';
+    $('pl-snap').classList.toggle('off', !plan.opts.snap);
+    $('pl-snap').setAttribute('aria-pressed', plan.opts.snap);
+  }
+  $('pl-snap').addEventListener('click', () => { plan.opts.snap = !plan.opts.snap; planToggles(); renderPlan(); });
+  $('pl-mode').addEventListener('click', () => {
+    plan.opts.bike = !plan.opts.bike;
+    planToggles();
     $('pl-pace').textContent = paceLabel(plan.opts.bike);
     // נקודות שנצמדו לשביל אופניים בלבד – לא מתאימות להליכה: מצמידים מחדש לרשת של המצב החדש
     toast('מעדכן…', 800);
@@ -2042,7 +2056,7 @@
         // נגיעה בכותרת: בוחרת את הקטגוריה (כמו מסלול) ופותחת/סוגרת אותה ברכות
         head.addEventListener('click', () => {
           if (dragJustEnded || (fsel && lsel.editing)) return;
-          // נגיעה ראשונה – בוחרת ופותחת; נגיעה בקטגוריה שכבר נבחרה – פותחת/סוגרת
+          // נגיעה ראשונה – מסמנת ופותחת; נגיעה בקטגוריה המסומנת – מבטלת וסוגרת
           if (!(lsel.kind === 'folder' && lsel.folder === c)) {
             // בחירה בלי לצייר מחדש – כך הפתיחה מונפשת, כמו הסגירה
             libOpen.add(c);
@@ -2051,9 +2065,11 @@
             sec.classList.add('sel', 'open');
             return renderLibTools(lib, cats);
           }
-          const open = !libOpen.has(c);
-          open ? libOpen.add(c) : libOpen.delete(c);
-          sec.classList.toggle('open', open);
+          // נגיעה נוספת בקטגוריה המסומנת – מבטלת את הסימון (הצבע והרקע יחד) וסוגרת אותה
+          libOpen.delete(c);
+          clearSel();
+          sec.classList.remove('sel', 'open');
+          renderLibTools(lib, cats);
         });
         g.addEventListener('pointerdown', (e) => startDrag(e, sec, 'cat', c, true));
         head.addEventListener('pointerdown', (e) => { if (!e.target.closest('.dh, input')) startDrag(e, sec, 'cat', c, false); });
@@ -2952,7 +2968,7 @@
       if (active?.nav) return ask('לעצור את הניווט?', 'עצור', stopNav); // שומרים מעצירה בטעות
       return exitRoute(); // לרשימה, כמו שהייתה
     }
-    if (m === 'plan') return plan?.wps.length ? $('pl-undo').click() : endPlan(); // הנקודה האחרונה; בלי נקודות – יציאה
+    if (m === 'plan') return plan?.wps.length ? (plan.wps.pop(), renderPlan()) : endPlan(); // הנקודה האחרונה; בלי נקודות – יציאה
     if (m === 'lib') {
       if (lsel.editing) { lsel.editing = false; return renderLibrary(); }
       if (lsel.kind) { clearSel(); return renderLibrary(); }

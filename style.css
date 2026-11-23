@@ -315,7 +315,7 @@ body.night .c-len { color: #ccc; }
 .cat-head { display: grid; grid-template-columns: 26px minmax(0, 1fr) 26px; align-items: center; gap: 6px; padding: 10px 4px 6px; cursor: pointer; }
 .cat-name { text-align: center; font-size: var(--ls-cat-s, 16px); font-weight: var(--ls-cat-w, 700); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .2s; }
 .cat-count { font-size: 12px; color: #999; text-align: center; }
-.cat.open .cat-name { color: var(--green); }
+.cat.sel .cat-name { color: var(--green); }
 .cat.sel .cat-head { background: rgba(46,125,79,.12); border-radius: 8px; }
 .cat-head .edit-in { text-align: center; font-size: 16px; font-weight: 700; }
 .cat-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .32s cubic-bezier(.22,1,.36,1); }
@@ -348,7 +348,7 @@ body.night .c-len { color: #ccc; }
 
 body.night .lib-row { border-color: #343a40; }
 body.night .lib-row.sel, body.night .cat.sel .cat-head { background: rgba(76,175,80,.18); }
-body.night .cat.open .cat-name { color: #81c784; }
+body.night .cat.sel .cat-name { color: #81c784; }
 body.night .ghost { background: #252b31; }
 body.night .tgrp { border-color: #3a3f45; background: #3a3f45; }
 body.night .tgrp button { background: #2a3036; color: #81c784; }
@@ -505,3 +505,42 @@ body.night .cat-body .lib-row { border-bottom-color: #343a40; }
 body.night .cat { border-bottom-color: #343a40; }
 /* בלי חוצץ אחרי השורה האחרונה ברשימה */
 #lib-list > .cat:last-child, #lib-list > :last-child .lib-row:last-child, #lib-list > .lib-loose:last-child > .lib-row:last-child { border-bottom: 0; }
+
+/* ===== שורות כפתורים: קבוצה אחת ממורכזת, מחוברת, עם קצוות גלולה; לכפתורים שבקצוות – עוד מקום מהעיגול ===== */
+.tgrp button { width: auto; min-width: 58px; padding: 7px 10px 6px; }
+.tgrp button:first-child { padding-inline-start: 18px; }
+.tgrp button:last-child { padding-inline-end: 18px; }
+.tgrp button.primary { background: var(--green); color: #fff; border: 0; }
+body.night .tgrp button.primary { background: #2e7d4f; color: #fff; }
+.tgrp button:disabled { opacity: 1; color: #9aa3a0; }
+.tgrp button.primary:disabled { background: #9fbfac; color: #fff; }
+body.night .tgrp button:disabled { color: #5d666e; }
+body.night .tgrp button.primary:disabled { background: #31473b; color: #8fa597; }
+/* הצמדה לשבילים: דלוקה – כמו שאר הכלים; כבויה – אפורה עם קו אלכסוני */
+.tgrp .tog .slash { display: none; }
+.tgrp .tog.off { color: #8a928e; }
+.tgrp .tog.off .slash { display: inline; }
+body.night .tgrp .tog.off { color: #7b848c; }
+.pl-tools { margin-top: 6px; }
+
+.cf-btns, .ls-btns, .dt-btns, .dt-modes { display: flex; width: fit-content; max-width: 100%; margin: 12px auto 0; gap: 1px; padding: 0;
+  border: 1px solid #ddd; background: #ddd; border-radius: 999px; overflow: hidden; }
+.cf-btns button, #style-dlg .ls-btns button, .ls-btns button, .dt-btns button, .dt-btns #dt-cancel, .dt-modes button {
+  flex: none; width: auto; min-width: 92px; margin: 0; padding: 11px 16px; border: 0; border-radius: 0; background: #f7f7f7;
+  font: inherit; font-size: 15px; color: inherit; }
+.cf-btns button:first-child, .ls-btns button:first-child, .dt-btns button:first-child, .dt-modes button:first-child { padding-inline-start: 24px; }
+.cf-btns button:last-child, .ls-btns button:last-child, .dt-btns button:last-child, .dt-modes button:last-child { padding-inline-end: 24px; }
+.cf-btns button.primary, .ls-btns button.primary, .dt-btns button.primary { background: var(--green); color: #fff; font-weight: 700; }
+.dt-modes button + button:not([hidden]) { border: 0; }
+.dt-modes button.on { background: #d81b60; color: #fff; }
+.dt-btns { margin-top: 10px; }
+body.night .cf-btns, body.night .ls-btns, body.night .dt-btns, body.night .dt-modes { border-color: #3a3f45; background: #3a3f45; }
+body.night .cf-btns button, body.night .ls-btns button, body.night .dt-btns button, body.night .dt-modes button { background: #2a3036; color: #e6e6e6; }
+body.night .cf-btns button.primary, body.night .ls-btns button.primary, body.night .dt-btns button.primary { background: #2e7d4f; color: #fff; }
+body.night .dt-modes button.on { background: #ad1457; }
+/* כפתור יחיד (יוצאים לדרך, סגור) – גלולה ממורכזת */
+.go { width: fit-content; min-width: 60%; margin: 8px auto 0; padding: 12px 28px; border-radius: 999px; }
+#areas-close { width: fit-content; min-width: 40%; margin: 10px auto 0; padding: 11px 28px; }
+
+/* תכנון: גובה הדוק משתנה ברכות (הנחיה של שורה/שתיים, הגרף) – בלי קפיצות */
+#dock[data-mode="plan"] { transition: height .3s cubic-bezier(.22,1,.36,1); }
