@@ -648,7 +648,7 @@
   }
   const netOk = () => navigator.onLine && !navigator.connection?.saveData;
   // ---------- הורדה בריבועים קבועים (0.1° ≈ 9×11 ק"מ): בלי חפיפות וחתיכות קטנות; הורדה שנייה – רק מה שחסר ----------
-  const CELL = 0.1, MAX_CELLS = 6;
+  const CELL = 0.1;
   const cellBox = (i, j) => [i * CELL, j * CELL, (i + 1) * CELL, (j + 1) * CELL].map((v) => +v.toFixed(4));
   const covers = (b, c) => b[0] <= c[0] + 1e-6 && b[1] <= c[1] + 1e-6 && b[2] >= c[2] - 1e-6 && b[3] >= c[3] - 1e-6;
   // מלבן פחות מלבן – מה שנשאר (עד 4 מלבנים)
@@ -787,30 +787,49 @@
     const v = map.getBounds(), pad = 0.01; // קצת מעבר למסך
     return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
   }
+  // הכפתור יושב במרכז הריבוע שיירד (הקרוב ביותר למרכז המסך), ומופיע בפייד כשהריבוע תופס 45–60% מרוחב המסך
+  let dlCell = null;
+  const DL_SHOW = [0.45, 0.6];
+  function placeDlHere() {
+    if (!dlCell) return (dlHere.hidden = true);
+    const c = dlCell, W = innerWidth, H = innerHeight;
+    const a = map.project([c[0], c[1]]), b = map.project([c[2], c[3]]); // SW, NE
+    const x0 = Math.max(Math.min(a.x, b.x), 0), x1 = Math.min(Math.max(a.x, b.x), W);
+    const y0 = Math.max(Math.min(a.y, b.y), 0), y1 = Math.min(Math.max(a.y, b.y), H);
+    const f = Math.abs(b.x - a.x) / W; // כמה מהמסך הריבוע תופס (לרוחב)
+    const o = dlMsg ? 1 : Math.max(0, Math.min(1, (f - DL_SHOW[0]) / (DL_SHOW[1] - DL_SHOW[0])));
+    if (o <= 0 || x1 <= x0 || y1 <= y0) return (dlHere.hidden = true);
+    dlHere.hidden = false;
+    dlHere.style.opacity = o;
+    dlHere.style.pointerEvents = o < 0.6 ? 'none' : '';
+    dlHere.style.left = (x0 + x1) / 2 + 'px';
+    dlHere.style.top = (y0 + y1) / 2 + 'px';
+  }
   function checkArea() {
-    // מרחוק (כל הארץ / המעטפת) – בלי כפתור ההורדה ובלי ריבועים
     const z = map.getZoom();
-    if (z < 9 && !dlMsg) { dlHere.hidden = true; map.getSource('dl-grid')?.setData(empty); return; }
+    if (z < 9 && !dlMsg) { dlCell = null; dlHere.hidden = true; map.getSource('dl-grid')?.setData(empty); return; }
     const miss = missingCells();
     // הריבועים שעוד לא הורדו – קווים מקווקווים עדינים: ברור מה יירד בלחיצה
     map.getSource('dl-grid')?.setData({ type: 'FeatureCollection', features: miss.map((c) => ({ type: 'Feature', properties: {},
       geometry: { type: 'LineString', coordinates: [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]] } })) });
-    if (z < 11 && !dlMsg) return (dlHere.hidden = true); // הכפתור – רק מזום 11; הריבועים נראים מרחוק יותר
-    if (!miss.length && !dlMsg) return (dlHere.hidden = true);
-    dlHere.hidden = false;
-    const big = miss.length > MAX_CELLS;
-    dlHere.disabled = !!dlMsg || !navigator.onLine || big;
+    if (!(dlMsg && dlCell)) { // בזמן הורדה הכפתור נשאר על הריבוע שיורד
+      const m = map.getCenter(), k = Math.cos((m.lat * Math.PI) / 180);
+      dlCell = miss.reduce((best, c) => {
+        const d = Math.hypot(((c[0] + c[2]) / 2 - m.lng) * k, (c[1] + c[3]) / 2 - m.lat);
+        return !best || d < best.d ? { c, d } : best;
+      }, null)?.c || null;
+    }
+    if (!dlCell) return (dlHere.hidden = true);
+    dlHere.disabled = !!dlMsg || !navigator.onLine;
     dlHere.textContent = dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
-      : big ? 'התקרבו כדי להוריד את מפות האזור'
       : dlErr ? `ההורדה נכשלה: ${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
+    placeDlHere();
   }
   dlHere.addEventListener('click', () => {
-    if (dlHere.disabled) return;
-    const cells = missingCells();
-    if (!cells.length || cells.length > MAX_CELLS) return;
-    const bbox = cells.reduce((u, b) => [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])], cells[0]);
-    downloadArea(bbox, { area: true, cells });
+    if (dlHere.disabled || !dlCell) return;
+    downloadArea(dlCell, { area: true, cells: [dlCell] });
   });
+  map.on('move', placeDlHere);
   map.on('moveend', checkArea);
   addEventListener('online', checkArea);
   addEventListener('offline', checkArea);
