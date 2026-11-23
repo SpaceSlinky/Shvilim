@@ -503,3 +503,5 @@ body.night .cat-body .lib-row { border-bottom-color: #343a40; }
 .cat { border-bottom: 1px solid #e8e8e8; }
 .cat.open { border-bottom: 0; }
 body.night .cat { border-bottom-color: #343a40; }
+/* בלי חוצץ אחרי השורה האחרונה ברשימה */
+#lib-list > .cat:last-child, #lib-list > :last-child .lib-row:last-child, #lib-list > .lib-loose:last-child > .lib-row:last-child { border-bottom: 0; }
