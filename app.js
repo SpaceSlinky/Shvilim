@@ -342,6 +342,7 @@
   // זום אאוט נגמר כשכל ישראל (מאילת עד החרמון) על המסך – לפי גודל המסך, מעל הדוק הסגור
   const ISRAEL = [[34.2, 29.45], [35.95, 33.35]];
   // וגם תזוזה: אי אפשר לגרור אל מחוץ למעטפת של כל הארץ – המלבן שרואים בזום הכי רחוק (setMaxBounds)
+  let farCam = null; // המצלמה של "כל הארץ" (מעודכן ב-israelMinZoom)
   function israelMinZoom() {
     const cam = map.cameraForBounds(ISRAEL, { padding: { top: 70, bottom: 100, left: 10, right: 10 } });
     if (!cam || !isFinite(cam.zoom)) return cam;
@@ -355,11 +356,37 @@
     map.setMaxBounds(null);
     map.setMinZoom(z);
     map.setMaxBounds([[c.lng - dLon, lat(my - H / 2 / scale)], [c.lng + dLon, lat(my + H / 2 / scale)]]);
+    farCam = cam;
     return cam;
   }
   const israelCam = israelMinZoom();
   if (!saved && israelCam) map.jumpTo(israelCam); // פתיחה ראשונה – כל הארץ
   map.on('resize', israelMinZoom);
+  // בזום הכי רחוק – מפת ישראל ישרה וקבועה: בלי סיבוב ובלי גרירה (הכול על המסך ממילא). ננעל כשהזום נגמר (zoomend),
+  // ומשתחרר ברגע שמתקרבים – לא באמצע מחווה
+  const FAR_EPS = 0.25;
+  let farLocked = false;
+  const isFar = () => map.getZoom() <= map.getMinZoom() + FAR_EPS;
+  function syncFarLock() {
+    const far = isFar();
+    if (far === farLocked) return;
+    farLocked = far;
+    if (far) {
+      map.dragPan.disable(); map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
+      if (typeof compassMode !== 'undefined' && compassMode) { compassMode = false; updateCompassIcon(); }
+      if (farCam) { // מיישרים: צפון למעלה, ואיפה שכל הארץ בדיוק על המסך
+        const c = maplibregl.LngLat.convert(farCam.center), m = map.getCenter();
+        if (Math.abs(map.getBearing()) > 0.01 || map.getZoom() > map.getMinZoom() + 0.01 || Math.abs(m.lng - c.lng) > 1e-4 || Math.abs(m.lat - c.lat) > 1e-4)
+          map.easeTo({ center: c, zoom: map.getMinZoom(), bearing: 0, duration: 350 });
+      }
+    } else {
+      map.dragPan.enable(); map.dragRotate.enable(); map.touchZoomRotate.enableRotation();
+    }
+  }
+  map.once('load', syncFarLock);
+  map.on('zoomend', syncFarLock);
+  map.on('moveend', syncFarLock);
+  map.on('resize', () => { farLocked = !isFar(); syncFarLock(); });
   // מפה כללית של כל הארץ – קובץ שמגיע עם האפליקציה (במטמון; מתעדכן עם כל גרסה)
   let overviewFC = null;
   fetch('israel.json').then((r) => (r.ok ? r.json() : null)).then(async (fc) => {
@@ -2655,6 +2682,7 @@
   }
 
   $('btn-compass').addEventListener('click', async () => {
+    if (isFar()) return toast('במבט על כל הארץ – צפון תמיד למעלה', 1800);
     if (compassMode) {
       compassMode = false;
       map.rotateTo(0, { duration: 400 });
