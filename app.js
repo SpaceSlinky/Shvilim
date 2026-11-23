@@ -55,6 +55,12 @@
   // ---------- סגנון המפה ----------
   const k = (v) => ['==', ['get', 'k'], v];
   const road = (r) => ['all', k('road'), ['==', ['get', 'r'], r]];
+  // רמות הגריד המאוחד: m = כמה ריבועים בצלע; op = עצירות [זום, שקיפות] – נכנס כשהרמה שמעליו יוצאת (פייד מוצלב)
+  const GRID_LEVELS = [
+    { m: 2, op: [8, 0, 8.6, 0.5, 9, 0.5, 9.8, 0] },
+    { m: 4, op: [7, 0, 7.6, 0.5, 8, 0.5, 8.8, 0] },
+    { m: 8, op: [5, 0, 5.6, 0.5, 7, 0.5, 7.8, 0] },
+  ];
   const zw = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, a, 16, b];
   // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
   const zwShared = (a, b, fn) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, fn(a), 16, fn(b)];
@@ -95,6 +101,7 @@
       overview: { type: 'geojson', data: empty }, // israel.json – כל הארץ, רק בזום רחוק
       'areas-env': { type: 'geojson', data: empty }, // מעטפת האזורים שהורדו (updateEnvelope)
       'dl-grid': { type: 'geojson', data: empty }, // ריבועי ההורדה שעוד חסרים (checkArea)
+      'dl-grid-c': { type: 'geojson', data: empty }, // הגריד המאוחד (2×2, 4×4, 8×8 ריבועים) – כך שבכל זום יש גריד על המפה
       scrub: { type: 'geojson', data: empty },
       detour: { type: 'geojson', data: empty },
       walked: { type: 'geojson', data: empty },
@@ -116,9 +123,12 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
-      // נראה כבר מרחוק ומתמזג בהדרגה: לא נראה מתחת ל-9.2, מלא מ-10.2
-      { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 9,
-        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 9.2, 0, 10.2, 0.55] } },
+      // הגריד תמיד על המפה: ככל שמתרחקים הריבועים מתאחדים (0.1° → 0.2° → 0.4° → 0.8°) ומתחלפים בפייד.
+      // הריבועים הרגילים (רק החסרים) מופיעים מזום 9; מרחוק – גריד מאוחד של כל המפה
+      { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.9,
+        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 9, 0, 9.8, 0.55] } },
+      ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 10,
+        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים
@@ -805,8 +815,24 @@
     dlHere.style.left = (x0 + x1) / 2 + 'px';
     dlHere.style.top = (y0 + y1) / 2 + 'px';
   }
+  // הגריד המאוחד: קווים מלאים (מרידיאנים ומקבילים בכפולות של m×0.1°) על פני המסך ועוד חצי מסך מכל צד
+  function updateCoarseGrid(z) {
+    const src = map.getSource('dl-grid-c');
+    if (!src) return;
+    if (z >= 10) return src.setData(empty);
+    const v = map.getBounds(), padX = (v.getEast() - v.getWest()) / 2, padY = (v.getNorth() - v.getSouth()) / 2;
+    const w = v.getWest() - padX, e = v.getEast() + padX, so = v.getSouth() - padY, n = v.getNorth() + padY;
+    const feats = [];
+    for (const { m } of GRID_LEVELS) {
+      const st = m * CELL;
+      for (let x = Math.ceil(w / st) * st; x <= e; x += st) feats.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[+x.toFixed(4), so], [+x.toFixed(4), n]] } });
+      for (let y = Math.ceil(so / st) * st; y <= n; y += st) feats.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[w, +y.toFixed(4)], [e, +y.toFixed(4)]] } });
+    }
+    src.setData({ type: 'FeatureCollection', features: feats });
+  }
   function checkArea() {
     const z = map.getZoom();
+    updateCoarseGrid(z);
     if (z < 9 && !dlMsg) { dlCell = null; dlHere.hidden = true; map.getSource('dl-grid')?.setData(empty); return; }
     const miss = missingCells();
     // הריבועים שעוד לא הורדו – קווים מקווקווים עדינים: ברור מה יירד בלחיצה
@@ -2721,6 +2747,7 @@
     ['trail-casing', 'line-opacity', fade(10, 10.7, 0.85), fade(10, 10.7, 1)],
     ['env-fill', 'fill-color', '#2e7d4f', '#81c784'],
     ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
+    ...GRID_LEVELS.map(({ m }) => ['dl-grid-' + m, 'line-color', '#6b6470', '#9aa3ab']),
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
     ['env-label', 'text-color', '#1f5f3a', '#a5d6a7'],
     ['env-dot', 'circle-color', '#2e7d4f', '#81c784'],
