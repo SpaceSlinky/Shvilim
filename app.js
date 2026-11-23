@@ -57,7 +57,7 @@
   const road = (r) => ['all', k('road'), ['==', ['get', 'r'], r]];
   // רמות הגריד המאוחד: m = כמה ריבועים בצלע; op = עצירות [זום, שקיפות] – נכנס כשהרמה שמעליו יוצאת (פייד מוצלב)
   const GRID_LEVELS = [
-    { m: 6, op: [5, 0, 5.4, 0.5, 9, 0.5, 9.8, 0] }, // 0.6° – שלוש עמודות לרוחב כל ישראל, קבוע מהזום הכי רחוק
+    { m: 6, op: [5, 0, 5.4, 0.5, 8.4, 0.5, 9.2, 0] }, // 0.6° – שלוש עמודות לרוחב כל ישראל, קבוע מהזום הכי רחוק
   ];
   const zw = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, a, 16, b];
   // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
@@ -121,11 +121,11 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
-      // הגריד תמיד על המפה: ככל שמתרחקים הריבועים מתאחדים (0.1° → 0.2° → 0.4° → 0.8°) ומתחלפים בפייד.
-      // הריבועים הרגילים (רק החסרים) מופיעים מזום 9; מרחוק – גריד מאוחד של כל המפה
-      { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.9,
-        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 9, 0, 9.8, 0.55] } },
-      ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 10,
+      // הגריד תמיד על המפה וידוע מראש (buildGrids – לא מתעדכן בזום ובתנועה): מרחוק – 0.6°, ומזום ~8.4 הוא מתחלף
+      // בפייד בריבועי ההורדה הרגילים (רק החסרים)
+      { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
+        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8.4, 0, 9.2, 0.55] } },
+      ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 9.4,
         paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
@@ -516,7 +516,7 @@
     return job.done;
   }
   async function runDownload(bbox, { quiet, area, cells, signal }) {
-    const say = (m, ms) => { if (area) { dlMsg = m; checkArea(); } else if (!quiet) toast(m, ms); };
+    const say = (m, ms) => { if (area) { dlMsg = m; placeDlHere(); } else if (!quiet) toast(m, ms); };
     if (area) { dlErr = ''; say('מוריד את מפות האזור…'); }
     try {
       const fresh = await OSM.download(bbox, (m) => say(m, 120000), signal);
@@ -696,21 +696,6 @@
     if (b[2] < r[2]) out.push([b[2], y0, r[2], y1]);
     return out;
   }
-  // ריבוע חסר = החלק שלו שעל המסך לא מכוסה במפות שהורדו (כולן יחד). אזור שלא מיושר לרשת (הכרמל)
-  // לא "מחסיר" את הריבועים שבקצוות שלו כשרואים רק את החלק שבתוכו; פס דק (~300 מ') – לא נחשב
-  function missingCells() {
-    const v = map.getBounds(), areas = dlAreas(), out = [], MIN = 0.003;
-    const vb = [v.getWest(), v.getSouth(), v.getEast(), v.getNorth()];
-    for (let i = Math.floor(vb[0] / CELL); i <= Math.floor(vb[2] / CELL); i++)
-      for (let j = Math.floor(vb[1] / CELL); j <= Math.floor(vb[3] / CELL); j++) {
-        const c = cellBox(i, j);
-        if (areas.some((a) => covers(a.b, c))) continue;
-        let left = [[Math.max(c[0], vb[0]), Math.max(c[1], vb[1]), Math.min(c[2], vb[2]), Math.min(c[3], vb[3])]];
-        for (const a of areas) left = left.flatMap((r) => rectMinus(r, a.b));
-        if (left.some((r) => r[2] - r[0] > MIN && r[3] - r[1] > MIN)) out.push(c);
-      }
-    return out;
-  }
   // אזורים שנוגעים או חופפים – אזור אחד (במעטפת וב"מפות שמורות"): שם, גבולות, ותאריך העדכון הישן ביותר
   function areaGroups() {
     const list = dlAreas(), par = list.map((_, i) => i);
@@ -822,7 +807,7 @@
     return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
   }
   // כפתור הורדה על כל ריבוע חסר שרואים – באמצע שלו, בשורה אחת; כולם מופיעים יחד בפייד כשהריבוע תופס 45–60% מרוחב המסך
-  let dlCell = null, dlMiss = [];
+  let dlCell = null, dlAll = []; // dlAll – כל הריבועים החסרים (קבוע, מחושב מראש; משתנה רק כשהאזורים השמורים משתנים)
   const DL_SHOW = [0.45, 0.6];
   const dlBtns = new Map(); // מפתח ריבוע → כפתור
   function dlButton(c) {
@@ -846,13 +831,13 @@
     : dlErr ? `ההורדה נכשלה: ${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
   function placeDlHere() {
     const W = innerWidth, H = innerHeight, top = 110, bottom = H - ($('dock')?.offsetHeight || 120) - 10;
-    const cells = dlMsg && dlCell ? [dlCell] : dlMiss;
+    const lat = map.getCenter().lat, cw = Math.abs(map.project([CELL, lat]).x - map.project([0, lat]).x); // רוחב ריבוע במסך
+    const o = dlMsg ? 1 : Math.max(0, Math.min(1, (cw / W - DL_SHOW[0]) / (DL_SHOW[1] - DL_SHOW[0])));
     const show = new Set();
-    if (cells.length && cells.length <= 60) {
-      const c0 = cells[0], a = map.project([c0[0], c0[1]]), b = map.project([c0[2], c0[3]]);
-      const cw = Math.abs(b.x - a.x);
-      const o = dlMsg ? 1 : Math.max(0, Math.min(1, (cw / W - DL_SHOW[0]) / (DL_SHOW[1] - DL_SHOW[0])));
-      if (o > 0) for (const c of cells) {
+    if (o > 0) {
+      const v = map.getBounds();
+      const cells = dlMsg && dlCell ? [dlCell] : dlAll.filter((c) => c[2] >= v.getWest() && c[0] <= v.getEast() && c[3] >= v.getSouth() && c[1] <= v.getNorth());
+      for (const c of cells) {
         const p = map.project([(c[0] + c[2]) / 2, (c[1] + c[3]) / 2]);
         if (p.x < 0 || p.x > W || p.y < top || p.y > bottom) continue; // באמצע שלו – רק כשהאמצע על המסך
         const btn = dlButton(c);
@@ -874,36 +859,36 @@
     }
     for (const [k, b] of dlBtns) if (!show.has(k)) b.hidden = true;
   }
-  // הגריד המאוחד: קווים מלאים (מרידיאנים ומקבילים בכפולות של m×0.1°) על פני המסך ועוד חצי מסך מכל צד
-  function updateCoarseGrid(z) {
-    const src = map.getSource('dl-grid-c');
-    if (!src) return;
-    if (z >= 10) return src.setData(empty);
-    const v = map.getBounds(), padX = (v.getEast() - v.getWest()) / 2, padY = (v.getNorth() - v.getSouth()) / 2;
-    const w = v.getWest() - padX, e = v.getEast() + padX, so = v.getSouth() - padY, n = v.getNorth() + padY;
-    const feats = [];
+  // הגריד ידוע מראש ולא משתנה בזמן תנועה וזום: מחושב פעם אחת לכל השטח שאפשר להגיע אליו (המלבן של setMaxBounds),
+  // ורק כשהאזורים השמורים משתנים – הריבועים החסרים מחושבים מחדש
+  function buildGrids() {
+    const mb = map.getMaxBounds(), areas = dlAreas(), MIN = 0.003;
+    const [w, e, so, n] = mb ? [mb.getWest(), mb.getEast(), mb.getSouth(), mb.getNorth()] : [34, 36.2, 29, 34];
+    const coarse = [];
     for (const { m } of GRID_LEVELS) {
-      const st = m * CELL;
-      for (let x = Math.ceil(w / st) * st; x <= e; x += st) feats.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[+x.toFixed(4), so], [+x.toFixed(4), n]] } });
-      for (let y = Math.ceil(so / st) * st; y <= n; y += st) feats.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[w, +y.toFixed(4)], [e, +y.toFixed(4)]] } });
+      const st = m * CELL, x0 = Math.floor(w / st) * st, x1 = Math.ceil(e / st) * st, y0 = Math.floor(so / st) * st, y1 = Math.ceil(n / st) * st;
+      for (let x = x0; x <= x1 + 1e-9; x += st) coarse.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[+x.toFixed(4), y0], [+x.toFixed(4), y1]] } });
+      for (let y = y0; y <= y1 + 1e-9; y += st) coarse.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[x0, +y.toFixed(4)], [x1, +y.toFixed(4)]] } });
     }
-    src.setData({ type: 'FeatureCollection', features: feats });
-  }
-  function checkArea() {
-    const z = map.getZoom();
-    updateCoarseGrid(z);
-    if (z < 9 && !dlMsg) { dlMiss = []; map.getSource('dl-grid')?.setData(empty); return placeDlHere(); }
-    const miss = missingCells();
-    dlMiss = miss;
-    // הריבועים שעוד לא הורדו – קווים מקווקווים עדינים: ברור מה יירד בלחיצה
-    map.getSource('dl-grid')?.setData({ type: 'FeatureCollection', features: miss.map((c) => ({ type: 'Feature', properties: {},
+    map.getSource('dl-grid-c')?.setData({ type: 'FeatureCollection', features: coarse });
+    // ריבוע חסר = יש בו חלק שלא מכוסה במפות שהורדו (כולן יחד); פס דק (~300 מ') לא נחשב
+    dlAll = [];
+    for (let i = Math.floor(w / CELL); i < Math.ceil(e / CELL); i++)
+      for (let j = Math.floor(so / CELL); j < Math.ceil(n / CELL); j++) {
+        const c = cellBox(i, j);
+        if (areas.some((a) => covers(a.b, c))) continue;
+        let left = [c];
+        for (const a of areas) left = left.flatMap((r) => rectMinus(r, a.b));
+        if (left.some((r) => r[2] - r[0] > MIN && r[3] - r[1] > MIN)) dlAll.push(c);
+      }
+    map.getSource('dl-grid')?.setData({ type: 'FeatureCollection', features: dlAll.map((c) => ({ type: 'Feature', properties: {},
       geometry: { type: 'LineString', coordinates: [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]] } })) });
-    placeDlHere();
   }
+  function checkArea() { buildGrids(); placeDlHere(); }
   map.on('move', placeDlHere);
-  map.on('moveend', checkArea);
-  addEventListener('online', checkArea);
-  addEventListener('offline', checkArea);
+  map.on('resize', checkArea);
+  addEventListener('online', placeDlHere);
+  addEventListener('offline', placeDlHere);
 
 
   let longPressAt = 0; // אחרי לחיצה ארוכה (תוספת למסלול) – לא פותחים מידע על מה שמתחת
