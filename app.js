@@ -1398,7 +1398,11 @@
     while (j < pc.coords.length - 1 && pc.cum[j] < d) j++;
     const a = pc.coords[j - 1], b = pc.coords[j], seg = pc.cum[j] - pc.cum[j - 1], t = seg ? Math.max(0, Math.min(1, (d - pc.cum[j - 1]) / seg)) : 0;
     let p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-    const k = Math.cos((a[1] * Math.PI) / 180), brg = (Math.atan2((b[0] - a[0]) * k, b[1] - a[1]) * 180) / Math.PI;
+    // הכיוון – לא של הקטע הקצרצר שבו נמצאים (משתנה בכל נקודה בקו המעוגל – השברון "רועד" בסיבוב), אלא ממוצע
+    // על חלון של ~18 פיקסלים לכל צד: מהנקודה שלפני עד הנקודה שאחרי
+    const k = Math.cos((a[1] * Math.PI) / 180), mpp = (40075016 * k) / (512 * 2 ** map.getZoom());
+    const w = Math.max(4, 18 * mpp), p0 = posAt(pcs, d - w), p1 = posAt(pcs, d + w);
+    const brg = (Math.atan2((p1[0] - p0[0]) * k, p1[1] - p0[1]) * 180) / Math.PI;
     const v = sharedV(pc.props) * (pc.props.tf ?? 1);
     if (v) {
       const z = map.getZoom(), f = Math.max(0, Math.min(1, (1.5 ** (z - 11) - 1) / (1.5 ** 5 - 1)));
@@ -1408,6 +1412,17 @@
       p = [q.lng, q.lat];
     }
     return { p, brg };
+  }
+  // נקודה (בלי הזזה) במרחק d לאורך הקו המצויר
+  function posAt(pcs, d) {
+    const first = pcs[0], last = pcs[pcs.length - 1];
+    if (d <= 0) return first.coords[0];
+    const pc = pcs.find((x) => x.cum[x.cum.length - 1] >= d);
+    if (!pc) return last.coords[last.coords.length - 1];
+    let j = 1;
+    while (j < pc.coords.length - 1 && pc.cum[j] < d) j++;
+    const a = pc.coords[j - 1], b = pc.coords[j], seg = pc.cum[j] - pc.cum[j - 1], t = seg ? Math.max(0, Math.min(1, (d - pc.cum[j - 1]) / seg)) : 0;
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   }
   // נקודה וכיוון (מעלות מהצפון) במרחק d לאורך המסלול
   function routeAt(r, d) {
