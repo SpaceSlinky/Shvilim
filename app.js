@@ -239,15 +239,15 @@
         layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d81b60', 'line-width': 5, 'line-dasharray': [1.6, 1.2] } },
       { id: 'detour-pt', type: 'circle', source: 'detour', filter: ['==', '$type', 'Point'],
         paint: { 'circle-radius': 8, 'circle-color': '#d81b60', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
-      // האצבע על הגרף: הקטע על המסלול והנקודה (כתום ביום, אפור בהיר בלילה)
-      // האצבע על הגרף: הקטע עד האצבע מעומעם (כמו מה שכבר הלכת), והנקודה – קו קצרצר עגול, כדי לזוז הצידה יחד עם המסלול
-      { id: 'scrub-line', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'dim'],
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-opacity': 0.65, 'line-width': zw(4, 8.5), 'line-offset': SHARED_OFFSET } },
-      { id: 'scrub-dot-casing', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'dot'], layout: { 'line-cap': 'round' },
-        paint: { 'line-color': '#ffffff', 'line-width': 18, 'line-offset': SHARED_OFFSET } },
-      { id: 'scrub-dot', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'dot'], layout: { 'line-cap': 'round' },
-        paint: { 'line-color': '#3c4247', 'line-width': 12, 'line-offset': SHARED_OFFSET } },
+      // האצבע על הגרף: הקטע המסומן על המסלול "זוהר" – המסגרת בצבע השביל (במקום לבן) והקו עצמו בגוון בהיר שלו (lc);
+      // אצבע אחת – שברון לבן בקצה שזז עם האצבע, בכיוון ההליכה; שתי אצבעות – שני קווים לבנים ניצבים בקצוות הטווח
+      { id: 'scrub-glow-casing', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': ['coalesce', ['get', 'c'], '#d4148f'], 'line-width': zw(4.5, 9.5), 'line-offset': SHARED_OFFSET } },
+      { id: 'scrub-glow', type: 'line', source: 'scrub', filter: ['==', ['get', 'k'], 'hl'], layout: { 'line-cap': 'round', 'line-join': 'round' },
+        paint: { 'line-color': ['coalesce', ['get', 'lc'], '#ff8ad0'], 'line-width': zw(2.6, 5.4), 'line-offset': SHARED_OFFSET } },
+      { id: 'scrub-mark', type: 'symbol', source: 'scrub', filter: ['==', ['geometry-type'], 'Point'],
+        layout: { 'icon-image': ['get', 'k'], 'icon-rotate': ['get', 'rot'], 'icon-rotation-alignment': 'map',
+          'icon-allow-overlap': true, 'icon-ignore-placement': true } },
       { id: 'acc', type: 'fill', source: 'acc',
         paint: { 'fill-color': '#1e88e5', 'fill-opacity': 0.12, 'fill-outline-color': '#1e88e5' } },
     ],
@@ -1355,13 +1355,35 @@
     const [segs, r, p, a, b, both] = scrubPending || [];
     if (!segs || !r) return map.getSource('scrub')?.setData(empty);
     const ra = profToRoute(p, r, a), rb = profToRoute(p, r, b);
-    const feats = rb - ra > 1 ? overlayFeatures(segs, ra, rb, 'dim') : [];
-    const dot = (d) => overlayFeatures(segs, Math.max(0, d - 0.8), Math.max(d, 0.8), 'dot');
-    feats.push(...dot(rb));
-    if (both) feats.push(...dot(ra));
+    const feats = rb - ra > 1 ? overlayFeatures(segs, ra, rb, 'hl').map((f) => ({ ...f, properties: { ...f.properties, lc: lighten(f.properties.c) } })) : [];
+    const mark = (d, k) => { const at = routeAt(r, d); if (at) feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: at.p }, properties: { k, rot: at.brg } }); };
+    if (both) { mark(ra, 'scrub-tick'); mark(rb, 'scrub-tick'); } else mark(rb, 'scrub-chev');
     map.getSource('scrub')?.setData({ type: 'FeatureCollection', features: feats });
   }
   function clearScrub() { scrub = null; setScrubMap(null); }
+  // גוון בהיר של צבע השביל (45% לבן) – הקטע המסומן "זוהר"
+  function lighten(c) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(c || '#d4148f');
+    if (!m) return '#ffffff';
+    const n = parseInt(m[1], 16), mix = (v) => Math.round(v + (255 - v) * 0.45);
+    return '#' + [n >> 16, (n >> 8) & 255, n & 255].map((v) => mix(v).toString(16).padStart(2, '0')).join('');
+  }
+  // נקודה וכיוון (מעלות מהצפון) במרחק d לאורך המסלול
+  function routeAt(r, d) {
+    if (!r?.pts?.length) return null;
+    let i = 1;
+    while (i < r.pts.length - 1 && r.cum[i] < d) i++;
+    const a = r.pts[i - 1], b = r.pts[i], seg = r.cum[i] - r.cum[i - 1], t = seg ? Math.max(0, Math.min(1, (d - r.cum[i - 1]) / seg)) : 0;
+    const k = Math.cos((a[1] * Math.PI) / 180);
+    return { p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], brg: (Math.atan2((b[0] - a[0]) * k, b[1] - a[1]) * 180) / Math.PI };
+  }
+  // סימני הגרירה על המסלול: שברון לבן (מצביע קדימה) וקו לבן ניצב לקצוות טווח – עם קו מתאר כהה דק, שייראו על כל צבע
+  mapReady.then(() => {
+    const img = (draw, w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.lineCap = g.lineJoin = 'round'; draw(g); return g.getImageData(0, 0, w, h); };
+    const both = (g, path, lw) => { g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = lw + 3; path(); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = lw; path(); g.stroke(); };
+    if (!map.hasImage('scrub-chev')) map.addImage('scrub-chev', img((g) => both(g, () => { g.beginPath(); g.moveTo(13, 37); g.lineTo(28, 21); g.lineTo(43, 37); }, 6), 56, 56), { pixelRatio: 2 });
+    if (!map.hasImage('scrub-tick')) map.addImage('scrub-tick', img((g) => both(g, () => { g.beginPath(); g.moveTo(8, 28); g.lineTo(48, 28); }, 6), 56, 56), { pixelRatio: 2 });
+  });
   // הפרש גובה: חץ במקום סימן (+/− מתהפך בטקסט עברי)
   const signed = (v) => (Math.round(v) > 0 ? '↗ ' : Math.round(v) < 0 ? '↘ ' : '') + Math.abs(Math.round(v)) + " מ'";
 
@@ -2575,9 +2597,6 @@
   // ---------- מצב לילה ----------
   const DARK = ['#222222', '#000000', '#000', '#111111', '#111', '#1a1a1a', '#333333', '#333'];
   const THEME = [ // [שכבה, מאפיין, יום, לילה]
-    ['scrub-line', 'line-color', '#ffffff', '#1b1f24'],
-    ['scrub-dot-casing', 'line-color', '#ffffff', '#1b1f24'],
-    ['scrub-dot', 'line-color', '#3c4247', '#ffffff'],
     ['bg', 'background-color', '#e6e1d1', '#15191e'],
     ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
     ['major-casing', 'line-color', '#b8742a', '#4d3215'],
