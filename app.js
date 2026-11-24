@@ -197,20 +197,22 @@
           ['case', ['has', 'e'], ['concat', '\n', ['to-string', ['get', 'e']]], '']],
           'text-font': FONT, 'text-size': 12, 'text-anchor': 'top', 'text-offset': [0, -0.6], 'text-max-width': 8 },
         paint: { 'text-color': '#6d4c2f', ...halo } },
-      { id: 'place-minor', type: 'symbol', source: 'osm', minzoom: 13,
+      { id: 'place-minor', type: 'symbol', source: 'osm', minzoom: 12,
         filter: ['all', k('place'), ['!', ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13 },
-        paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
+        paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-opacity': fade(12, 13.5) } },
       // שמות: בזום רחוק – רק ערים מרכזיות (m, ~24 לכל הארץ, להתמצאות), ולא בתוך אזור שהורד (שם – רק שם האזור);
       // מקרוב (11+) מחוץ לאזורים – כל היישובים. כל יישוב אחר – בחיפוש. הגדולים קודמים בהתנגשות (symbol-sort-key)
       { id: 'ov-city', type: 'symbol', source: 'ov-cities', maxzoom: 11,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13.5,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
         paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
-      { id: 'ovh-place', type: 'symbol', source: 'overview-hi', minzoom: 11, filter: k('p'),
+      // שמות היישובים נכנסים בפייד איטי מזום 9.8 (לא "במכה" ב-11); ערים מרכזיות – מלא מיד (ממשיכות את ov-city)
+      { id: 'ovh-place', type: 'symbol', source: 'overview-hi', minzoom: 9.8, filter: k('p'),
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 12.5,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
-        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6,
+          'text-opacity': ['interpolate', ['linear'], ['zoom'], 9.8, ['case', ['has', 'm'], 1, 0], 11.4, 1] } },
       // מרחוק (מתחת לזום 9, עד הזום הכי רחוק): כל אזור שהורד – נקודה ירוקה עם השם; קרוב יותר – המעטפת והשם בתוכה
       { id: 'env-dot', type: 'circle', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], maxzoom: 9.2,
         paint: { 'circle-radius': 5, 'circle-color': '#2e7d4f', 'circle-stroke-width': 1.5, 'circle-stroke-color': '#ffffff',
@@ -222,11 +224,11 @@
       { id: 'env-label', type: 'symbol', source: 'areas-env', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.5, maxzoom: 11,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
         paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1, 'text-halo-blur': 0.5, 'text-opacity': ENV_FADE(1) } },
-      { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 11,
+      { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 10,
         filter: ['all', k('place'), ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
           'text-size': ['match', ['get', 't'], ['city', 'town'], 17, 15] },
-        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 2 } },
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-opacity': fade(10, 11.4) } },
       // תצלום אוויר מעל כל המפה (חצי התחתון של הסליידר); המסלול, הנקודות והמיקום – מעליו
       { id: 'sat-top', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       // מסלול פעיל: המפה מתחתיו דוהה, והמסלול מצויר בצבעי השבילים עם מסגרת לבנה (בלי קו מתאר כהה)
