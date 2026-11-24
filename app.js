@@ -1220,7 +1220,6 @@
   }
   async function setActive(a, { fit = false, save = true } = {}) {
     await mapReady;
-    if (!active || fit) routeSat = 0; // כניסה למסלול – תמיד מתחילים ממסלול ממוקד
     active = a;
     a.segs = repairSegs(a.segs);
     const lines = segsToLines(a.segs);
@@ -2875,11 +2874,11 @@
   if ('base' in layerPrefs) { layerPrefs.sat = layerPrefs.base === 'sat' ? 1 : 0; delete layerPrefs.base; }
   delete layerPrefs.overlay;
   layerPrefs.sat = Math.max(0, Math.min(1, +layerPrefs.sat || 0));
-  // בתוך מסלול (תצוגה / ניווט) לסליידר משמעות אחרת – ערך נפרד, מתחיל תמיד מ-0 (מסלול ממוקד)
-  let routeSat = 0;
+  // ערך אחד לסליידר בכל האפליקציה, נשמר (layers.sat) – בשיטוט ובתוך מסלול הידית באותו מקום, רק המשמעות משתנה
+  // (פעם: בתוך מסלול ערך נפרד שהתחיל תמיד מ-0 – בוטל)
   const FOCUS_DIM = 0.85; // מסלול ממוקד: כמה המפה מוסתרת
   const inRoute = () => !!active && !plan;
-  const sliderVal = () => (inRoute() ? routeSat : layerPrefs.sat);
+  const sliderVal = () => layerPrefs.sat;
   // הסתרת הרקע – ערך אחד ליום וללילה (פעם היו שניים: ממשיכים מהערך של המצב הנוכחי)
   if (layerPrefs.dim == null) layerPrefs.dim = (localStorage.getItem('theme') === 'dark' ? layerPrefs.dimNight : layerPrefs.dimDay) ?? 0.55;
 
@@ -3101,7 +3100,7 @@
   // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה). בלי סליידר (הוחלף בתצלום האוויר):
   // הערך השמור, ופוחת ככל שמעלים את התצלום – כדי שהתצלום לא ייראה דהוי ----------
   function dimValue() {
-    if (inRoute()) return FOCUS_DIM * Math.max(0, 1 - routeSat * 2);
+    if (inRoute()) return FOCUS_DIM * Math.max(0, 1 - layerPrefs.sat * 2);
     return layerPrefs.dim * (1 - Math.min(1, layerPrefs.sat * 2));
   }
   // ---------- הסליידר שליד הכלים ----------
@@ -3122,7 +3121,7 @@
       if (f === 0.5 && was !== 0.5) navigator.vibrate?.(8);
       if (f > satFrom && was <= satFrom && !navigator.onLine) toast('תצלום אוויר דורש אינטרנט', 3000);
       if (f === was) return;
-      if (inRoute()) routeSat = f; else layerPrefs.sat = f; // בתוך מסלול – לא נשמר (כל מסלול מתחיל ממוקד)
+      layerPrefs.sat = f;
       applyLayers();
     };
     tr.addEventListener('pointerdown', (e) => { down = true; tr.setPointerCapture(e.pointerId); at(e); });
