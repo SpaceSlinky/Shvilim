@@ -383,14 +383,18 @@ section.open .lib-body { grid-template-rows: 1fr; }
 .cf-btns button { flex: 1; margin: 0; }
 .danger-btn { background: #c62828 !important; border-color: #c62828 !important; color: #fff !important; font-weight: 700; }
 
-/* משבצת בלי מפה שנגעו בה: כפתור קטן באמצעה */
-.dl-here { position: fixed; left: 50%; top: 42%; translate: -50% -50%; z-index: 6; width: max-content; padding: 6px 14px; border: 0; border-radius: 22px;
-  background: #fff; color: var(--green); font: inherit; font-size: 14px; font-weight: 500; box-shadow: 0 1px 8px rgba(0,0,0,.2);
-  opacity: 0; pointer-events: none; transition: opacity .2s; }
-.dl-here.on { opacity: 1; pointer-events: auto; }
-.dl-here:disabled { color: #666; }
-body.night .dl-here { background: #23282e; color: #81c784; }
-body.night .dl-here:disabled { color: #aaa; }
+/* הורדת מפות מהשיטוט: שורה קטנה בדוק מעל "מסלולים" – נפתחת ונסגרת ברכות */
+.lib-dl { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .3s cubic-bezier(.22,1,.36,1), opacity .25s; }
+.lib-dl > div { overflow: hidden; min-height: 0; }
+.lib-dl.on { grid-template-rows: 1fr; opacity: 1; }
+.lib-dl:not(.on) button { pointer-events: none; }
+.ld-row { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 2px 0 6px; font-size: 14px; }
+.ld-t { color: #1e6fb8; font-weight: 500; }
+.ld-go { padding: 5px 16px; border: 0; border-radius: 999px; background: var(--green); color: #fff; font: inherit; font-size: 14px; font-weight: 600; }
+.ld-x { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.06); color: inherit; font-size: 14px; }
+body.night .ld-t { color: #90caf9; }
+body.night .ld-go { background: #2e7d4f; }
+body.night .ld-x { background: rgba(255,255,255,.08); }
 
 /* עיצוב רשימת המסלולים: חלון למעלה, הרשימה נראית מתחתיו ומשתנה בזמן אמת */
 #style-dlg { margin: 12px auto auto; max-height: 56vh; overflow: hidden; padding: 14px 16px; }
