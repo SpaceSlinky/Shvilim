@@ -100,6 +100,7 @@
       'areas-env': { type: 'geojson', data: empty }, // מעטפת האזורים שהורדו (updateEnvelope)
       'dl-grid': { type: 'geojson', data: empty }, // ריבועי ההורדה שעוד חסרים (checkArea)
       'areas-del': { type: 'geojson', data: empty }, // מפות שמורות: האזורים שהורדו, כשרואים את כל הארץ (renderAreasMap)
+      'dl-tap': { type: 'geojson', data: empty }, // המשבצת שנגעו בה (בלי מפה) – placeDlHere
       'dl-grid-c': { type: 'geojson', data: empty }, // הגריד המאוחד (2×2, 4×4, 8×8 ריבועים) – כך שבכל זום יש גריד על המפה
       scrub: { type: 'geojson', data: empty },
       detour: { type: 'geojson', data: empty },
@@ -131,6 +132,8 @@
       // בפייד בריבועי ההורדה הרגילים (רק החסרים)
       { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
         paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8.4, 0, 9.2, 0.55] } },
+      { id: 'dl-tap-fill', type: 'fill', source: 'dl-tap', paint: { 'fill-color': '#90caf9', 'fill-opacity': 0.3 } },
+      { id: 'dl-tap-line', type: 'line', source: 'dl-tap', paint: { 'line-color': '#64b5f6', 'line-width': 1.5 } },
       ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 9.4,
         paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
@@ -1078,21 +1081,47 @@
     renderAreasMap();
   }
 
-  // אזור בלי מפה שמורה (למשל אחרי חיפוש): בדוק – "להורדת מפות האזור", שנכנס למצב מפות עם המשבצת שבמרכז המסך מסומנת.
-  // ההורדה עצמה – רק משם (בחירת משבצות וכפתור "הורדה" בדוק); על המפה אין כפתורים
+  // נגיעה במשבצת בלי מפה (בשיטוט, מזום שהמשבצות נראות): היא מסומנת בתכלת, ובאמצעה – "להורדת מפות האזור";
+  // נגיעה בכפתור עוברת למצב מפות עם המשבצת מסומנת (ההורדה עצמה – משם). נגיעה במקום אחר / התרחקות – נעלם.
+  // (פעם: כפתור על כל ריבוע חסר – כיסה את המפה; אחר כך שורה בדוק לפי מרכז המסך – מיותרת)
   let dlMsg = '', dlAll = []; // dlAll – כל הריבועים החסרים (קבוע, מחושב מראש; משתנה רק כשהאזורים השמורים משתנים)
-  let dlHereCell = null;
-  function placeDlHere() {
-    const c = map.getCenter();
-    dlHereCell = !areasMode && map.getZoom() >= 9 ? dlAll.find((x) => c.lng >= x[0] && c.lng < x[2] && c.lat >= x[1] && c.lat < x[3]) || null : null;
-    const el = $('lib-dl'), on = !!dlHereCell;
-    if (el.classList.contains('on') !== on) el.classList.toggle('on', on);
-    const btn = el.querySelector('button'), off = !navigator.onLine;
-    const t = off ? 'אין כאן מפה שמורה · צריך אינטרנט כדי להוריד' : 'להורדת מפות האזור';
-    if (btn.textContent !== t) btn.textContent = t;
-    btn.disabled = off;
+  let tapCell = null;
+  const TAP_MIN_Z = 8.4;
+  const tapBtn = Object.assign(document.createElement('button'), { className: 'dl-here' });
+  document.body.appendChild(tapBtn);
+  tapBtn.addEventListener('click', () => { const c = tapCell; setTapCell(null); if (c) enterAreasMode(c); });
+  function setTapCell(c) {
+    tapCell = c;
+    map.getSource('dl-tap')?.setData({ type: 'FeatureCollection', features: c ? [{ type: 'Feature', properties: {},
+      geometry: { type: 'Polygon', coordinates: [[[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]]] } }] : [] });
+    placeDlHere();
   }
-  $('lib-dl').querySelector('button').addEventListener('click', () => { if (dlHereCell) enterAreasMode(dlHereCell); });
+  function placeDlHere() {
+    let c = tapCell;
+    if (c && (areasMode || dockMode() !== 'lib' || map.getZoom() < TAP_MIN_Z - 0.3 || !dlAll.some((x) => x.join() === c.join()))) { setTapCell(null); return; }
+    if (!c) { tapBtn.classList.remove('on'); return; }
+    // באמצע החלק של המשבצת שעל המסך (מתחת לשורת החיפוש ומעל הדוק)
+    const W = innerWidth, top = 70, bottom = innerHeight - ($('dock')?.offsetHeight || 120) - 10;
+    const pts = [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]]].map((p) => map.project(p));
+    const x0 = Math.max(0, Math.min(...pts.map((p) => p.x))), x1 = Math.min(W, Math.max(...pts.map((p) => p.x)));
+    const y0 = Math.max(top, Math.min(...pts.map((p) => p.y))), y1 = Math.min(bottom, Math.max(...pts.map((p) => p.y)));
+    if (x1 - x0 < 40 || y1 - y0 < 30) { tapBtn.classList.remove('on'); return; } // כמעט מחוץ למסך
+    const off = !navigator.onLine;
+    const t = off ? 'צריך אינטרנט כדי להוריד' : 'להורדת מפות האזור';
+    if (tapBtn.textContent !== t) tapBtn.textContent = t;
+    tapBtn.disabled = off;
+    tapBtn.style.left = (x0 + x1) / 2 + 'px';
+    tapBtn.style.top = (y0 + y1) / 2 + 'px';
+    tapBtn.style.scale = Math.min(1, (0.9 * (x1 - x0)) / (tapBtn.offsetWidth || 1)); // לא רחב מהמשבצת
+    tapBtn.classList.add('on');
+  }
+  map.on('click', (e) => {
+    if (areasMode || plan || dockMode() !== 'lib' || Date.now() - longPressAt < 800) return;
+    const { lng, lat } = e.lngLat;
+    const inSaved = dlAreas().some((a) => lng >= a.b[0] && lng <= a.b[2] && lat >= a.b[1] && lat <= a.b[3]);
+    const c = !inSaved && map.getZoom() >= TAP_MIN_Z && dlAll.find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
+    setTapCell(c && (!tapCell || tapCell.join() !== c.join()) ? c : null); // נגיעה נוספת באותה משבצת – מבטלת
+  });
   // הגריד ידוע מראש ולא משתנה בזמן תנועה וזום: מחושב פעם אחת לכל השטח שאפשר להגיע אליו (המלבן של setMaxBounds),
   // ורק כשהאזורים השמורים משתנים – הריבועים החסרים מחושבים מחדש
   function buildGrids() {
