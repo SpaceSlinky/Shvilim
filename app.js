@@ -761,6 +761,7 @@
     }
     // פעם ראשונה: אין הורדה אוטומטית ואין מסך פתיחה – המפה הכללית של כל הארץ כבר באפליקציה; מתקרבים לאזור ומורידים אותו
     checkArea();
+    resumeBatch(); // הורדה שנקטעה (האפליקציה נסגרה באמצע) – ממשיכים
   });
   // ---------- מפות שמורות: רשימה ומחיקה (בחלון השכבות, תחת "עוד") ----------
   const inBox = (b) => (c) => c[0] >= b[0] && c[0] <= b[2] && c[1] >= b[1] && c[1] <= b[3];
@@ -915,7 +916,11 @@
     else dlSel.add(k);
     renderAreasMap();
   });
-  $('ab-close').addEventListener('click', exitAreasMode);
+  $('ab-close').addEventListener('click', () => {
+    if (!batchQ) return exitAreasMode();
+    batchQ.cancel = true; // עוצרים את ההורדה שרצה, ויוצאים כשהיא נעצרת
+    dlJob?.ctl.abort(new DOMException('הופסק', 'AbortError'));
+  });
   $('ab-del').addEventListener('click', async () => {
     const sel = dlAreas().filter((a) => areaSel.has(a.b.join()));
     if (!sel.length) return;
@@ -931,37 +936,72 @@
     renderAreasMap();
   });
   // עדכון: מורידים מחדש את המשבצות שיש להן עדכון, אחת אחרי השנייה
-  $('ab-upd').addEventListener('click', async () => {
-    const todo = dlAreas().filter((a) => areasUpd.has(a.b.join()));
-    let fails = 0;
-    for (let i = 0; i < todo.length; i++) {
-      areasBusy = `מעדכן ${todo.length > 1 ? `${i + 1} מתוך ${todo.length}` : ''}…`.replace(' …', '…');
-      renderAreasMap();
-      dlErr = '';
-      await downloadArea(todo[i].b, { area: true, cells: [todo[i].b], batch: true });
-      if (dlErr) fails++; else areasUpd.delete(todo[i].b.join());
-    }
-    areasBusy = '';
-    renderAreasMap();
-    if (fails) toast(`העדכון נכשל${todo.length > 1 ? ` ב-${fails} משבצות` : ''}: ${dlErr}`, 6000);
-    else toast('המפות עודכנו ✓', 2500);
+  // הורדה/עדכון של כמה משבצות, אחת אחרי השנייה. התור נשמר (localStorage dlQueue): כשהאפליקציה ברקע או שהמסך כבה
+  // הדפדפן עוצר את הדף, והמשבצת שנקטעה לא נחשבת ככישלון – ממשיכים ממנה כשחוזרים; נסגרה לגמרי / נגמר האינטרנט –
+  // ממשיכים בפתיחה הבאה / כשהרשת חוזרת. בזמן ההורדה המסך נשאר דולק (wake lock), כדי שלא יכבה לבד באמצע.
+  // משבצת שנכשלה באמת – ממשיכים לבאות, ובסוף אומרים כמה נכשלו ולמה. "סגירה" באמצע – עוצרת
+  let batchQ = null, hiddenAt = 0, dlWake = null;
+  async function holdScreen(on) {
+    if (!on) { dlWake?.release(); dlWake = null; return; }
+    if (dlWake || document.hidden || !('wakeLock' in navigator)) return;
+    try { dlWake = await navigator.wakeLock.request('screen'); dlWake.addEventListener('release', () => (dlWake = null)); } catch { /* לא נתמך */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hiddenAt = Date.now();
+    else if (batchQ) holdScreen(true);
   });
-  // הורדה: המשבצות שנבחרו, אחת אחרי השנייה; משבצת שנכשלה – ממשיכים לבאות, ובסוף אומרים כמה נכשלו ולמה
-  $('ab-dl').addEventListener('click', async () => {
-    const todo = [...dlSel].map((k) => k.split(',').map(Number));
-    if (!todo.length || !navigator.onLine) return;
-    let fails = 0, err = '';
-    for (let i = 0; i < todo.length; i++) {
-      areasBusy = todo.length > 1 ? `מוריד ${i + 1} מתוך ${todo.length}…` : 'מוריד…';
+  const whenVisible = () => (!document.hidden ? Promise.resolve() : new Promise((r) => {
+    const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); r(); } };
+    document.addEventListener('visibilitychange', f);
+  }));
+  const saveQueue = (q) => { try { q ? localStorage.setItem('dlQueue', JSON.stringify(q)) : localStorage.removeItem('dlQueue'); } catch { /* ignore */ } };
+  async function runBatch(q) {
+    if (batchQ || areasBusy) return;
+    if (!areasMode) enterAreasMode();
+    batchQ = q; saveQueue(q);
+    let retries = 0;
+    while (q.done < q.cells.length && !q.cancel) {
+      await whenVisible();
+      if (!navigator.onLine) break;
+      const c = q.cells[q.done], n = q.cells.length;
+      areasBusy = (q.kind === 'upd' ? 'מעדכן' : 'מוריד') + (n > 1 ? ` ${q.done + 1} מתוך ${n}…` : '…');
       renderAreasMap();
+      holdScreen(true);
+      const t0 = Date.now();
       dlErr = '';
-      await downloadArea(todo[i], { area: true, cells: [todo[i]], batch: true });
-      if (dlErr) { fails++; err = dlErr; }
+      await downloadArea(c, { area: true, cells: [c], batch: true });
+      if (q.cancel) break;
+      // נקטע כי הדף הוסתר (מסך כבוי / יצאו מהאפליקציה) או שהרשת נפלה – אותה משבצת שוב, כשחוזרים
+      if (dlErr && (document.hidden || hiddenAt >= t0 || !navigator.onLine) && retries++ < 3) continue;
+      retries = 0;
+      if (dlErr) { q.fails++; q.err = dlErr; } else areasUpd.delete(c.join());
+      q.done++;
+      saveQueue(q);
     }
-    areasBusy = '';
+    holdScreen(false);
+    batchQ = null; areasBusy = '';
+    const n = q.cells.length;
+    if (q.cancel) { saveQueue(null); renderAreasMap(); return exitAreasMode(); }
     renderAreasMap();
-    if (fails) toast(`ההורדה נכשלה${todo.length > 1 ? ` ב-${fails} מתוך ${todo.length} משבצות` : ''}: ${err}`, 6000);
-    else toast('המפות נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓', 3000);
+    if (q.done < n) return toast('אין אינטרנט – ההורדה תמשיך כשהחיבור יחזור', 4000); // התור נשאר שמור
+    saveQueue(null);
+    const upd = q.kind === 'upd';
+    if (q.fails) toast(`${upd ? 'העדכון' : 'ההורדה'} נכשל${upd ? '' : 'ה'}${n > 1 ? ` ב-${q.fails} מתוך ${n} משבצות` : ''}: ${q.err}`, 6000);
+    else toast(upd ? 'המפות עודכנו ✓' : 'המפות נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓', 3000);
+  }
+  function resumeBatch() {
+    let q = null;
+    try { q = JSON.parse(localStorage.getItem('dlQueue')); } catch { /* ignore */ }
+    if (q?.cells?.length && q.done < q.cells.length && navigator.onLine && !batchQ) runBatch(q);
+  }
+  addEventListener('online', resumeBatch);
+  $('ab-upd').addEventListener('click', () => {
+    const cells = dlAreas().filter((a) => areasUpd.has(a.b.join())).map((a) => a.b);
+    if (cells.length) runBatch({ kind: 'upd', cells, done: 0, fails: 0, err: '' });
+  });
+  $('ab-dl').addEventListener('click', () => {
+    const cells = [...dlSel].map((k) => k.split(',').map(Number));
+    if (cells.length && navigator.onLine) runBatch({ kind: 'dl', cells, done: 0, fails: 0, err: '' });
   });
   // מוחקים את מה שבתוך האזור – חוץ ממה שנוגע באזור שמור אחר
   async function deleteAreas(bs) {
