@@ -555,3 +555,4 @@ body.night .dt-modes button.on { background: #ad1457; }
 body.night #dock[data-mode="areas"] .credits { color: #999; }
 body.areas-mode .maplibregl-ctrl-scale { display: none; }
 #controls #btn-areas.pressed svg { fill: none; stroke: #fff; }
+#cf-title { text-align: center; }

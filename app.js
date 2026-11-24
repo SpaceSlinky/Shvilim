@@ -902,9 +902,9 @@
     // מסלולים שמורים שעוברים במשבצות – נשארים, אבל בלי המפה מתחתם, בלי גובה כשאין רשת, ובלי עריכה ותוספות
     const tests = sel.map((a) => inBox(a.b));
     const hit = (await libLoad().catch(() => [])).filter((r) => (r.segs || []).some((sg) => sg.coords.some((c) => tests.some((t) => t(c)))));
-    const names = hit.slice(0, 3).map((r) => `"${r.name}"`).join(', ') + (hit.length > 3 ? ` ועוד ${hit.length - 3}` : '');
-    const warn = !hit.length ? '' : ` ${hit.length === 1 ? `המסלול ${names} עובר` : `${hit.length} מסלולים שמורים (${names}) עוברים`} כאן: ${hit.length === 1 ? 'הוא יישאר' : 'הם יישארו'}, אבל בלי המפה מתחת, בלי גרף גובה כשאין רשת, ובלי עריכה עד שתורידו שוב.`;
-    if (!(await confirmDlg(title, 'המפות האלה יימחקו מהטלפון. אפשר להוריד אותן שוב כשיש אינטרנט.' + warn))) return;
+    const text = !hit.length ? 'אפשר להוריד שוב כשיש אינטרנט.'
+      : hit.length === 1 ? `המסלול "${hit[0].name}" יישאר, בלי מפה מתחתיו.` : `${hit.length} מסלולים שמורים יישארו, בלי מפה מתחתם.`;
+    if (!(await confirmDlg(title, text))) return;
     await deleteAreas(sel.map((a) => a.b));
     areaSel.clear();
     renderAreasMap();
