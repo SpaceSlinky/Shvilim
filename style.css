@@ -554,3 +554,4 @@ body.night .dt-modes button.on { background: #ad1457; }
 #dock[data-mode="areas"] .credits { margin: 8px 0 2px; font-size: 10.5px; color: #777; text-align: center; }
 body.night #dock[data-mode="areas"] .credits { color: #999; }
 body.areas-mode .maplibregl-ctrl-scale { display: none; }
+#controls #btn-areas.pressed svg { fill: none; stroke: #fff; }

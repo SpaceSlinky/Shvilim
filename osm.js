@@ -229,6 +229,25 @@ out center tags;`;
     throw new Error(reasons.join('\n'));
   }
 
+  /** לכל משבצת ({b, t}) – האם ב-OSM יש דרכים/שבילים מסומנים שנוספו או השתנו מאז t. שאילתה אחת (out count לכל משבצת);
+   *  null – אין תשובה מאף שרת */
+  async function changedSince(cells) {
+    const q = '[out:json][timeout:25];' + cells.map(({ b: [w, s, e, n], t }) => {
+      const bb = `${s},${w},${n},${e}`, iso = new Date(t).toISOString().slice(0, 19) + 'Z';
+      return `(way["highway"](newer:"${iso}")(${bb});relation["route"~"^(hiking|foot|mtb|bicycle)$"](newer:"${iso}")(${bb}););out count;`;
+    }).join('');
+    for (const url of OVERPASS) {
+      try {
+        const res = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: q }), signal: AbortSignal.timeout(30000) });
+        if (!res.ok) continue;
+        const counts = ((await res.json()).elements || []).filter((x) => x.type === 'count');
+        if (counts.length !== cells.length) continue;
+        return counts.map((c) => +(c.tags?.total || 0) > 0);
+      } catch { /* השרת הבא */ }
+    }
+    return null;
+  }
+
   /** מיזוג הורדה חדשה לתוך המפה הקיימת: מה שבתוך האזור החדש מוחלף, השאר נשמר */
   function merge(old, fresh) {
     const box = fresh.bbox, [w, s, e, n] = box;
@@ -265,7 +284,7 @@ out center tags;`;
     return best;
   }
 
-  const OSM = { query, convert, glyphRanges, download, trailColor, merge, canonColor };
+  const OSM = { query, convert, glyphRanges, download, trailColor, merge, canonColor, changedSince };
   if (typeof module !== 'undefined' && module.exports) module.exports = OSM;
   root.OSM = OSM;
 })(typeof self !== 'undefined' ? self : globalThis);

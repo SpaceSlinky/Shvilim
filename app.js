@@ -123,7 +123,7 @@
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'line-width': 1.5 } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 2.5, 1.5] } },
       { id: 'ad-label', type: 'symbol', source: 'areas-del', filter: ['==', ['geometry-type'], 'Point'],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 14, 'text-allow-overlap': true },
         paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.2, 'text-halo-blur': 0.5 } },
@@ -787,10 +787,12 @@
     return best || 'אזור ללא שם';
   }
   const fmtSize = (n) => '\u2066' + (n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB') + '\u2069'; // בידוד: "KB 1" → "1 KB"
-  // ---------- מפות שמורות: האזורים שהורדו על המפה; כל משבצת נבחרת לבד (נגיעה – בחירה, "מחיקה" – מוחקת אותה) ----------
-  // במצב הזה הדוק מוצג כפס מפות (info + סגירה/מחיקה), ורק מה שרלוונטי על המפה: רקע, ים וגבול, הגריד והמשבצות
-  // ושמות האזורים – בלי שבילים, שמות יישובים ומידע בנגיעה
-  let areasMode = false, areaSel = null; // areaSel – אינדקס המשבצת ב-dlAreas
+  // ---------- מפות שמורות (כפתור דלוק/כבוי בכלים): המשבצות שהורדו על המפה; בחירה מרובה (נגיעה – בוחרת, נגיעה נוספת – מבטלת),
+  // מחיקה של הנבחרות, ו"עדכון" כשב-OSM נוספו/השתנו שבילים או דרכים מאז שהמשבצת הורדה (בדיקה אחת ל-Overpass בכניסה).
+  // במצב הזה רק מה שרלוונטי על המפה: רקע, ים וגבול, הגריד והמשבצות ושמות האזורים – בלי שבילים, שמות יישובים ומידע בנגיעה
+  let areasMode = false;
+  const areaSel = new Set(); // מפתחות המשבצות הנבחרות (b.join())
+  let areasUpd = new Set(), areasChecking = false, areasBusy = ''; // משבצות שיש להן עדכון; בדיקה / עדכון שרצים
   const AREAS_KEEP = /^(bg|base-sat|sat-top|ov-sea|ov-coast|ov-border|ovh-(coast|border|sea)|ad-.*|dl-grid.*)$/;
   const areasHidden = new Map();
   function hideForAreas() {
@@ -805,66 +807,111 @@
     areasHidden.clear();
     applyLayers();
   }
+  const sizeOf = (boxes) => {
+    const tests = boxes.map(inBox);
+    let size = 0;
+    for (const f of mapFC?.features || []) if (tests.some((t) => touchesBox(f, t))) size += JSON.stringify(f).length;
+    return size;
+  };
   function renderAreasMap() {
     const list = dlAreas(), groups = areaGroups(), feats = [];
-    list.forEach((a, i) => feats.push({ type: 'Feature', properties: { sel: i === areaSel ? 1 : 0 },
+    for (const k of [...areaSel]) if (!list.some((a) => a.b.join() === k)) areaSel.delete(k);
+    for (const k of [...areasUpd]) if (!list.some((a) => a.b.join() === k)) areasUpd.delete(k);
+    list.forEach((a) => feats.push({ type: 'Feature', properties: { sel: areaSel.has(a.b.join()) ? 1 : 0, upd: areasUpd.has(a.b.join()) ? 1 : 0 },
       geometry: { type: 'Polygon', coordinates: [[[a.b[0], a.b[1]], [a.b[2], a.b[1]], [a.b[2], a.b[3]], [a.b[0], a.b[3]], [a.b[0], a.b[1]]]] } }));
     for (const g of groups) feats.push({ type: 'Feature', properties: { n: g.name }, geometry: { type: 'Point', coordinates: groupCenter(g) } });
     map.getSource('areas-del')?.setData({ type: 'FeatureCollection', features: areasMode ? feats : [] });
-    const info = $('ab-info'), a = list[areaSel];
-    $('ab-del').hidden = !a;
-    if (!list.length) info.textContent = 'אין מפות שמורות';
-    else if (!a) info.textContent = `${list.length === 1 ? 'משבצת אחת שמורה' : list.length + ' משבצות שמורות'} · נגעו במשבצת כדי לבחור`;
-    else {
-      const t = inBox(a.b);
-      let size = 0;
-      for (const f of mapFC?.features || []) if (touchesBox(f, t)) size += JSON.stringify(f).length;
-      const g = groups.find((x) => x.areas.some((y) => y.b.join() === a.b.join()));
-      info.replaceChildren(Object.assign(document.createElement('b'), { textContent: g?.name || 'משבצת' }),
-        document.createTextNode(` · ${fmtSize(size)}${a.t ? ' · עודכן ' + new Date(a.t).toLocaleDateString('he-IL') : ''}`));
+    const sel = list.filter((a) => areaSel.has(a.b.join()));
+    $('ab-del').hidden = !sel.length || !!areasBusy;
+    $('ab-upd').hidden = !areasUpd.size || !navigator.onLine || !!areasBusy;
+    const info = $('ab-info');
+    if (areasBusy) return (info.textContent = areasBusy);
+    if (!list.length) return (info.textContent = 'אין מפות שמורות');
+    const upd = areasChecking ? ' · בודק עדכונים…' : areasUpd.size ? ` · יש עדכון ל-${areasUpd.size === 1 ? 'משבצת אחת' : areasUpd.size + ' משבצות'}` : '';
+    if (!sel.length) return (info.textContent = `${list.length === 1 ? 'משבצת אחת שמורה' : list.length + ' משבצות שמורות'} · נגעו כדי לבחור${upd}`);
+    if (sel.length === 1) {
+      const a = sel[0], g = groups.find((x) => x.areas.some((y) => y.b.join() === a.b.join()));
+      return info.replaceChildren(Object.assign(document.createElement('b'), { textContent: g?.name || 'משבצת' }),
+        document.createTextNode(` · ${fmtSize(sizeOf([a.b]))}${a.t ? ' · עודכן ' + new Date(a.t).toLocaleDateString('he-IL') : ''}`));
     }
+    info.replaceChildren(Object.assign(document.createElement('b'), { textContent: `נבחרו ${sel.length} משבצות` }),
+      document.createTextNode(` · ${fmtSize(sizeOf(sel.map((a) => a.b)))}`));
+  }
+  // בדיקת עדכונים: האם ב-OSM יש שבילים/דרכים שנוספו או השתנו מאז שכל משבצת הורדה
+  async function checkAreaUpdates() {
+    const list = dlAreas().filter((a) => a.t);
+    if (!list.length || !navigator.onLine || areasChecking) return;
+    areasChecking = true; renderAreasMap();
+    try {
+      const res = await OSM.changedSince(list);
+      if (res) areasUpd = new Set(list.filter((_, i) => res[i]).map((a) => a.b.join()));
+    } catch (e) { console.warn('בדיקת עדכונים', e); }
+    areasChecking = false;
+    if (areasMode) renderAreasMap();
   }
   function enterAreasMode() {
     if (areasMode) return;
-    areasMode = true; areaSel = null;
+    areasMode = true; areaSel.clear();
     document.body.classList.add('areas-mode');
-    if (typeof setKnife === 'function') setKnife(false);
+    $('btn-areas').classList.add('pressed');
     closeSearch();
     hideForAreas();
     renderDock();
     placeDlHere();
+    layoutTools();
     renderAreasMap();
+    checkAreaUpdates();
     setTimeout(syncBack);
   }
   function exitAreasMode() {
-    if (!areasMode) return;
-    areasMode = false; areaSel = null;
+    if (!areasMode || areasBusy) return;
+    areasMode = false; areaSel.clear();
     document.body.classList.remove('areas-mode');
+    $('btn-areas').classList.remove('pressed');
     renderAreasMap();
     restoreAfterAreas();
     renderDock();
     placeDlHere();
+    layoutTools();
     setTimeout(syncBack);
   }
   map.on('click', (e) => {
-    if (!areasMode) return;
+    if (!areasMode || areasBusy) return;
     const { lng, lat } = e.lngLat;
-    let best = -1, ba = Infinity;
-    dlAreas().forEach((a, i) => { // כמה משבצות חופפות – הקטנה
-      if (lng >= a.b[0] && lng <= a.b[2] && lat >= a.b[1] && lat <= a.b[3]) { const ar = (a.b[2] - a.b[0]) * (a.b[3] - a.b[1]); if (ar < ba) { ba = ar; best = i; } }
-    });
-    areaSel = best < 0 || best === areaSel ? null : best;
+    let best = null, ba = Infinity;
+    for (const a of dlAreas()) { // כמה משבצות חופפות – הקטנה
+      if (lng >= a.b[0] && lng <= a.b[2] && lat >= a.b[1] && lat <= a.b[3]) { const ar = (a.b[2] - a.b[0]) * (a.b[3] - a.b[1]); if (ar < ba) { ba = ar; best = a; } }
+    }
+    if (!best) return;
+    const k = best.b.join();
+    areaSel.has(k) ? areaSel.delete(k) : areaSel.add(k);
     renderAreasMap();
   });
   $('ab-close').addEventListener('click', exitAreasMode);
   $('ab-del').addEventListener('click', async () => {
-    const a = dlAreas()[areaSel];
-    if (!a) return;
-    const name = areaGroups().find((x) => x.areas.some((y) => y.b.join() === a.b.join()))?.name || 'המשבצת';
-    if (!(await confirmDlg(`למחוק את המשבצת מ${name}?`, 'המפה של המשבצת תימחק מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותה שוב כשיש אינטרנט.'))) return;
-    await deleteAreas([a.b]);
-    areaSel = null;
+    const sel = dlAreas().filter((a) => areaSel.has(a.b.join()));
+    if (!sel.length) return;
+    const title = sel.length === 1 ? 'למחוק את המשבצת?' : `למחוק ${sel.length} משבצות?`;
+    if (!(await confirmDlg(title, 'המפות האלה יימחקו מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותן שוב כשיש אינטרנט.'))) return;
+    await deleteAreas(sel.map((a) => a.b));
+    areaSel.clear();
     renderAreasMap();
+  });
+  // עדכון: מורידים מחדש את המשבצות שיש להן עדכון, אחת אחרי השנייה
+  $('ab-upd').addEventListener('click', async () => {
+    const todo = dlAreas().filter((a) => areasUpd.has(a.b.join()));
+    let fails = 0;
+    for (let i = 0; i < todo.length; i++) {
+      areasBusy = `מעדכן ${todo.length > 1 ? `${i + 1} מתוך ${todo.length}` : ''}…`.replace(' …', '…');
+      renderAreasMap();
+      dlErr = '';
+      await downloadArea(todo[i].b, { area: true, cells: [todo[i].b] });
+      if (dlErr) fails++; else areasUpd.delete(todo[i].b.join());
+    }
+    areasBusy = '';
+    renderAreasMap();
+    if (fails) toast(`העדכון נכשל${todo.length > 1 ? ` ב-${fails} משבצות` : ''}: ${dlErr}`, 6000);
+    else toast('המפות עודכנו ✓', 2500);
   });
   // מוחקים את מה שבתוך האזור – חוץ ממה שנוגע באזור שמור אחר
   async function deleteAreas(bs) {
@@ -2844,7 +2891,7 @@
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
   function smoothLevel() { return layerPrefs.smooth ? 2 : 0; }
-  $('btn-areas').addEventListener('click', enterAreasMode);
+  $('btn-areas').addEventListener('click', () => (areasMode ? exitAreasMode() : enterAreasMode()));
   mapReady.then(applyLayers);
 
   // ---------- מצב לילה ----------
@@ -3357,6 +3404,7 @@
   function pinned(b) {
     if (b.id === 'btn-compass') return compassMode || Math.abs(map.getBearing()) > 0.5;
     if (b.id === 'btn-locate') return watchId != null && !follow && followedOnce;
+    if (b.id === 'btn-areas') return areasMode; // מצב מפות דלוק – הכפתור נשאר על המסך, לחיצה נוספת יוצאת
     return false;
   }
   function layoutTools() {
