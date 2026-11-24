@@ -93,6 +93,18 @@
       <button id="ri-go" class="go primary">▶ יוצאים לדרך</button>
     </section>
 
+    <!-- מפות שמורות: במקום "מסלולים" – מה נבחר, וסגירה / מחיקה -->
+    <section data-mode="areas" hidden>
+      <div id="ab-info" class="ab-info"></div>
+      <div class="lib-tools">
+        <div class="tgrp">
+          <button id="ab-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>סגירה</span></button>
+          <button id="ab-del" class="danger" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>מחיקה</span></button>
+        </div>
+      </div>
+      <p class="credits">נתוני המפה © תורמי OpenStreetMap · גובה: Mapzen/AWS · תצלום אוויר © Esri</p>
+    </section>
+
     <section data-mode="plan" hidden>
       <!-- שם המסלול: נוגעים ועורכים במקום (עט קטן ליד) -->
       <label class="pl-name-row"><input id="pl-name" placeholder="מסלול חדש" maxlength="50" autocomplete="off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></label>
@@ -135,16 +147,6 @@
       <button type="button" id="search-close" aria-label="ניקוי" hidden>✕</button>
     </form>
     <ul id="search-results"></ul>
-  </div>
-
-  <!-- מפות שמורות: מבט על כל הארץ עם האזורים שהורדו; נגיעה באזור בוחרת אותו, "מחיקה" מוחקת -->
-  <div id="areas-bar" hidden>
-    <div id="ab-info" class="ab-info"></div>
-    <div class="tgrp ab-btns">
-      <button id="ab-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>סגירה</span></button>
-      <button id="ab-del" class="danger" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>מחיקה</span></button>
-    </div>
-    <p class="credits">נתוני המפה © תורמי OpenStreetMap · גובה: Mapzen/AWS · תצלום אוויר © Esri</p>
   </div>
 
   <!-- עיצוב רשימת המסלולים: גודל ומשקל לכל סוג טקסט, ומרווח השורות -->

@@ -122,8 +122,11 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
-      { id: 'ad-fill', type: 'fill', source: 'areas-del', paint: { 'fill-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', paint: { 'line-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'line-width': 1.5 } },
+      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'line-width': 1.5 } },
+      { id: 'ad-label', type: 'symbol', source: 'areas-del', filter: ['==', ['geometry-type'], 'Point'],
+        layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 14, 'text-allow-overlap': true },
+        paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.2, 'text-halo-blur': 0.5 } },
       // הגריד תמיד על המפה וידוע מראש (buildGrids – לא מתעדכן בזום ובתנועה): מרחוק – 0.6°, ומזום ~8.4 הוא מתחלף
       // בפייד בריבועי ההורדה הרגילים (רק החסרים)
       { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
@@ -428,6 +431,14 @@
   // מעטפת האזורים שהורדו: איחוד המלבנים (רשת לפי כל קווי הקצה) – משטח (תאים), קו המתאר (רק צלעות שבצד השני שלהן
   // אין אזור) ושם לכל קבוצה מחוברת (של האזור הגדול בה, במרכזו). נגיעה – מתקרבים לקבוצה
   let envGroups = [];
+  // מרכז המעטפת של קבוצת משבצות: מרכז המלבן החוסם; אם הוא מחוץ למשבצות (צורת L) – מרכז המשבצת הקרובה אליו
+  function groupCenter(g) {
+    const c = [(g.bbox[0] + g.bbox[2]) / 2, (g.bbox[1] + g.bbox[3]) / 2];
+    if (g.areas.some(({ b }) => c[0] >= b[0] && c[0] <= b[2] && c[1] >= b[1] && c[1] <= b[3])) return c;
+    let best = null, bd = Infinity;
+    for (const { b } of g.areas) { const m = [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2], d = Math.hypot(m[0] - c[0], m[1] - c[1]); if (d < bd) { bd = d; best = m; } }
+    return best || c;
+  }
   function updateEnvelope() {
     const boxes = dlAreas().map((a) => a.b);
     const xs = [...new Set(boxes.flatMap((b) => [b[0], b[2]]))].sort((a, b) => a - b);
@@ -447,12 +458,12 @@
     }
     envGroups = areaGroups();
     for (const g of envGroups) {
-      feats.push({ type: 'Feature', properties: { n: g.name }, geometry: { type: 'Point', coordinates: [(g.big[0] + g.big[2]) / 2, (g.big[1] + g.big[3]) / 2] } });
+      feats.push({ type: 'Feature', properties: { n: g.name }, geometry: { type: 'Point', coordinates: groupCenter(g) } });
     }
     map.getSource('areas-env')?.setData({ type: 'FeatureCollection', features: feats });
   }
   map.on('click', 'env-fill', (e) => {
-    if (map.getZoom() >= 10.8) return;
+    if (areasMode || map.getZoom() >= 10.8) return;
     const { lng, lat } = e.lngLat;
     const g = envGroups.find((x) => lng >= x.bbox[0] && lng <= x.bbox[2] && lat >= x.bbox[1] && lat <= x.bbox[3]);
     if (g) map.fitBounds([[g.bbox[0], g.bbox[1]], [g.bbox[2], g.bbox[3]]], { padding: 40, duration: 900 });
@@ -776,23 +787,41 @@
     return best || 'אזור ללא שם';
   }
   const fmtSize = (n) => '\u2066' + (n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB') + '\u2069'; // בידוד: "KB 1" → "1 KB"
-  // ---------- מפות שמורות: מבט על כל הארץ עם האזורים שהורדו (נגיעה באזור – בחירה; "מחיקה" – מוחקת אותו) ----------
-  let areasMode = false, areaSel = null; // areaSel – אינדקס הקבוצה הנבחרת
+  // ---------- מפות שמורות: האזורים שהורדו על המפה; כל משבצת נבחרת לבד (נגיעה – בחירה, "מחיקה" – מוחקת אותה) ----------
+  // במצב הזה הדוק מוצג כפס מפות (info + סגירה/מחיקה), ורק מה שרלוונטי על המפה: רקע, ים וגבול, הגריד והמשבצות
+  // ושמות האזורים – בלי שבילים, שמות יישובים ומידע בנגיעה
+  let areasMode = false, areaSel = null; // areaSel – אינדקס המשבצת ב-dlAreas
+  const AREAS_KEEP = /^(bg|base-sat|sat-top|ov-sea|ov-coast|ov-border|ovh-(coast|border|sea)|ad-.*|dl-grid.*)$/;
+  const areasHidden = new Map();
+  function hideForAreas() {
+    for (const l of map.getStyle().layers) {
+      if (AREAS_KEEP.test(l.id)) continue;
+      if (!areasHidden.has(l.id)) areasHidden.set(l.id, map.getLayoutProperty(l.id, 'visibility') || 'visible');
+      map.setLayoutProperty(l.id, 'visibility', 'none');
+    }
+  }
+  function restoreAfterAreas() {
+    for (const [id, v] of areasHidden) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
+    areasHidden.clear();
+    applyLayers();
+  }
   function renderAreasMap() {
-    const groups = areaGroups(), feats = [];
-    groups.forEach((g, gi) => g.areas.forEach(({ b }) => feats.push({ type: 'Feature', properties: { sel: gi === areaSel ? 1 : 0 },
-      geometry: { type: 'Polygon', coordinates: [[[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]], [b[0], b[1]]]] } })));
+    const list = dlAreas(), groups = areaGroups(), feats = [];
+    list.forEach((a, i) => feats.push({ type: 'Feature', properties: { sel: i === areaSel ? 1 : 0 },
+      geometry: { type: 'Polygon', coordinates: [[[a.b[0], a.b[1]], [a.b[2], a.b[1]], [a.b[2], a.b[3]], [a.b[0], a.b[3]], [a.b[0], a.b[1]]]] } }));
+    for (const g of groups) feats.push({ type: 'Feature', properties: { n: g.name }, geometry: { type: 'Point', coordinates: groupCenter(g) } });
     map.getSource('areas-del')?.setData({ type: 'FeatureCollection', features: areasMode ? feats : [] });
-    const info = $('ab-info'), g = groups[areaSel];
-    $('ab-del').hidden = !g;
-    if (!groups.length) info.textContent = 'אין מפות שמורות';
-    else if (!g) info.textContent = `${groups.length === 1 ? 'אזור אחד שמור' : groups.length + ' אזורים שמורים'} · נגעו באזור כדי לבחור`;
+    const info = $('ab-info'), a = list[areaSel];
+    $('ab-del').hidden = !a;
+    if (!list.length) info.textContent = 'אין מפות שמורות';
+    else if (!a) info.textContent = `${list.length === 1 ? 'משבצת אחת שמורה' : list.length + ' משבצות שמורות'} · נגעו במשבצת כדי לבחור`;
     else {
-      const tests = g.areas.map((x) => inBox(x.b));
+      const t = inBox(a.b);
       let size = 0;
-      for (const f of mapFC?.features || []) if (tests.some((t) => touchesBox(f, t))) size += JSON.stringify(f).length;
-      info.replaceChildren(Object.assign(document.createElement('b'), { textContent: g.name }),
-        document.createTextNode(` · ${fmtSize(size)}${g.t ? ' · עודכן ' + new Date(g.t).toLocaleDateString('he-IL') : ''}`));
+      for (const f of mapFC?.features || []) if (touchesBox(f, t)) size += JSON.stringify(f).length;
+      const g = groups.find((x) => x.areas.some((y) => y.b.join() === a.b.join()));
+      info.replaceChildren(Object.assign(document.createElement('b'), { textContent: g?.name || 'משבצת' }),
+        document.createTextNode(` · ${fmtSize(size)}${a.t ? ' · עודכן ' + new Date(a.t).toLocaleDateString('he-IL') : ''}`));
     }
   }
   function enterAreasMode() {
@@ -801,33 +830,39 @@
     document.body.classList.add('areas-mode');
     if (typeof setKnife === 'function') setKnife(false);
     closeSearch();
-    $('areas-bar').hidden = false;
+    hideForAreas();
+    renderDock();
     placeDlHere();
     renderAreasMap();
-    if (farCam) map.easeTo({ center: maplibregl.LngLat.convert(farCam.center), zoom: map.getMinZoom(), bearing: 0, duration: 700 });
     setTimeout(syncBack);
   }
   function exitAreasMode() {
     if (!areasMode) return;
     areasMode = false; areaSel = null;
     document.body.classList.remove('areas-mode');
-    $('areas-bar').hidden = true;
     renderAreasMap();
+    restoreAfterAreas();
+    renderDock();
     placeDlHere();
     setTimeout(syncBack);
   }
   map.on('click', (e) => {
     if (!areasMode) return;
-    const gi = areaGroups().findIndex((g) => g.areas.some(({ b }) => e.lngLat.lng >= b[0] && e.lngLat.lng <= b[2] && e.lngLat.lat >= b[1] && e.lngLat.lat <= b[3]));
-    areaSel = gi < 0 || gi === areaSel ? null : gi;
+    const { lng, lat } = e.lngLat;
+    let best = -1, ba = Infinity;
+    dlAreas().forEach((a, i) => { // כמה משבצות חופפות – הקטנה
+      if (lng >= a.b[0] && lng <= a.b[2] && lat >= a.b[1] && lat <= a.b[3]) { const ar = (a.b[2] - a.b[0]) * (a.b[3] - a.b[1]); if (ar < ba) { ba = ar; best = i; } }
+    });
+    areaSel = best < 0 || best === areaSel ? null : best;
     renderAreasMap();
   });
   $('ab-close').addEventListener('click', exitAreasMode);
   $('ab-del').addEventListener('click', async () => {
-    const g = areaGroups()[areaSel];
-    if (!g) return;
-    if (!(await confirmDlg(`למחוק את המפה של ${g.name}?`, 'המפה של האזור תימחק מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותה שוב כשיש אינטרנט.'))) return;
-    await deleteAreas(g.areas.map((x) => x.b));
+    const a = dlAreas()[areaSel];
+    if (!a) return;
+    const name = areaGroups().find((x) => x.areas.some((y) => y.b.join() === a.b.join()))?.name || 'המשבצת';
+    if (!(await confirmDlg(`למחוק את המשבצת מ${name}?`, 'המפה של המשבצת תימחק מהטלפון. המסלולים השמורים נשארים. אפשר להוריד אותה שוב כשיש אינטרנט.'))) return;
+    await deleteAreas([a.b]);
     areaSel = null;
     renderAreasMap();
   });
@@ -946,7 +981,7 @@
 
   let longPressAt = 0; // אחרי לחיצה ארוכה (תוספת למסלול) – לא פותחים מידע על מה שמתחת
   map.on('click', 'wpts', (e) => {
-    if (Date.now() - longPressAt < 800) return;
+    if (areasMode || Date.now() - longPressAt < 800) return;
     const f = e.features[0];
     if (!f.properties.name) return;
     const el = document.createElement('div');
@@ -959,7 +994,7 @@
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
   const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
   map.on('click', (e) => {
-    if (plan || Date.now() - longPressAt < 800) return;
+    if (areasMode || plan || Date.now() - longPressAt < 800) return;
     const { x, y } = e.point;
     const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
     if (!feats.length) return;
@@ -1777,7 +1812,7 @@
     return best;
   }
   function proposeDetour(target) {
-    if (!showingRoute() || !mapFC) return;
+    if (areasMode || !showingRoute() || !mapFC) return;
     const opts = { snap: true, bike: !!active.opts?.bike };
     const g = getGraph(opts.bike), sn = g && Router.snap(g, target, 200);
     if (sn) target = sn.p;
@@ -2056,7 +2091,7 @@
   }
 
   map.on('click', (e) => {
-    if (!plan) return;
+    if (areasMode || !plan) return;
     plan.wps.push(snapWp([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]));
     renderPlan();
   });
@@ -2804,6 +2839,7 @@
     map.setLayoutProperty('dim', 'visibility', vis(dimValue() > 0 && layerPrefs.route && (!!active || !!plan)));
     map.setPaintProperty('dim', 'fill-opacity', dimValue());
     showSat();
+    if (areasMode) hideForAreas();
     try { localStorage.setItem('layers', JSON.stringify(layerPrefs)); } catch { /* ignore */ }
   }
   if (typeof layerPrefs.smooth === 'number') layerPrefs.smooth = layerPrefs.smooth > 0; // מעבר מהגרסה עם רמות
@@ -2833,6 +2869,8 @@
     ...GRID_LEVELS.map(({ m }) => ['dl-grid-' + m, 'line-color', '#6b6470', '#9aa3ab']),
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
     ['env-label', 'text-color', '#1f5f3a', '#a5d6a7'],
+    ['ad-label', 'text-color', '#1f5f3a', '#a5d6a7'],
+    ['ad-label', 'text-halo-color', 'rgba(255,255,255,.8)', 'rgba(16,19,23,.8)'],
     ['env-dot', 'circle-color', '#2e7d4f', '#81c784'],
     ['env-dot', 'circle-stroke-color', '#ffffff', '#101317'],
     ['env-dot-label', 'text-color', '#1f5f3a', '#a5d6a7'],
@@ -3038,6 +3076,7 @@
   const dock = { open: false, libOpen: false }; // open – פרטי המסלול פתוחים; libOpen – רשימת המסלולים פתוחה
   const dockEl = $('dock');
   function dockMode() {
+    if (areasMode) return 'areas';
     if (plan) return 'plan';
     return active && route?.pts.length > 1 ? 'route' : 'lib';
   }
