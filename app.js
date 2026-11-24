@@ -122,8 +122,8 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
-      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#1e88e5', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#1e88e5', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 2.5, 1.5] } },
+      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 2.5, 1.5] } },
       { id: 'ad-label', type: 'symbol', source: 'areas-del', filter: ['==', ['geometry-type'], 'Point'],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 14, 'text-allow-overlap': true },
         paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.2, 'text-halo-blur': 0.5 } },
@@ -906,15 +906,17 @@
       areaSel.has(k) ? areaSel.delete(k) : areaSel.add(k);
       return renderAreasMap();
     }
-    // משבצת שלא הורדה – בחירה להורדה (כשהגריד שלה נראה)
-    const c = map.getZoom() >= 7.2 && dlAll.find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
-    if (!c) return map.getZoom() < 7.2 && toast('התקרבו כדי לבחור משבצות', 2000);
+    // משבצת שלא הורדה – נגיעה מסמנת אותה להורדה, בכל זום. מרחוק (המשבצות קטנות מדי לנגיעה מדויקת) – גם מתקרבים
+    // אליה, כדי לראות אותה ולהוסיף את השכנות
+    const c = dlAll.find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
+    if (!c) return;
     const k = c.join();
     areaSel.clear();
     if (dlSel.has(k)) dlSel.delete(k);
     else if (dlSel.size >= DL_MAX) return toast(`עד ${DL_MAX} משבצות בכל הורדה`, 2500);
     else dlSel.add(k);
     renderAreasMap();
+    if (map.getZoom() < 8.4) map.easeTo({ center: [(c[0] + c[2]) / 2, (c[1] + c[3]) / 2], zoom: 9, duration: 700 });
   });
   $('ab-close').addEventListener('click', () => {
     if (!batchQ) return exitAreasMode();
