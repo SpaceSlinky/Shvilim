@@ -511,9 +511,9 @@ body.night .cat { border-bottom-color: #343a40; }
 /* ===== שורות כפתורים: קבוצה אחת ממורכזת, מחוברת, עם קצוות גלולה; לכפתורים שבקצוות – עוד מקום מהעיגול ===== */
 /* כל הכפתורים באותו רוחב (לא לפי הטקסט); רק הקיצוניים מעט ארוכים יותר – בצד החיצוני */
 .tgrp button { width: 66px; min-width: 0; padding: 7px 0 6px; }
-.tgrp button:first-child { width: 72px; padding-inline-start: 6px; }
-.tgrp button:last-child { width: 72px; padding-inline-end: 6px; }
-.tgrp button:only-child { width: 78px; padding-inline: 6px; }
+.tgrp button:first-child { width: 72px; }
+.tgrp button:last-child { width: 72px; }
+.tgrp button:only-child { width: 78px; }
 .tgrp button.primary { background: var(--green); color: #fff; border: 0; }
 body.night .tgrp button.primary { background: #2e7d4f; color: #fff; }
 .tgrp button:disabled { opacity: 1; color: #9aa3a0; }
@@ -532,8 +532,8 @@ body.night .tgrp .tog.off { color: #7b848c; }
 .cf-btns button, #style-dlg .ls-btns button, .ls-btns button, .dt-btns button, .dt-btns #dt-cancel, .dt-modes button {
   width: auto; min-width: 104px; margin: 0; padding: 11px 16px; border: 0; border-radius: 0; background: #f7f7f7;
   font: inherit; font-size: 15px; color: inherit; }
-.cf-btns button:first-child, .ls-btns button:first-child, .dt-btns button:first-child, .dt-modes button:first-child { padding-inline-start: 22px; }
-.cf-btns button:last-child, .ls-btns button:last-child, .dt-btns button:last-child, .dt-modes button:last-child { padding-inline-end: 22px; }
+.cf-btns button:first-child, .ls-btns button:first-child, .dt-btns button:first-child, .dt-modes button:first-child { padding-inline: 22px; }
+.cf-btns button:last-child, .ls-btns button:last-child, .dt-btns button:last-child, .dt-modes button:last-child { padding-inline: 22px; }
 .cf-btns button.primary, .ls-btns button.primary, .dt-btns button.primary { background: var(--green); color: #fff; font-weight: 700; }
 .dt-modes button + button:not([hidden]) { border: 0; }
 .dt-modes button.on { background: #d81b60; color: #fff; }
