@@ -59,6 +59,8 @@
          נגיעה במסלול בוחרת; הכלים למטה פועלים על מה שנבחר -->
     <section data-mode="lib" hidden>
       <div class="grip lib-pull" aria-hidden="true"></div>
+      <!-- מרכז המסך באזור בלי מפה שמורה – כניסה למצב מפות עם המשבצת הזו מסומנת להורדה -->
+      <div id="lib-dl" class="lib-dl"><div><button></button></div></div>
       <button id="lib-head" class="lib-head lib-pull" aria-expanded="false">מסלולים</button>
       <div id="lib-body" class="lib-body"><div>
         <div id="lib-list" class="dock-scroll"></div>
@@ -100,6 +102,7 @@
         <div class="tgrp">
           <button id="ab-close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg><span>סגירה</span></button>
           <button id="ab-upd" hidden><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg><span>עדכון</span></button>
+          <button id="ab-dl" class="primary" hidden><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>הורדה</span></button>
           <button id="ab-del" class="danger" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg><span>מחיקה</span></button>
         </div>
       </div>

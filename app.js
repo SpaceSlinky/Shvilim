@@ -122,8 +122,8 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
-      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 2.5, 1.5] } },
+      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#1e88e5', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#1e88e5', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 2.5, 1.5] } },
       { id: 'ad-label', type: 'symbol', source: 'areas-del', filter: ['==', ['geometry-type'], 'Point'],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 14, 'text-allow-overlap': true },
         paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.2, 'text-halo-blur': 0.5 } },
@@ -545,7 +545,7 @@
   let dlErr = ''; // ההורדה האחרונה של אזור נכשלה – הסיבה מוצגת על הכפתור
   const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
   // quiet: עדכון ברקע בלי הודעות; area: אזור חדש – ההתקדמות על הכפתור במרכז המסך
-  async function downloadArea(bbox, { quiet = false, area = false, cells = null } = {}) {
+  async function downloadArea(bbox, { quiet = false, area = false, cells = null, batch = false } = {}) {
     if (dlJob) {
       if (quiet || !dlJob.quiet) return;
       dlJob.ctl.abort(new DOMException('הופסק', 'AbortError'));
@@ -554,12 +554,12 @@
     if (!navigator.onLine) return quiet || area ? undefined : toast('אין חיבור לאינטרנט');
     const ctl = new AbortController();
     const job = { quiet, ctl };
-    job.done = runDownload(bbox, { quiet, area, cells, signal: ctl.signal }).finally(() => { if (dlJob === job) dlJob = null; });
+    job.done = runDownload(bbox, { quiet, area, cells, batch, signal: ctl.signal }).finally(() => { if (dlJob === job) dlJob = null; });
     dlJob = job;
     return job.done;
   }
-  async function runDownload(bbox, { quiet, area, cells, signal }) {
-    const say = (m, ms) => { if (area) { dlMsg = m; placeDlHere(); } else if (!quiet) toast(m, ms); };
+  async function runDownload(bbox, { quiet, area, cells, batch, signal }) {
+    const say = (m, ms) => { if (area) dlMsg = m; else if (!quiet) toast(m, ms); };
     if (area) { dlErr = ''; say('מוריד את מפות האזור…'); }
     try {
       const fresh = await OSM.download(bbox, (m) => say(m, 120000), signal);
@@ -580,7 +580,7 @@
       const trails = fc.features.filter((f) => f.properties.k === 'trail').length;
       for (const c of cells || [bbox]) markArea(c); // הורדה בריבועים – כל ריבוע נרשם לבד
       areasChanged();
-      if (area) toast(fresh.features.length ? 'מפות האזור נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓' : 'אין שבילים או דרכים באזור הזה', 3000);
+      if (area && !batch) toast(fresh.features.length ? 'מפות האזור נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓' : 'אין שבילים או דרכים באזור הזה', 3000);
       else say(`המפה נשמרה בטלפון ✓ (${trails} קטעי שבילים מסומנים)`, 5000);
     } catch (e) {
       // עדכון שקט שנכשל או שפינה את הדרך – ינסה שוב מחר, לא בכל פתיחה
@@ -593,16 +593,6 @@
     } finally {
       if (area) { dlMsg = ''; checkArea(); }
     }
-  }
-
-  function downloadBbox(bbox) {
-    bbox = bbox.map((v) => +v.toFixed(4));
-    if ((bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) > 0.12) return toast('האזור גדול מדי – התקרבו (זום) ונסו שוב', 5000);
-    downloadArea(bbox);
-  }
-  function downloadVisible() {
-    const b = map.getBounds();
-    downloadBbox([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
   }
 
   let mapFC = null;
@@ -794,6 +784,8 @@
   // במצב הזה המפה לא פעילה: בלי מידע בנגיעה, תוספות למסלול וכפתורי הורדה; שמות היישובים מעומעמים
   let areasMode = false;
   const areaSel = new Set(); // מפתחות המשבצות הנבחרות (b.join())
+  const dlSel = new Set(); // משבצות שלא הורדו ונבחרו להורדה (מפתח c.join()); לא יחד עם areaSel
+  const DL_MAX = 20; // משבצות בכל הורדה – השרתים הציבוריים עמוסים
   let areasUpd = new Set(), areasChecking = false, areasBusy = ''; // משבצות שיש להן עדכון; בדיקה / עדכון שרצים
   // המפה עצמה נשארת (מקרוב רואים את השבילים בתוך המשבצות – בלי מידע בנגיעה), שמות היישובים מעומעמים, והמעטפת הרגילה
   // מוסתרת (המשבצות במקומה)
@@ -828,16 +820,22 @@
     for (const k of [...areasUpd]) if (!list.some((a) => a.b.join() === k)) areasUpd.delete(k);
     list.forEach((a) => feats.push({ type: 'Feature', properties: { sel: areaSel.has(a.b.join()) ? 1 : 0, upd: areasUpd.has(a.b.join()) ? 1 : 0 },
       geometry: { type: 'Polygon', coordinates: [[[a.b[0], a.b[1]], [a.b[2], a.b[1]], [a.b[2], a.b[3]], [a.b[0], a.b[3]], [a.b[0], a.b[1]]]] } }));
+    for (const k of [...dlSel]) if (!dlAll.some((c) => c.join() === k)) dlSel.delete(k);
+    for (const k of dlSel) { const c = k.split(',').map(Number);
+      feats.push({ type: 'Feature', properties: { dl: 1 }, geometry: { type: 'Polygon', coordinates: [[[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]]] } }); }
     for (const g of groups) feats.push({ type: 'Feature', properties: { n: g.name }, geometry: { type: 'Point', coordinates: groupCenter(g) } });
     map.getSource('areas-del')?.setData({ type: 'FeatureCollection', features: areasMode ? feats : [] });
     const sel = list.filter((a) => areaSel.has(a.b.join()));
     $('ab-del').hidden = !sel.length || !!areasBusy;
-    $('ab-upd').hidden = !areasUpd.size || !navigator.onLine || !!areasBusy;
+    $('ab-upd').hidden = !areasUpd.size || !navigator.onLine || !!areasBusy || !!dlSel.size;
+    $('ab-dl').hidden = !dlSel.size || !navigator.onLine || !!areasBusy;
     const info = $('ab-info');
     if (areasBusy) return (info.textContent = areasBusy);
-    if (!list.length) return (info.textContent = 'אין מפות שמורות');
+    if (dlSel.size) return info.replaceChildren(Object.assign(document.createElement('b'), { textContent: dlSel.size === 1 ? 'משבצת אחת להורדה' : `${dlSel.size} משבצות להורדה` }),
+      document.createTextNode(navigator.onLine ? '' : ' · צריך אינטרנט'));
+    if (!list.length) return (info.textContent = 'אין מפות שמורות · נגעו במשבצות כדי לבחור להורדה');
     const upd = areasChecking ? ' · בודק עדכונים…' : areasUpd.size ? ` · יש עדכון ל-${areasUpd.size === 1 ? 'משבצת אחת' : areasUpd.size + ' משבצות'}` : '';
-    if (!sel.length) return (info.textContent = `${list.length === 1 ? 'משבצת אחת שמורה' : list.length + ' משבצות שמורות'} · נגעו כדי לבחור${upd}`);
+    if (!sel.length) return (info.textContent = `${list.length === 1 ? 'משבצת אחת שמורה' : list.length + ' משבצות שמורות'} · נגעו במשבצת כדי לבחור${upd}`);
     if (sel.length === 1) {
       const a = sel[0], g = groups.find((x) => x.areas.some((y) => y.b.join() === a.b.join()));
       return info.replaceChildren(Object.assign(document.createElement('b'), { textContent: g?.name || 'משבצת' }),
@@ -858,9 +856,18 @@
     areasChecking = false;
     if (areasMode) renderAreasMap();
   }
-  function enterAreasMode() {
+  // במצב מפות הגריד של המשבצות החסרות נראה כבר מרחוק (כדי לבחור אותן), והגריד המאוחד מוסתר
+  function gridForAreas(on) {
+    if (!map.getLayer('dl-grid')) return;
+    map.setLayerZoomRange('dl-grid', on ? 6.5 : 8.2, 24);
+    map.setPaintProperty('dl-grid', 'line-opacity', ['interpolate', ['linear'], ['zoom'], ...(on ? [6.8, 0, 7.6, 0.55] : [8.4, 0, 9.2, 0.55])]);
+    for (const { m } of GRID_LEVELS) map.setLayoutProperty('dl-grid-' + m, 'visibility', on ? 'none' : 'visible');
+  }
+  function enterAreasMode(pre) {
     if (areasMode) return;
-    areasMode = true; areaSel.clear();
+    areasMode = true; areaSel.clear(); dlSel.clear();
+    if (pre) dlSel.add(pre.join());
+    gridForAreas(true);
     document.body.classList.add('areas-mode');
     $('btn-areas').classList.add('pressed');
     closeSearch();
@@ -874,7 +881,8 @@
   }
   function exitAreasMode() {
     if (!areasMode || areasBusy) return;
-    areasMode = false; areaSel.clear();
+    areasMode = false; areaSel.clear(); dlSel.clear();
+    gridForAreas(false);
     document.body.classList.remove('areas-mode');
     $('btn-areas').classList.remove('pressed');
     renderAreasMap();
@@ -891,9 +899,20 @@
     for (const a of dlAreas()) { // כמה משבצות חופפות – הקטנה
       if (lng >= a.b[0] && lng <= a.b[2] && lat >= a.b[1] && lat <= a.b[3]) { const ar = (a.b[2] - a.b[0]) * (a.b[3] - a.b[1]); if (ar < ba) { ba = ar; best = a; } }
     }
-    if (!best) return;
-    const k = best.b.join();
-    areaSel.has(k) ? areaSel.delete(k) : areaSel.add(k);
+    if (best) {
+      const k = best.b.join();
+      dlSel.clear();
+      areaSel.has(k) ? areaSel.delete(k) : areaSel.add(k);
+      return renderAreasMap();
+    }
+    // משבצת שלא הורדה – בחירה להורדה (כשהגריד שלה נראה)
+    const c = map.getZoom() >= 7.2 && dlAll.find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
+    if (!c) return map.getZoom() < 7.2 && toast('התקרבו כדי לבחור משבצות', 2000);
+    const k = c.join();
+    areaSel.clear();
+    if (dlSel.has(k)) dlSel.delete(k);
+    else if (dlSel.size >= DL_MAX) return toast(`עד ${DL_MAX} משבצות בכל הורדה`, 2500);
+    else dlSel.add(k);
     renderAreasMap();
   });
   $('ab-close').addEventListener('click', exitAreasMode);
@@ -919,13 +938,30 @@
       areasBusy = `מעדכן ${todo.length > 1 ? `${i + 1} מתוך ${todo.length}` : ''}…`.replace(' …', '…');
       renderAreasMap();
       dlErr = '';
-      await downloadArea(todo[i].b, { area: true, cells: [todo[i].b] });
+      await downloadArea(todo[i].b, { area: true, cells: [todo[i].b], batch: true });
       if (dlErr) fails++; else areasUpd.delete(todo[i].b.join());
     }
     areasBusy = '';
     renderAreasMap();
     if (fails) toast(`העדכון נכשל${todo.length > 1 ? ` ב-${fails} משבצות` : ''}: ${dlErr}`, 6000);
     else toast('המפות עודכנו ✓', 2500);
+  });
+  // הורדה: המשבצות שנבחרו, אחת אחרי השנייה; משבצת שנכשלה – ממשיכים לבאות, ובסוף אומרים כמה נכשלו ולמה
+  $('ab-dl').addEventListener('click', async () => {
+    const todo = [...dlSel].map((k) => k.split(',').map(Number));
+    if (!todo.length || !navigator.onLine) return;
+    let fails = 0, err = '';
+    for (let i = 0; i < todo.length; i++) {
+      areasBusy = todo.length > 1 ? `מוריד ${i + 1} מתוך ${todo.length}…` : 'מוריד…';
+      renderAreasMap();
+      dlErr = '';
+      await downloadArea(todo[i], { area: true, cells: [todo[i]], batch: true });
+      if (dlErr) { fails++; err = dlErr; }
+    }
+    areasBusy = '';
+    renderAreasMap();
+    if (fails) toast(`ההורדה נכשלה${todo.length > 1 ? ` ב-${fails} מתוך ${todo.length} משבצות` : ''}: ${err}`, 6000);
+    else toast('המפות נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓', 3000);
   });
   // מוחקים את מה שבתוך האזור – חוץ ממה שנוגע באזור שמור אחר
   async function deleteAreas(bs) {
@@ -948,73 +984,21 @@
     renderAreasMap();
   }
 
-  // אזור בלי מפה שמורה (למשל אחרי חיפוש): במרכז המסך – "להורדת מפות האזור" (לחיץ)
-  let dlMsg = '';
-  function viewBox() {
-    const v = map.getBounds(), pad = 0.01; // קצת מעבר למסך
-    return [v.getWest() - pad, v.getSouth() - pad, v.getEast() + pad, v.getNorth() + pad].map((x) => +x.toFixed(4));
-  }
-  // כפתור הורדה על כל ריבוע חסר שרואים – באמצע שלו, בשורה אחת; כולם מופיעים יחד בפייד כשהריבוע תופס 45–60% מרוחב המסך
-  let dlCell = null, dlAll = []; // dlAll – כל הריבועים החסרים (קבוע, מחושב מראש; משתנה רק כשהאזורים השמורים משתנים)
-  const DL_SHOW = [0.33, 0.48];
-  const dlBtns = new Map(); // מפתח ריבוע → כפתור
-  function dlButton(c) {
-    const key = c.join();
-    let b = dlBtns.get(key);
-    if (!b) {
-      b = document.createElement('button');
-      b.className = 'dl-here';
-      b.hidden = true;
-      b.addEventListener('click', () => {
-        if (b.disabled) return;
-        dlCell = c;
-        downloadArea(c, { area: true, cells: [c] });
-      });
-      document.body.appendChild(b);
-      dlBtns.set(key, b);
-    }
-    return b;
-  }
-  const dlLabel = () => dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
-    : dlErr ? `ההורדה נכשלה:\n${dlErr}\nלנסות שוב` : 'להורדת מפות האזור');
+  // אזור בלי מפה שמורה (למשל אחרי חיפוש): בדוק – "להורדת מפות האזור", שנכנס למצב מפות עם המשבצת שבמרכז המסך מסומנת.
+  // ההורדה עצמה – רק משם (בחירת משבצות וכפתור "הורדה" בדוק); על המפה אין כפתורים
+  let dlMsg = '', dlAll = []; // dlAll – כל הריבועים החסרים (קבוע, מחושב מראש; משתנה רק כשהאזורים השמורים משתנים)
+  let dlHereCell = null;
   function placeDlHere() {
-    if (areasMode) { for (const b of dlBtns.values()) b.hidden = true; return; }
-    const W = innerWidth, H = innerHeight, top = 110, bottom = H - ($('dock')?.offsetHeight || 120) - 10;
-    const lat = map.getCenter().lat, cw = Math.abs(map.project([CELL, lat]).x - map.project([0, lat]).x); // רוחב ריבוע במסך
-    const o = dlMsg ? 1 : Math.max(0, Math.min(1, (cw / W - DL_SHOW[0]) / (DL_SHOW[1] - DL_SHOW[0])));
-    const show = new Set();
-    if (o > 0) {
-      const v = map.getBounds();
-      const cells = dlMsg && dlCell ? [dlCell] : dlAll.filter((c) => c[2] >= v.getWest() && c[0] <= v.getEast() && c[3] >= v.getSouth() && c[1] <= v.getNorth());
-      // מקרוב (הריבוע רחב מהמסך) הכפתור של הריבוע שבמרכז "נדבק" למרכז המסך, והשאר נעלמים בפייד
-      const stick = Math.max(0, Math.min(1, (cw / W - 1) / 0.5)), mid = [W / 2, (top + bottom) / 2];
-      const cc = map.unproject(mid);
-      for (const c of cells) {
-        const p = map.project([(c[0] + c[2]) / 2, (c[1] + c[3]) / 2]);
-        const here = cc.lng >= c[0] && cc.lng < c[2] && cc.lat >= c[1] && cc.lat < c[3];
-        if (here && stick) { p.x += (mid[0] - p.x) * stick; p.y += (mid[1] - p.y) * stick; }
-        const fadeOut = here ? 1 : 1 - stick;
-        if (fadeOut <= 0) continue;
-        if (p.x < 0 || p.x > W || p.y < top || p.y > bottom) continue; // באמצע שלו – רק כשהאמצע על המסך
-        const btn = dlButton(c);
-        btn.hidden = false;
-        btn.textContent = dlLabel();
-        btn.disabled = !!dlMsg || !navigator.onLine;
-        btn.style.scale = 1;
-        const sc = Math.min(1, (0.88 * cw) / (btn.offsetWidth || 1)); // לא רחב מהריבוע שלו
-        btn.style.scale = sc;
-        // נכנס/יוצא בפייד כשהאמצע של הריבוע מתקרב לקצה המסך – לא נחתך ולא קופץ
-        const e = Math.max(0, Math.min(1, Math.min(Math.min(p.x, W - p.x) / (btn.offsetWidth * sc / 2 + 8), Math.min(p.y - top, bottom - p.y) / (btn.offsetHeight * sc / 2 + 8))));
-        if (e <= 0) { btn.hidden = true; continue; }
-        btn.style.opacity = o * e * fadeOut;
-        btn.style.pointerEvents = o * e * fadeOut < 0.6 ? 'none' : '';
-        btn.style.left = p.x + 'px';
-        btn.style.top = p.y + 'px';
-        show.add(c.join());
-      }
-    }
-    for (const [k, b] of dlBtns) if (!show.has(k)) b.hidden = true;
+    const c = map.getCenter();
+    dlHereCell = !areasMode && map.getZoom() >= 9 ? dlAll.find((x) => c.lng >= x[0] && c.lng < x[2] && c.lat >= x[1] && c.lat < x[3]) || null : null;
+    const el = $('lib-dl'), on = !!dlHereCell;
+    if (el.classList.contains('on') !== on) el.classList.toggle('on', on);
+    const btn = el.querySelector('button'), off = !navigator.onLine;
+    const t = off ? 'אין כאן מפה שמורה · צריך אינטרנט כדי להוריד' : 'להורדת מפות האזור';
+    if (btn.textContent !== t) btn.textContent = t;
+    btn.disabled = off;
   }
+  $('lib-dl').querySelector('button').addEventListener('click', () => { if (dlHereCell) enterAreasMode(dlHereCell); });
   // הגריד ידוע מראש ולא משתנה בזמן תנועה וזום: מחושב פעם אחת לכל השטח שאפשר להגיע אליו (המלבן של setMaxBounds),
   // ורק כשהאזורים השמורים משתנים – הריבועים החסרים מחושבים מחדש
   function buildGrids() {

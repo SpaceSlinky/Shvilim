@@ -383,13 +383,17 @@ section.open .lib-body { grid-template-rows: 1fr; }
 .cf-btns button { flex: 1; margin: 0; }
 .danger-btn { background: #c62828 !important; border-color: #c62828 !important; color: #fff !important; font-weight: 700; }
 
-/* אזור בלי מפה שמורה: טקסט לחיץ במרכז המסך */
-.dl-here { position: fixed; left: 50%; top: 42%; translate: -50% -50%; transition: opacity .2s; z-index: 6; width: max-content; padding: 6px 14px; border: 0; border-radius: 22px;
-  background: #fff; color: var(--green); font: inherit; font-size: 14px; font-weight: 500; box-shadow: 0 1px 8px rgba(0,0,0,.2);
-  white-space: pre; text-align: center; line-height: 1.4; }
-.dl-here:disabled { color: #666; font-weight: 500; }
-body.night .dl-here { background: #23282e; color: #81c784; }
-body.night .dl-here:disabled { color: #aaa; }
+/* אזור בלי מפה שמורה: שורה קטנה בדוק מעל "מסלולים" – נפתחת ונסגרת ברכות (לא קופצת בתנועת המפה) */
+.lib-dl { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .3s cubic-bezier(.22,1,.36,1), opacity .25s; }
+.lib-dl > div { overflow: hidden; min-height: 0; text-align: center; }
+.lib-dl.on { grid-template-rows: 1fr; opacity: 1; }
+section.open .lib-dl { grid-template-rows: 0fr; opacity: 0; }
+.lib-dl:not(.on) button, section.open .lib-dl button { pointer-events: none; }
+.lib-dl button { margin: 2px auto 4px; padding: 6px 14px; border: 0; border-radius: 22px; background: rgba(46,125,79,.1); color: var(--green);
+  font: inherit; font-size: 14px; font-weight: 500; }
+.lib-dl button:disabled { background: none; color: #777; }
+body.night .lib-dl button { background: rgba(129,199,132,.12); color: #81c784; }
+body.night .lib-dl button:disabled { background: none; color: #aaa; }
 
 /* עיצוב רשימת המסלולים: חלון למעלה, הרשימה נראית מתחתיו ומשתנה בזמן אמת */
 #style-dlg { margin: 12px auto auto; max-height: 56vh; overflow: hidden; padding: 14px 16px; }
@@ -470,7 +474,7 @@ body.night #controls .kmenu { background: transparent; box-shadow: none; }
 body.night .kmenu i { background: #ddd; }
 
 /* ===== כל הכפתורים – גלולה ===== */
-dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-cancel, #areas-dlg .ls-open, .back, .stop, .dl-here,
+dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-cancel, #areas-dlg .ls-open, .back, .stop,
 .seg, .dt-modes, .tgrp { border-radius: 999px; }
 
 /* פיתוח (זמני): נקודה קטנה משמאל למעלה */
