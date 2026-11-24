@@ -1,7 +1,7 @@
 /* Service Worker: שומר את האפליקציה, הספריות והגופנים לשימוש אופליין.
    נתוני המפה עצמם נשמרים ב-IndexedDB (ראו app.js).
    קבצי האפליקציה: מוגשים מהמטמון ומתעדכנים ברקע. ספריות וגופנים מ-CDN: מהמטמון בלבד אחרי הפעם הראשונה. */
-const CACHE = 'shvilim-v160';
+const CACHE = 'shvilim-v161';
 const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'router.js', 'elev.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png',
   'fonts/noto-sans-hebrew-hebrew.woff2', 'fonts/noto-sans-hebrew-latin.woff2', 'fonts/noto-sans-hebrew-latin-ext.woff2'];
@@ -14,6 +14,23 @@ const CDN_HOSTS = ['unpkg.com', 'protomaps.github.io', 's3.amazonaws.com'];
 // נתוני גובה, גופני המפה והספריות – במטמון נפרד שלא נמחק בעדכון גרסה (רק קבצי האפליקציה מתחלפים).
 // פעם הכול היה ב-CACHE, ונמחק בכל עדכון – כולל הגובה של האזורים שהורדו.
 const DATA = 'shvilim-data';
+// הורדת מפות ברקע (Background Fetch – ממשיכה גם כשהאפליקציה ברקע, המסך כבוי או שהיא נסגרה; התראה עם התקדמות):
+// תשובות Overpass נשמרות כאן עד שהאפליקציה נפתחת ומעבדת אותן; אריחי הגובה – ישר למטמון הנתונים
+const BG = 'shvilim-bg';
+async function bgStore(reg) {
+  const bg = await caches.open(BG), d = await caches.open(DATA);
+  for (const r of await reg.matchAll()) {
+    const res = await r.responseReady.catch(() => null);
+    if (res?.ok) await (r.request.url.includes('overpass') ? bg : d).put(r.request.url, res);
+  }
+  for (const c of await self.clients.matchAll()) c.postMessage('bg-done');
+}
+self.addEventListener('backgroundfetchsuccess', (e) => e.waitUntil(bgStore(e.registration)
+  .then(() => e.updateUI({ title: 'המפות הורדו – פתחו את שבילים כדי לשמור' }))));
+self.addEventListener('backgroundfetchfail', (e) => e.waitUntil(bgStore(e.registration)
+  .then(() => e.updateUI({ title: 'חלק מהמפות לא ירד – פתחו את שבילים להמשך' }))));
+self.addEventListener('backgroundfetchclick', (e) => e.waitUntil(self.clients.matchAll({ type: 'window' })
+  .then((cs) => (cs[0] ? cs[0].focus() : self.clients.openWindow('./')))));
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
@@ -31,7 +48,7 @@ self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const d = await caches.open(DATA);
     for (const k of await caches.keys()) {
-      if (k === CACHE || k === DATA) continue;
+      if (k === CACHE || k === DATA || k === BG) continue;
       // מעבירים מהמטמון הישן את מה שלא שייך לאפליקציה (גובה, גופנים, ספריות) – ורק אז מוחקים
       const old = await caches.open(k);
       for (const req of await old.keys()) {

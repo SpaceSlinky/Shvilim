@@ -42,6 +42,14 @@
     return out;
   }
 
+  // האריחים ש-prefetch מוריד (כולל אריח שוליים מכל צד) – להורדה ברקע
+  function prefetchUrls([w, s, e, nn]) {
+    const out = [];
+    for (let x = Math.floor(worldX(w) / 256) - 1; x <= Math.floor(worldX(e) / 256) + 1; x++)
+      for (let y = Math.floor(worldY(nn) / 256) - 1; y <= Math.floor(worldY(s) / 256) + 1; y++)
+        out.push(URL_T.replace('{z}', Z).replace('{x}', x).replace('{y}', y));
+    return out;
+  }
   async function prefetch(bbox) {
     const [w, s, e, nn] = bbox;
     const x0 = Math.floor(worldX(w) / 256), x1 = Math.floor(worldX(e) / 256);
@@ -130,6 +138,6 @@
     return { dist, ele, gain, loss, min: Math.min(...ele), max: Math.max(...ele), total };
   }
 
-  const Elev = { prefetch, profile, tileUrls, Z, lastError: '' };
+  const Elev = { prefetch, prefetchUrls, profile, tileUrls, Z, lastError: '' };
   root.Elev = Elev;
 })(typeof self !== 'undefined' ? self : globalThis);

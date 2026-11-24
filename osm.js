@@ -196,6 +196,14 @@ out center tags;`;
     try { await fetch(url + '?data=' + encodeURIComponent('[out:json];out count;'), { mode: 'no-cors', signal: AbortSignal.timeout(8000) }); return 'דחה (עמוס?)'; }
     catch { return navigator.onLine ? 'לא נגיש' : 'אין רשת'; }
   }
+  function fromJson(json, bbox) {
+    if (/error/i.test(json.remark || '')) throw new Error('השרת לא סיים');
+    const fc = clipToBox(convert(json), bbox);
+    fc.bbox = bbox;
+    return fc;
+  }
+  // הורדה ברקע (Background Fetch – רק GET, בלי גוף): אותה שאילתה בכתובת, מהשרת הראשון
+  const bgUrl = (bbox) => OVERPASS[0] + '?data=' + encodeURIComponent(query(bbox));
   /** הורדה: מנסים שרת אחרי שרת (ועד שני סבבים כשהשרתים עמוסים). signal – ביטול מבחוץ (למשל כשהמשתמש מבקש אזור אחר) */
   async function download(bbox, onProgress, signal) {
     let reasons = [];
@@ -216,9 +224,7 @@ out center tags;`;
           const json = await res.json();
           // שגיאה באמצע (זמן, זיכרון) מגיעה עם 200 ונתונים חלקיים – לא שומרים מפה חסרה
           if (/error/i.test(json.remark || '')) { busy = true; throw new Error('השרת לא סיים'); }
-          const fc = clipToBox(convert(json), bbox);
-          fc.bbox = bbox;
-          return fc;
+          return fromJson(json, bbox);
         } catch (e) {
           if (signal?.aborted) throw signal.reason;
           let r = e.name === 'AbortError' ? 'אין תשובה' : e.message;
@@ -289,7 +295,7 @@ out center tags;`;
     return best;
   }
 
-  const OSM = { query, convert, glyphRanges, download, trailColor, merge, canonColor, changedSince };
+  const OSM = { query, convert, fromJson, bgUrl, glyphRanges, download, trailColor, merge, canonColor, changedSince };
   if (typeof module !== 'undefined' && module.exports) module.exports = OSM;
   root.OSM = OSM;
 })(typeof self !== 'undefined' ? self : globalThis);

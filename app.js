@@ -545,24 +545,24 @@
   let dlErr = ''; // ההורדה האחרונה של אזור נכשלה – הסיבה מוצגת על הכפתור
   const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(r, ms))]);
   // quiet: עדכון ברקע בלי הודעות; area: אזור חדש – ההתקדמות על הכפתור במרכז המסך
-  async function downloadArea(bbox, { quiet = false, area = false, cells = null, batch = false } = {}) {
+  async function downloadArea(bbox, { quiet = false, area = false, cells = null, batch = false, pre = null } = {}) {
     if (dlJob) {
       if (quiet || !dlJob.quiet) return;
       dlJob.ctl.abort(new DOMException('הופסק', 'AbortError'));
       await dlJob.done;
     }
-    if (!navigator.onLine) return quiet || area ? undefined : toast('אין חיבור לאינטרנט');
+    if (!pre && !navigator.onLine) return quiet || area ? undefined : toast('אין חיבור לאינטרנט');
     const ctl = new AbortController();
     const job = { quiet, ctl };
-    job.done = runDownload(bbox, { quiet, area, cells, batch, signal: ctl.signal }).finally(() => { if (dlJob === job) dlJob = null; });
+    job.done = runDownload(bbox, { quiet, area, cells, batch, pre, signal: ctl.signal }).finally(() => { if (dlJob === job) dlJob = null; });
     dlJob = job;
     return job.done;
   }
-  async function runDownload(bbox, { quiet, area, cells, batch, signal }) {
+  async function runDownload(bbox, { quiet, area, cells, batch, pre, signal }) {
     const say = (m, ms) => { if (area) dlMsg = m; else if (!quiet) toast(m, ms); };
     if (area) { dlErr = ''; say('מוריד את מפות האזור…'); }
     try {
-      const fresh = await OSM.download(bbox, (m) => say(m, 120000), signal);
+      const fresh = pre || await OSM.download(bbox, (m) => say(m, 120000), signal); // pre – כבר ירד ברקע
       // אזור בלי שבילים ודרכים – לא שגיאה, פשוט אין מה להציג
       if (!fresh.features.length && !area) throw new Error('לא נמצאו נתונים באזור');
       const old = await db.get('mapdata').catch(() => null);
@@ -571,8 +571,8 @@
       await mapReady;
       setMapData(fc);
       say('שומר גופנים…', 60000);
-      // טעינה מוקדמת של הגופנים שהשמות דורשים – ה-Service Worker שומר אותם לאופליין
-      await withTimeout(Promise.all(OSM.glyphRanges(fc).map((r) =>
+      // טעינה מוקדמת של הגופנים שהשמות דורשים – ה-Service Worker שומר אותם לאופליין (אחרי הורדה ברקע – רק כשיש רשת)
+      if (navigator.onLine) await withTimeout(Promise.all(OSM.glyphRanges(fc).map((r) =>
         fetch(GLYPHS.replace('{fontstack}', encodeURIComponent(FONT[0])).replace('{range}', r)).catch(() => null))), 30000);
       say('שומר נתוני גובה…', 60000);
       await withTimeout(Elev.prefetch(bbox).catch(() => 0), 60000);
@@ -947,9 +947,56 @@
     try { dlWake = await navigator.wakeLock.request('screen'); dlWake.addEventListener('release', () => (dlWake = null)); } catch { /* לא נתמך */ }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) hiddenAt = Date.now();
+    if (document.hidden) { hiddenAt = Date.now(); if (batchQ && !batchQ.cancel && !batchQ.bg) handOff(batchQ); }
     else if (batchQ) holdScreen(true);
+    else resumeBatch();
   });
+  // הורדה ממש ברקע (Background Fetch, כרום באנדרואיד): כשיוצאים מהאפליקציה / המסך כבה באמצע – מה שנשאר עובר למערכת
+  // (התראה עם התקדמות; ממשיכה גם כשהאפליקציה נסגרה). השרת הראשון בלבד; התשובות נשמרות במטמון (sw.js) ומעובדות
+  // כשחוזרים לאפליקציה. מה שלא ירד שם – יורד כרגיל כשחוזרים
+  const swReg = () => navigator.serviceWorker?.getRegistration().catch(() => null) ?? Promise.resolve(null);
+  async function handOff(q) {
+    const reg = await swReg();
+    if (!reg?.backgroundFetch || q.cancel || q.done >= q.cells.length) return;
+    const cells = q.cells.slice(q.done);
+    const data = await caches.open('shvilim-data');
+    const tiles = [];
+    for (const u of new Set(cells.flatMap((c) => Elev.prefetchUrls(c)))) if (!(await data.match(u))) tiles.push(u);
+    const id = 'maps-' + Date.now();
+    try {
+      await reg.backgroundFetch.fetch(id, [...cells.map((c) => OSM.bgUrl(c)), ...tiles], {
+        title: cells.length > 1 ? `מוריד מפות של ${cells.length} משבצות` : 'מוריד את מפות האזור',
+        icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+      });
+    } catch (e) { return console.warn('background fetch', e); }
+    q.bg = id;
+    saveQueue(q);
+    dlJob?.ctl.abort(new DOMException('הופסק', 'AbortError')); // ההורדה בדף – נעצרת, הרקע ממשיך
+  }
+  // ממתינים שההורדה ברקע תיגמר (ההתקדמות – בשורת המידע)
+  async function waitBg(q) {
+    const reg = await swReg();
+    for (;;) {
+      const f = await reg?.backgroundFetch?.get(q.bg).catch(() => null);
+      if (!f || q.cancel) break;
+      if (!f.result) {
+        areasBusy = 'מוריד ברקע…' + (f.downloaded ? ` ${fmtSize(f.downloaded)}` : '');
+        renderAreasMap();
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (q.cancel) (await reg?.backgroundFetch?.get(q.bg).catch(() => null))?.abort();
+    delete q.bg;
+    saveQueue(q);
+  }
+  // התשובה של Overpass שירדה ברקע למשבצת (אם יש ותקינה)
+  async function takeBg(c) {
+    if (!self.caches) return null;
+    const cache = await caches.open('shvilim-bg'), u = OSM.bgUrl(c);
+    const res = await cache.match(u);
+    if (!res) return null;
+    try { return OSM.fromJson(await res.json(), c); } catch { return null; } finally { cache.delete(u); }
+  }
   const whenVisible = () => (!document.hidden ? Promise.resolve() : new Promise((r) => {
     const f = () => { if (!document.hidden) { document.removeEventListener('visibilitychange', f); r(); } };
     document.addEventListener('visibilitychange', f);
@@ -959,18 +1006,21 @@
     if (batchQ || areasBusy) return;
     if (!areasMode) enterAreasMode();
     batchQ = q; saveQueue(q);
+    if (q.bg) await waitBg(q);
     let retries = 0;
-    while (q.done < q.cells.length && !q.cancel) {
+    while (q.done < q.cells.length && !q.cancel && !q.bg) {
       await whenVisible();
-      if (!navigator.onLine) break;
+      if (q.bg) break;
       const c = q.cells[q.done], n = q.cells.length;
-      areasBusy = (q.kind === 'upd' ? 'מעדכן' : 'מוריד') + (n > 1 ? ` ${q.done + 1} מתוך ${n}…` : '…');
+      const pre = await takeBg(c);
+      if (!pre && !navigator.onLine) break;
+      areasBusy = (pre ? 'שומר' : q.kind === 'upd' ? 'מעדכן' : 'מוריד') + (n > 1 ? ` ${q.done + 1} מתוך ${n}…` : '…');
       renderAreasMap();
       holdScreen(true);
       const t0 = Date.now();
       dlErr = '';
-      await downloadArea(c, { area: true, cells: [c], batch: true });
-      if (q.cancel) break;
+      await downloadArea(c, { area: true, cells: [c], batch: true, pre });
+      if (q.cancel || q.bg) break; // עצרו / עבר להורדה ברקע
       // נקטע כי הדף הוסתר (מסך כבוי / יצאו מהאפליקציה) או שהרשת נפלה – אותה משבצת שוב, כשחוזרים
       if (dlErr && (document.hidden || hiddenAt >= t0 || !navigator.onLine) && retries++ < 3) continue;
       retries = 0;
@@ -983,6 +1033,7 @@
     const n = q.cells.length;
     if (q.cancel) { saveQueue(null); renderAreasMap(); return exitAreasMode(); }
     renderAreasMap();
+    if (q.bg) return void setTimeout(resumeBatch); // עבר להורדה ברקע – ממתינים לה (ומעבדים כשהדף חי)
     if (q.done < n) return toast('אין אינטרנט – ההורדה תמשיך כשהחיבור יחזור', 4000); // התור נשאר שמור
     saveQueue(null);
     const upd = q.kind === 'upd';
@@ -992,9 +1043,10 @@
   function resumeBatch() {
     let q = null;
     try { q = JSON.parse(localStorage.getItem('dlQueue')); } catch { /* ignore */ }
-    if (q?.cells?.length && q.done < q.cells.length && navigator.onLine && !batchQ) runBatch(q);
+    if (q?.cells?.length && q.done < q.cells.length && (navigator.onLine || q.bg) && !batchQ) runBatch(q);
   }
   addEventListener('online', resumeBatch);
+  navigator.serviceWorker?.addEventListener('message', (e) => { if (e.data === 'bg-done' && !document.hidden && !batchQ) resumeBatch(); });
   $('ab-upd').addEventListener('click', () => {
     const cells = dlAreas().filter((a) => areasUpd.has(a.b.join())).map((a) => a.b);
     if (cells.length) runBatch({ kind: 'upd', cells, done: 0, fails: 0, err: '' });
