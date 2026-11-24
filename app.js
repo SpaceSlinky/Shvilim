@@ -954,7 +954,7 @@
   }
   // כפתור הורדה על כל ריבוע חסר שרואים – באמצע שלו, בשורה אחת; כולם מופיעים יחד בפייד כשהריבוע תופס 45–60% מרוחב המסך
   let dlCell = null, dlAll = []; // dlAll – כל הריבועים החסרים (קבוע, מחושב מראש; משתנה רק כשהאזורים השמורים משתנים)
-  const DL_SHOW = [0.45, 0.6];
+  const DL_SHOW = [0.33, 0.48];
   const dlBtns = new Map(); // מפתח ריבוע → כפתור
   function dlButton(c) {
     const key = c.join();
@@ -974,7 +974,7 @@
     return b;
   }
   const dlLabel = () => dlMsg || (!navigator.onLine ? 'אין מפה שמורה לאזור הזה · צריך אינטרנט כדי להוריד'
-    : dlErr ? `ההורדה נכשלה:\n${dlErr}\n⬇ לנסות שוב` : '⬇ להורדת מפות האזור');
+    : dlErr ? `ההורדה נכשלה:\n${dlErr}\nלנסות שוב` : 'להורדת מפות האזור');
   function placeDlHere() {
     if (areasMode) { for (const b of dlBtns.values()) b.hidden = true; return; }
     const W = innerWidth, H = innerHeight, top = 110, bottom = H - ($('dock')?.offsetHeight || 120) - 10;
@@ -984,8 +984,15 @@
     if (o > 0) {
       const v = map.getBounds();
       const cells = dlMsg && dlCell ? [dlCell] : dlAll.filter((c) => c[2] >= v.getWest() && c[0] <= v.getEast() && c[3] >= v.getSouth() && c[1] <= v.getNorth());
+      // מקרוב (הריבוע רחב מהמסך) הכפתור של הריבוע שבמרכז "נדבק" למרכז המסך, והשאר נעלמים בפייד
+      const stick = Math.max(0, Math.min(1, (cw / W - 1) / 0.5)), mid = [W / 2, (top + bottom) / 2];
+      const cc = map.unproject(mid);
       for (const c of cells) {
         const p = map.project([(c[0] + c[2]) / 2, (c[1] + c[3]) / 2]);
+        const here = cc.lng >= c[0] && cc.lng < c[2] && cc.lat >= c[1] && cc.lat < c[3];
+        if (here && stick) { p.x += (mid[0] - p.x) * stick; p.y += (mid[1] - p.y) * stick; }
+        const fadeOut = here ? 1 : 1 - stick;
+        if (fadeOut <= 0) continue;
         if (p.x < 0 || p.x > W || p.y < top || p.y > bottom) continue; // באמצע שלו – רק כשהאמצע על המסך
         const btn = dlButton(c);
         btn.hidden = false;
@@ -997,8 +1004,8 @@
         // נכנס/יוצא בפייד כשהאמצע של הריבוע מתקרב לקצה המסך – לא נחתך ולא קופץ
         const e = Math.max(0, Math.min(1, Math.min(Math.min(p.x, W - p.x) / (btn.offsetWidth * sc / 2 + 8), Math.min(p.y - top, bottom - p.y) / (btn.offsetHeight * sc / 2 + 8))));
         if (e <= 0) { btn.hidden = true; continue; }
-        btn.style.opacity = o * e;
-        btn.style.pointerEvents = o * e < 0.6 ? 'none' : '';
+        btn.style.opacity = o * e * fadeOut;
+        btn.style.pointerEvents = o * e * fadeOut < 0.6 ? 'none' : '';
         btn.style.left = p.x + 'px';
         btn.style.top = p.y + 'px';
         show.add(c.join());
