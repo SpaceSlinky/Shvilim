@@ -390,11 +390,9 @@ section.open .lib-body { grid-template-rows: 1fr; }
 .lib-dl:not(.on) button { pointer-events: none; }
 .ld-row { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 2px 0 6px; font-size: 14px; }
 .ld-t { color: #1e6fb8; font-weight: 500; }
-.ld-go { padding: 5px 16px; border: 0; border-radius: 999px; background: var(--green); color: #fff; font: inherit; font-size: 14px; font-weight: 600; }
 .ld-x { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.06); color: inherit; font-size: 14px; }
 body.night .ld-t { color: #90caf9; }
-body.night .ld-go { background: #2e7d4f; }
-body.night .ld-x { background: rgba(255,255,255,.08); }
+body.night body.night .ld-x { background: rgba(255,255,255,.08); }
 
 /* עיצוב רשימת המסלולים: חלון למעלה, הרשימה נראית מתחתיו ומשתנה בזמן אמת */
 #style-dlg { margin: 12px auto auto; max-height: 56vh; overflow: hidden; padding: 14px 16px; }
@@ -556,12 +554,17 @@ body.night .dt-modes button.on { background: #ad1457; }
 /* מפות שמורות: הדוק במצב "areas" */
 .ab-info { text-align: center; font-size: 15px; line-height: 1.4; padding: 8px 6px 2px; min-height: 1.4em; }
 .ab-info b { font-weight: 700; }
-#dock[data-mode="areas"] .credits { margin: 8px 0 2px; font-size: 10.5px; color: #777; text-align: center; }
-body.night #dock[data-mode="areas"] .credits { color: #999; }
-body.areas-mode .maplibregl-ctrl-scale { display: none; }
-#controls #btn-areas.pressed svg { fill: none; stroke: #fff; }
+#dock .lib-body .credits { margin: 8px 0 2px; font-size: 10.5px; color: #777; text-align: center; }
+body.night #dock .lib-body .credits { color: #999; }
 #cf-title { text-align: center; }
 #photo-dlg { padding: 0; width: min(94vw, 560px); overflow: hidden; background: #000; }
 #photo-img { display: block; width: 100%; max-height: 75vh; object-fit: contain; background: #000; }
 #photo-cap { margin: 0; padding: 8px 12px; text-align: center; font-size: 14px; color: #eee; }
 .info-photos { border: 0; background: none; padding: 0; cursor: pointer; }
+
+/* שורת המפה השמורה בחלון המידע: "בחירה" – לניהול (עדכון, מחיקה) */
+.info-area { color: #666; font-size: 13px; }
+.info-sel { margin-inline-start: 8px; padding: 2px 10px; border: 0; border-radius: 999px; background: rgba(46,125,79,.12); color: var(--green); font: inherit; font-size: 13px; font-weight: 600; }
+body.night .info-area { color: #aaa; }
+body.night .info-sel { background: rgba(129,199,132,.15); color: #81c784; }
+.ld-t { cursor: pointer; }
