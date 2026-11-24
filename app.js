@@ -122,7 +122,7 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ENV_FADE(0.1) } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], minzoom: 8.5, maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
-      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32] } },
+      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
       { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 2.5, 1.5] } },
       { id: 'ad-label', type: 'symbol', source: 'areas-del', filter: ['==', ['geometry-type'], 'Point'],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-size': 14, 'text-allow-overlap': true },
@@ -789,22 +789,29 @@
   const fmtSize = (n) => '\u2066' + (n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB') + '\u2069'; // בידוד: "KB 1" → "1 KB"
   // ---------- מפות שמורות (כפתור דלוק/כבוי בכלים): המשבצות שהורדו על המפה; בחירה מרובה (נגיעה – בוחרת, נגיעה נוספת – מבטלת),
   // מחיקה של הנבחרות, ו"עדכון" כשב-OSM נוספו/השתנו שבילים או דרכים מאז שהמשבצת הורדה (בדיקה אחת ל-Overpass בכניסה).
-  // במצב הזה רק מה שרלוונטי על המפה: רקע, ים וגבול, הגריד והמשבצות ושמות האזורים – בלי שבילים, שמות יישובים ומידע בנגיעה
+  // במצב הזה המפה לא פעילה: בלי מידע בנגיעה, תוספות למסלול וכפתורי הורדה; שמות היישובים מעומעמים
   let areasMode = false;
   const areaSel = new Set(); // מפתחות המשבצות הנבחרות (b.join())
   let areasUpd = new Set(), areasChecking = false, areasBusy = ''; // משבצות שיש להן עדכון; בדיקה / עדכון שרצים
-  const AREAS_KEEP = /^(bg|base-sat|sat-top|ov-sea|ov-coast|ov-border|ovh-(coast|border|sea)|ad-.*|dl-grid.*)$/;
-  const areasHidden = new Map();
+  // המפה עצמה נשארת (מקרוב רואים את השבילים בתוך המשבצות – בלי מידע בנגיעה), שמות היישובים מעומעמים, והמעטפת הרגילה
+  // מוסתרת (המשבצות במקומה)
+  const AREAS_HIDE = /^env-/, AREAS_DIM = /^(ov-city|ovh-place|place-major|place-minor)$/;
+  const areasHidden = new Map(), areasDimmed = new Map();
   function hideForAreas() {
     for (const l of map.getStyle().layers) {
-      if (AREAS_KEEP.test(l.id)) continue;
-      if (!areasHidden.has(l.id)) areasHidden.set(l.id, map.getLayoutProperty(l.id, 'visibility') || 'visible');
-      map.setLayoutProperty(l.id, 'visibility', 'none');
+      if (AREAS_HIDE.test(l.id)) {
+        if (!areasHidden.has(l.id)) areasHidden.set(l.id, map.getLayoutProperty(l.id, 'visibility') || 'visible');
+        map.setLayoutProperty(l.id, 'visibility', 'none');
+      } else if (AREAS_DIM.test(l.id)) {
+        if (!areasDimmed.has(l.id)) areasDimmed.set(l.id, map.getPaintProperty(l.id, 'text-opacity'));
+        map.setPaintProperty(l.id, 'text-opacity', 0.35);
+      }
     }
   }
   function restoreAfterAreas() {
     for (const [id, v] of areasHidden) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v);
-    areasHidden.clear();
+    for (const [id, v] of areasDimmed) if (map.getLayer(id)) map.setPaintProperty(id, 'text-opacity', v ?? 1);
+    areasHidden.clear(); areasDimmed.clear();
     applyLayers();
   }
   const sizeOf = (boxes) => {
