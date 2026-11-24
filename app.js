@@ -1071,15 +1071,11 @@
     const colors = [...new Set(trails.map((f) => f.properties.c))];
     const trailName = trails.map((f) => f.properties.n).find(Boolean) || '';
     const squares = colors.map((c) => `<span class="sq" style="background:${esc(c)}"></span>`).join('');
-    // נקודת עניין / נחל עם שם – אייקון מצלמה בסוף השורה שלה (משמאל): תמונות שאנשים צילמו
-    const named = navigator.onLine && feats.find((f) => (f.properties.k === 'poi' || f.properties.k === 'water') && f.properties.n);
+    // נקודת עניין / נחל שב-OSM מקושרים לתמונה שלהם (image / wikimedia_commons / wikidata / wikipedia) – אייקון מצלמה בסוף
+    // השורה; נגיעה מציגה את התמונה בתוך האפליקציה. (פעם: חיפוש בגוגל מפות לפי השם – הרבה פעמים מצא מקום אחר, בוטל)
+    const named = navigator.onLine && feats.find((f) => (f.properties.k === 'poi' || f.properties.k === 'water') && f.properties.ph);
     let cam = '';
-    if (named) {
-      // גוגל מפות: חיפוש השם בלבד, ממוקד במקום שלו – מוצא את המקום עצמו (ולא יישוב בשם דומה) ופותח את הכרטיס עם התמונות.
-      // (גוגל תמונות עם "השם + היישוב הקרוב" – בוטל: היישוב ניצח, למשל "צנירי הכרמל בית אורן" הביא את בית אורן)
-      const [lon, lat] = named.geometry.type === 'Point' ? named.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
-      cam = `<a class="info-photos" href="https://www.google.com/maps/search/${encodeURIComponent(named.properties.n)}/@${lat.toFixed(6)},${lon.toFixed(6)},17z" target="_blank" rel="noopener" aria-label="תמונות">${CAM_SVG}</a>`;
-    }
+    if (named) cam = `<button class="info-photos" data-ph="${esc(named.properties.ph)}" data-n="${esc(named.properties.n || '')}" aria-label="תמונה">${CAM_SVG}</button>`;
     const seen = new Set();
     const rows = [];
     let gotSquares = false;
@@ -1105,8 +1101,45 @@
     if (colors.length && !gotSquares) rows.unshift(`<div class="info-row">${trailName ? `<b>${esc(trailName)}</b> ` : ''}שביל${squares}</div>`);
     if (!rows.length) return;
     if (cam) rows.push(`<div class="info-row">${cam}</div>`);
-    new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
+    const pop = new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
+    pop.getElement().querySelector('.info-photos')?.addEventListener('click', (ev) => { const d = ev.currentTarget.dataset; showPhoto(d.ph, d.n); });
   });
+  // התמונה מהתגית: קישור ישיר, קובץ בוויקישיתוף, ויקינתונים (P18) או ויקיפדיה (התמונה הראשית של הערך)
+  const commonsFile = (f) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f.replace(/^(File|קובץ):/i, ''))}?width=900`;
+  async function photoUrl(ph) {
+    const [kind, ...rest] = ph.split(':'), v = rest.join(':').trim();
+    if (kind === 'img') {
+      const m = /commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/i.exec(v);
+      return m ? commonsFile(decodeURIComponent(m[1])) : v;
+    }
+    if (kind === 'c') return /^category:/i.test(v) ? null : commonsFile(v);
+    if (kind === 'wd') {
+      const q = v.split(';')[0];
+      const j = await (await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(q)}.json`)).json();
+      const ent = j.entities?.[q], f = ent?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+      if (f) return commonsFile(f);
+      const he = ent?.sitelinks?.hewiki?.title || ent?.sitelinks?.enwiki?.title;
+      return he ? photoUrl(`wp:${ent.sitelinks.hewiki ? 'he' : 'en'}:${he}`) : null;
+    }
+    if (kind === 'wp') {
+      const [lang, ...t] = v.includes(':') ? v.split(':') : ['he', v];
+      const j = await (await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t.join(':'))}`)).json();
+      return j.originalimage?.source || j.thumbnail?.source || null;
+    }
+    return null;
+  }
+  async function showPhoto(ph, name) {
+    toast('טוען תמונה…', 1500);
+    let url = null;
+    try { url = await photoUrl(ph); } catch { /* ignore */ }
+    if (!url) return toast('אין תמונה זמינה למקום הזה', 2500);
+    const img = $('photo-img');
+    img.onerror = () => { $('photo-dlg').close(); toast('לא הצלחתי לטעון את התמונה', 2500); };
+    img.src = url;
+    $('photo-cap').textContent = name || '';
+    $('photo-dlg').showModal();
+  }
+  $('photo-dlg').addEventListener('click', () => $('photo-dlg').close());
   const CAM_SVG = '<svg viewBox="0 0 24 24"><path d="M4 8h3.5l1.5-2.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 

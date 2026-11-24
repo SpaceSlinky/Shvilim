@@ -49,6 +49,9 @@ out center tags;`;
   // התגים המקוריים של הסימון – מוצגים בהקשה על שביל
   const tagInfo = (t) => Object.fromEntries([['o', t['osmc:symbol']], ['cl', t.colour], ['ref', t.ref]].filter(([, v]) => v));
   const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  // תמונה של המקום עצמו, מהתגיות ב-OSM (רק כשמישהו קישר): image > wikimedia_commons > wikidata > wikipedia
+  const photoRef = (t) => (t.image ? 'img:' + t.image : t.wikimedia_commons ? 'c:' + t.wikimedia_commons
+    : t.wikidata ? 'wd:' + t.wikidata : t.wikipedia ? 'wp:' + t.wikipedia : '');
 
   function trailColor(t) {
     const osmc = (t['osmc:symbol'] || '').toLowerCase();
@@ -95,6 +98,7 @@ out center tags;`;
         add('Point', [r6(el.center.lon), r6(el.center.lat)], { k: 'poi', t: 'parking', ...(n ? { n } : {}) });
       } else if (el.type === 'way') {
         const props = t.waterway ? { k: 'water' } : { k: 'road', r: ROAD_CLASS[t.highway] || 'minor', h: t.highway };
+        if (t.waterway && n && photoRef(t)) props.ph = photoRef(t);
         if (!t.waterway) {
           if (t.foot === 'no' || t.access === 'no' || t.access === 'private') props.fn = 1;
           // שביל ייעודי לאופניים (סינגל) – בתכנון הליכה משתמשים בו רק אם ביקשו
@@ -118,6 +122,7 @@ out center tags;`;
         if (!kind) continue;
         const props = { k: 'poi', t: kind };
         if (n) props.n = n;
+        if (photoRef(t)) props.ph = photoRef(t);
         const ele = parseFloat(String(t.ele || '').replace(',', '.'));
         if (kind === 'peak' && Number.isFinite(ele)) props.e = Math.round(ele);
         add('Point', p, props);
