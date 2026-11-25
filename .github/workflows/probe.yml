@@ -5,7 +5,8 @@ jobs:
   q:
     runs-on: ubuntu-latest
     steps:
-      - run: |
+      - shell: bash {0}
+        run: |
           Q='[out:json][timeout:60];way(32.720,35.030,32.740,35.060)["highway"~"path|footway|track|cycleway"]->.w;.w out tags;relation(bw.w)["route"];out tags;'
           for u in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do
             curl -sS -m 120 -A "shvilim-probe/1.0" -w "\nHTTP %{http_code}\n" "$u" --data-urlencode "data=$Q" -o o.json; head -c 300 o.json; echo
