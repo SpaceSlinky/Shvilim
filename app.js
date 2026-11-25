@@ -3324,7 +3324,12 @@
       layerPrefs.sat = f;
       applyLayers();
     };
-    tr.addEventListener('pointerdown', (e) => { down = true; tr.setPointerCapture(e.pointerId); at(e); });
+    // רק מהידית (פעם: נגיעה בכל מקום על הקו הזיזה – נגיעות בטעות): נגיעה רחוקה מהידית לא עושה כלום
+    tr.addEventListener('pointerdown', (e) => {
+      const r = tr.getBoundingClientRect(), y = r.top + sliderVal() * r.height;
+      if (Math.abs(e.clientY - y) > 22) return;
+      down = true; tr.setPointerCapture(e.pointerId);
+    });
     tr.addEventListener('pointermove', (e) => down && at(e));
     tr.addEventListener('pointerup', () => (down = false));
     tr.addEventListener('pointercancel', () => (down = false));
