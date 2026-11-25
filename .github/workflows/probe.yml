@@ -1,0 +1,22 @@
+# זמני – בדיקת נתוני OSM (נמחק אחרי הבדיקה)
+name: probe
+on: workflow_dispatch
+jobs:
+  q:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash {0}
+        run: |
+          Q='[out:json][timeout:90];relation(32.70,34.98,32.79,35.10)["route"];out tags;relation(32.70,34.98,32.79,35.10)["route"]["name"~"שוויצריה"];way(r);out tags;'
+          for u in https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass-api.de/api/interpreter; do
+            curl -sS -m 150 -A "shvilim-probe/1.0" "$u" --data-urlencode "data=$Q" -o o.json
+            python3 -c "import json;json.load(open('o.json'))" 2>/dev/null && break
+          done
+          python3 - <<'PY'
+          import json
+          d=json.load(open('o.json'))
+          K=('highway','name','name:he','bicycle','foot','mtb:scale','route','colour','osmc:symbol','network','ref','timestamp')
+          for e in d['elements']:
+              t=e.get('tags',{})
+              print(e['type'],e['id'],{k:v for k,v in t.items() if k in K})
+          PY
