@@ -122,19 +122,21 @@
       { id: 'env-fill', type: 'fill', source: 'areas-env', filter: ['==', ['geometry-type'], 'Polygon'], maxzoom: 11,
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9.5, 0.15, 10.3, 0.12, 11, 0] } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11,
-        layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1.6, 'line-opacity': ENV_FADE(0.9) } },
+        layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 2.5, 1.5] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 1.8, 1] } },
       // הגריד תמיד על המפה וידוע מראש (buildGrids – לא מתעדכן בזום ובתנועה): מרחוק – 0.6°, ומזום ~8.4 הוא מתחלף
       // בפייד בריבועי ההורדה הרגילים (רק החסרים)
       { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
         paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8.4, 0, 9.2, 0.55] } },
-      // משבצות שנבחרו להורדה – לבנות; בהורדה – מהבהבות (blinkBusy) עם "בהורדה" בתוכן
-      { id: 'dl-tap-fill', type: 'fill', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.55 } },
-      { id: 'dl-tap-line', type: 'line', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffffff', 'line-width': 2 } },
+      // משבצות שנבחרו להורדה – לבנות; זו שיורדת עכשיו – לבנה עם "בהורדה", שאחריה בתור – רק קו מתאר עם "ממתין"
+      // (פעם: הבהוב – "נראה לא טוב")
+      { id: 'dl-tap-fill', type: 'fill', source: 'dl-tap', filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['!=', ['get', 'q'], 2]],
+        paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.5 } },
+      { id: 'dl-tap-line', type: 'line', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffffff', 'line-width': 1 } },
       { id: 'dl-busy-label', type: 'symbol', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.4,
-        layout: { 'text-field': 'בהורדה', 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
-        paint: { 'text-color': '#1f5f3a', 'text-halo-color': '#fff', 'text-halo-width': 1.4 } },
+        layout: { 'text-field': ['case', ['==', ['get', 'q'], 1], 'בהורדה…', 'ממתין'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
+        paint: { 'text-color': '#2b3035', 'text-halo-color': 'rgba(255,255,255,.7)', 'text-halo-width': 1 } },
       ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 9.4,
         paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
@@ -869,7 +871,7 @@
       return ask(batchQ.kind === 'upd' ? 'לעצור את העדכון?' : 'לעצור את ההורדה?', 'עצירה', stopBatch);
     }
     const c = dlAll.find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
-    if (!c) return;
+    if (!c || !canPick(c)) return;
     e.shvSel = true;
     const k = c.join();
     areaSel.clear();
@@ -1059,22 +1061,9 @@
     placeDlHere.sig = sig;
     map.getSource('dl-tap')?.setData({ type: 'FeatureCollection', features: [
       ...[...dlSel].map((k) => box(keyCell(k))),
-      ...queued.map((c) => ({ ...box(c), properties: { q: 1 } })),
-      ...queued.map((c) => ({ type: 'Feature', properties: { q: 1 }, geometry: { type: 'Point', coordinates: [(c[0] + c[2]) / 2, (c[1] + c[3]) / 2] } })),
+      ...queued.map((c, i) => ({ ...box(c), properties: { q: i ? 2 : 1 } })),
+      ...queued.map((c, i) => ({ type: 'Feature', properties: { q: i ? 2 : 1 }, geometry: { type: 'Point', coordinates: [(c[0] + c[2]) / 2, (c[1] + c[3]) / 2] } })),
     ] });
-    blinkBusy(queued.length > 0);
-  }
-  // המשבצות שבהורדה מהבהבות (שקיפות המילוי לפי sin), כל עוד יש הורדה
-  function blinkBusy(on) {
-    cancelAnimationFrame(blinkBusy.raf);
-    const op = (v) => ['case', ['==', ['get', 'q'], 1], v, 0.55];
-    if (!on) { map.getLayer('dl-tap-fill') && map.setPaintProperty('dl-tap-fill', 'fill-opacity', 0.55); return; }
-    let last = 0;
-    const step = (t) => {
-      if (t - last > 60 && map.getLayer('dl-tap-fill')) { last = t; map.setPaintProperty('dl-tap-fill', 'fill-opacity', op(0.15 + 0.5 * (0.5 + 0.5 * Math.sin(t / 260)))); }
-      blinkBusy.raf = requestAnimationFrame(step);
-    };
-    blinkBusy.raf = requestAnimationFrame(step);
   }
   // הגריד ידוע מראש ולא משתנה בזמן תנועה וזום: מחושב פעם אחת לכל השטח שאפשר להגיע אליו (המלבן של setMaxBounds),
   // ורק כשהאזורים השמורים משתנים – הריבועים החסרים מחושבים מחדש
@@ -1084,25 +1073,16 @@
     const coarse = [];
     for (const { m } of GRID_LEVELS) {
       const st = m * CELL;
-      if (landCells) { // רק ריבועים גדולים שיש בהם יבשה
-        const big = new Set([...landCells].map((k) => k.split(',').map((v) => Math.floor(+v / m)).join(',')));
-        for (const k of big) {
-          const [bi, bj] = k.split(',').map(Number), x0 = +(bi * st).toFixed(4), y0 = +(bj * st).toFixed(4), x1 = +((bi + 1) * st).toFixed(4), y1 = +((bj + 1) * st).toFixed(4);
-          coarse.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]] } });
-        }
-        continue;
-      }
       const x0 = Math.floor(w / st) * st, x1 = Math.ceil(e / st) * st, y0 = Math.floor(so / st) * st, y1 = Math.ceil(n / st) * st;
       for (let x = x0; x <= x1 + 1e-9; x += st) coarse.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[+x.toFixed(4), y0], [+x.toFixed(4), y1]] } });
       for (let y = y0; y <= y1 + 1e-9; y += st) coarse.push({ type: 'Feature', properties: { m }, geometry: { type: 'LineString', coordinates: [[x0, +y.toFixed(4)], [x1, +y.toFixed(4)]] } });
     }
     map.getSource('dl-grid-c')?.setData({ type: 'FeatureCollection', features: coarse });
-    // ריבוע חסר = יש בו חלק שלא מכוסה במפות שהורדו (כולן יחד); פס דק (~300 מ') לא נחשב. רק משבצות עם יבשה בישראל
-    // וביו"ש (land.json – tools/land_cells.py): בלי ים ובלי מה שמחוץ לגבולות
+    // ריבוע חסר = יש בו חלק שלא מכוסה במפות שהורדו (כולן יחד); פס דק (~300 מ') לא נחשב. הגריד – על כל המפה; לבחור
+    // אפשר רק משבצת עם יבשה בישראל וביו"ש (canPick, land.json)
     dlAll = [];
     for (let i = Math.floor(w / CELL); i < Math.ceil(e / CELL); i++)
       for (let j = Math.floor(so / CELL); j < Math.ceil(n / CELL); j++) {
-        if (landCells && !landCells.has(i + ',' + j)) continue;
         const c = cellBox(i, j);
         if (areas.some((a) => covers(a.b, c))) continue;
         let left = [c];
@@ -1113,8 +1093,9 @@
       geometry: { type: 'LineString', coordinates: [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]] } })) });
   }
   function checkArea() { buildGrids(); placeDlHere(); }
-  let landCells = null; // Set של "i,j"
-  fetch('land.json').then((r) => r.json()).then((j) => { landCells = new Set(j.cells.map((c) => c.join(','))); mapReady.then(checkArea); }).catch(() => {});
+  let landCells = null; // Set של "i,j" – משבצות עם יבשה בישראל וביו"ש (tools/land_cells.py)
+  fetch('land.json').then((r) => r.json()).then((j) => { landCells = new Set(j.cells.map((c) => c.join(','))); }).catch(() => {});
+  const canPick = (c) => !landCells || landCells.has(Math.round(c[0] / CELL) + ',' + Math.round(c[1] / CELL)); // בלי ים ובלי מחוץ לגבולות
   map.on('resize', checkArea);
   addEventListener('online', placeDlHere);
   addEventListener('offline', placeDlHere);
@@ -3059,6 +3040,8 @@
     ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
     ...GRID_LEVELS.map(({ m }) => ['dl-grid-' + m, 'line-color', '#6b6470', '#9aa3ab']),
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
+    ['dl-busy-label', 'text-color', '#2b3035', '#ffffff'],
+    ['dl-busy-label', 'text-halo-color', 'rgba(255,255,255,.7)', 'rgba(0,0,0,.45)'],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
     ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
       .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
