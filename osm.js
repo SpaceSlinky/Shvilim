@@ -114,10 +114,14 @@ out center tags;`;
         const segs = lines(el.geometry);
         segs.forEach((c) => add('LineString', c, props));
         // שביל שהסימון שלו רשום על הדרך עצמה (ולא כמסלול) – מציירים גם כשביל מסומן
+        // כמה צבעים על אותה דרך ("red;blue" – שבילים משותפים): קו לכל צבע (פעם – צבע לא מוכר, סגול)
         if (!t.waterway && (t['osmc:symbol'] || t.colour)) {
-          const tp = { k: 'trail', c: trailColor(t), ...tagInfo(t), w: 1 };
-          if (n) tp.n = n;
-          segs.forEach((c) => add('LineString', c, tp));
+          const cols = String(t.colour || '').split(';').map((x) => x.trim()).filter(Boolean);
+          for (const col of cols.length > 1 ? cols : [null]) {
+            const tp = { k: 'trail', c: col ? trailColor({ colour: col }) : trailColor(t), ...tagInfo(t), w: 1 };
+            if (n) tp.n = n;
+            segs.forEach((c) => add('LineString', c, tp));
+          }
         }
       } else if (el.type === 'node') {
         const p = [r6(el.lon), r6(el.lat)];
