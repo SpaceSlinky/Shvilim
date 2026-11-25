@@ -57,7 +57,7 @@
   const road = (r) => ['all', k('road'), ['==', ['get', 'r'], r]];
   // רמות הגריד המאוחד: m = כמה ריבועים בצלע; op = עצירות [זום, שקיפות] – נכנס כשהרמה שמעליו יוצאת (פייד מוצלב)
   const GRID_LEVELS = [
-    { m: 6, op: [5, 0, 5.4, 0.5, 8.4, 0.5, 9.2, 0] }, // 0.6° – שלוש עמודות לרוחב כל ישראל, קבוע מהזום הכי רחוק
+    { m: 6, op: [5, 0, 5.4, 0.4, 8.4, 0.4, 9.2, 0] }, // 0.6° – שלוש עמודות לרוחב כל ישראל, קבוע מהזום הכי רחוק
   ];
   const zw = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 11, a, 16, b];
   // כמו zw, אבל הערך בכל זום מחושב לפי המאפיינים של הקו (fn מקבל את הרוחב הבסיסי)
@@ -122,23 +122,23 @@
       { id: 'env-fill', type: 'fill', source: 'areas-env', filter: ['==', ['geometry-type'], 'Polygon'], maxzoom: 11,
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9.5, 0.15, 10.3, 0.12, 11, 0] } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11,
-        layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 1, 'line-opacity': ENV_FADE(0.9) } },
+        layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 0.6, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 1.8, 1] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 1.4, 0.6] } },
       // הגריד תמיד על המפה וידוע מראש (buildGrids – לא מתעדכן בזום ובתנועה): מרחוק – 0.6°, ומזום ~8.4 הוא מתחלף
       // בפייד בריבועי ההורדה הרגילים (רק החסרים)
       { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
-        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8.4, 0, 9.2, 0.55] } },
+        paint: { 'line-color': '#6b6470', 'line-width': 0.6, 'line-dasharray': [4, 4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8.4, 0, 9.2, 0.4] } },
       // משבצות שנבחרו להורדה – לבנות; זו שיורדת עכשיו – לבנה עם "בהורדה", שאחריה בתור – רק קו מתאר עם "ממתין"
       // (פעם: הבהוב – "נראה לא טוב")
-      { id: 'dl-tap-fill', type: 'fill', source: 'dl-tap', filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['!=', ['get', 'q'], 2]],
-        paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.25 } },
-      { id: 'dl-tap-line', type: 'line', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffffff', 'line-width': 1 } },
+      { id: 'dl-tap-fill', type: 'fill', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.12 } },
+      { id: 'dl-tap-line', type: 'line', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffffff', 'line-width': 0.6 } },
       { id: 'dl-busy-label', type: 'symbol', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.4,
         layout: { 'text-field': ['case', ['==', ['get', 'q'], 1], 'בהורדה…', 'ממתין'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
         paint: { 'text-color': '#2b3035', 'text-halo-color': 'rgba(255,255,255,.7)', 'text-halo-width': 1 } },
       ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 9.4,
-        paint: { 'line-color': '#6b6470', 'line-width': 1, 'line-dasharray': [4, 3], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
+        paint: { 'line-color': '#6b6470', 'line-width': 0.6, 'line-dasharray': [4, 4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
       { id: 'water', type: 'line', source: 'osm', filter: k('water'),
         paint: { 'line-color': '#5aa9e6', 'line-width': zw(0.35, 1.3), 'line-opacity': 0.85 } },
       // דרכים

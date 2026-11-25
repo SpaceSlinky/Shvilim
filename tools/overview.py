@@ -390,6 +390,9 @@ def lines(els, tol, prec):
     return res
 
 
+PONDS = (35.3, 30.95, 35.65, 31.3)  # מלבן בריכות האידוי של ים המלח (w, s, e, n)
+
+
 def from_pbf(path):
     """קובץ מוכן של Geofabrik (ישראל ופלסטין): יישובים, ודרכי הגבול של IL ו-PS – בלי שרת ציבורי עמוס"""
     import osmium
@@ -418,7 +421,7 @@ def from_pbf(path):
     class H(osmium.SimpleHandler):
         def __init__(self):
             super().__init__()
-            self.places, self.il, self.nb = [], [], {}
+            self.places, self.il, self.nb, self.ponds = [], [], {}, []
 
         def node(self, n):
             t = n.tags
@@ -426,6 +429,15 @@ def from_pbf(path):
                 self.places.append({'lon': n.location.lon, 'lat': n.location.lat, 'tags': {k: v for k, v in t}})
 
         def way(self, w):
+            # בריכות האידוי בדרום ים המלח – חלק מהים (אחרת ים המלח נראה חסר)
+            t = w.tags
+            if (t.get('landuse') == 'salt_pond' or t.get('natural') == 'water') and w.is_closed():
+                try:
+                    ring = [[nd.lon, nd.lat] for nd in w.nodes]
+                except osmium.InvalidLocationError:
+                    ring = []
+                if ring and all(PONDS[0] <= x <= PONDS[2] and PONDS[1] <= y <= PONDS[3] for x, y in ring):
+                    self.ponds.append(ring)
             mine = [c for c, ids in rel.nb.items() if w.id in ids]
             if (w.id in rel.il or mine) and w.tags.get('maritime') != 'yes':
                 try:
@@ -439,7 +451,7 @@ def from_pbf(path):
 
     h = H()
     h.apply_file(path, locations=True)
-    print('pbf:', len(h.places), 'places,', len(h.il), 'IL ways,', {c: len(v) for c, v in h.nb.items()}, file=sys.stderr)
+    print('pbf:', len(h.ponds), 'ponds,', len(h.places), 'places,', len(h.il), 'IL ways,', {c: len(v) for c, v in h.nb.items()}, file=sys.stderr)
     return h
 
 
@@ -464,8 +476,12 @@ def main(path, pbf=None):
         # ים, חוף ואגמים לא משתנים – נשארים מהקובץ הקיים (בקובץ של ישראל אין את החוף של לבנון וסיני, שצריך לסגירת הים)
         with open(path, encoding='utf-8') as f:
             for x in json.load(f)['features']:
-                if x['properties']['k'] in ('w', 'c'):
+                if x['properties']['k'] in ('w', 'c') and not x['properties'].get('pd'):
                     feats.append(x)
+        for ring in src.ponds:
+            r = ring_clean(ring, 20, 4)
+            if r and len(r) > 3:
+                F({'type': 'Polygon', 'coordinates': [r]}, {'k': 'w', 'pd': 1})
     for b, probe in ([] if src else SEAS):
         print('seas…', file=sys.stderr)
         coast = overpass(coast_q(b), need=5)
