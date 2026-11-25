@@ -1117,6 +1117,7 @@
   });
 
   // ---------- הקשה על המפה: מה רשום ב-OpenStreetMap ----------
+  const SV_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.2"/><path d="M9.5 21v-6.5H8v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4h-1.5V21z"/></svg>';
   const HW = { path: 'שביל', footway: 'שביל הליכה', track: 'דרך עפר', steps: 'מדרגות', bridleway: 'שביל רכיבה', cycleway: 'שביל אופניים',
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
   const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
@@ -1166,6 +1167,8 @@
       rows.push(`<div class="info-row info-area">מפה שמורה · ${esc(g?.name || '')} · ${fmtSize(sizeOf([saved.b]))}<button class="info-sel">בחירה</button></div>`);
     }
     if (!rows.length) return;
+    // "איך זה נראה": Street View הכי קרוב לנקודה, ב-Google Maps (רק עם רשת; אם אין צילום קרוב – גוגל מראה מפה)
+    if (navigator.onLine) rows.push(`<div class="info-row info-sv-row"><a class="info-sv" target="_blank" rel="noopener" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${e.lngLat.lat.toFixed(6)},${e.lngLat.lng.toFixed(6)}">${SV_SVG}איך זה נראה</a></div>`);
     const pop = new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
     pop.getElement().querySelector('.info-photos')?.addEventListener('click', (ev) => { const d = ev.currentTarget.dataset; showPhoto(d.ph, d.n); });
     pop.getElement().querySelector('.info-sel')?.addEventListener('click', () => { pop.remove(); selectSaved(saved); });
