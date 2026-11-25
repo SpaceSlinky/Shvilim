@@ -3059,10 +3059,17 @@
  { sat: 0, labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
   layerPrefs.route = true; // המסלול תמיד מוצג (אין לו יותר תיבה בשכבות)
-  // שני מתגים בסרגל הכלים: שבילים (מסומנים, שבילים ודרכי עפר, אופניים) וכל השאר (כבישים, נחלים, נקודות, שמות, חניות)
-  const LAYER_SETS = { lyTrails: ['trails', 'paths', 'tracks', 'bike'], lyRest: ['roads', 'water', 'poi', 'places', 'parking'] };
-  for (const k of Object.keys(LAYER_SETS)) if (typeof layerPrefs[k] !== 'boolean') layerPrefs[k] = true;
-  const syncSets = () => { for (const [k, gs] of Object.entries(LAYER_SETS)) for (const g of gs) layerPrefs[g] = layerPrefs[k]; };
+  // שני מתגים בסרגל הכלים שמבודדים (לא מסתירים): דרכי עפר (דרכי עפר, שבילים ואופניים) ושבילים מסומנים. שניהם כבויים –
+  // מפה מלאה; אחד דלוק – רק הוא; שניהם – שניהם (ובכל מקרה שמות היישובים, המפה הכללית והמסלול נשארים)
+  const ISO = { isoDirt: ['paths', 'tracks', 'bike'], isoMarked: ['trails'] };
+  delete layerPrefs.lyTrails; delete layerPrefs.lyRest; // המתגים הקודמים (הסתרה)
+  for (const k of Object.keys(ISO)) layerPrefs[k] = layerPrefs[k] === true;
+  const syncSets = () => {
+    const any = layerPrefs.isoDirt || layerPrefs.isoMarked;
+    for (const g of ['trails', 'paths', 'tracks', 'bike', 'roads', 'water', 'poi', 'parking']) layerPrefs[g] = !any;
+    for (const [k, gs] of Object.entries(ISO)) if (layerPrefs[k]) for (const g of gs) layerPrefs[g] = true;
+    layerPrefs.places = true;
+  };
   syncSets();
   layerPrefs.labels = true;
   // תצלום אוויר: שקיפות 0–1 (סליידר). פעם היה "סוג מפה" (מפה/תצלום/טופו) ו"הסתרת שכבות" – בוטלו
@@ -3152,9 +3159,9 @@
   document.body.classList.toggle('night', isNight);
   showTheme();
   mapReady.then(() => applyTheme(isNight));
-  for (const [id, k] of [['btn-ly-trails', 'lyTrails'], ['btn-ly-rest', 'lyRest']]) {
+  for (const [id, k] of [['btn-iso-dirt', 'isoDirt'], ['btn-iso-marked', 'isoMarked']]) {
     const b = $(id);
-    const show = () => { b.classList.toggle('off', !layerPrefs[k]); b.setAttribute('aria-pressed', layerPrefs[k]); };
+    const show = () => { b.classList.toggle('pressed', layerPrefs[k]); b.setAttribute('aria-pressed', layerPrefs[k]); };
     show();
     b.addEventListener('click', () => { infoPop?.remove(); layerPrefs[k] = !layerPrefs[k]; syncSets(); show(); applyLayers(); layoutTools(); });
   }
@@ -3609,8 +3616,8 @@
   function pinned(b) {
     if (b.id === 'btn-compass') return compassMode || Math.abs(map.getBearing()) > 0.5;
     if (b.id === 'btn-locate') return watchId != null && !follow && followedOnce;
-    if (b.id === 'btn-ly-trails') return !layerPrefs.lyTrails; // שכבה כבויה – נשאר על המסך, שיהיה ברור שמשהו מוסתר
-    if (b.id === 'btn-ly-rest') return !layerPrefs.lyRest;
+    if (b.id === 'btn-iso-dirt') return layerPrefs.isoDirt; // בידוד דלוק – נשאר על המסך, שיהיה ברור שהמפה מסוננת
+    if (b.id === 'btn-iso-marked') return layerPrefs.isoMarked;
     return false;
   }
   function layoutTools() {

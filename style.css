@@ -553,10 +553,14 @@ body.night #dock .lib-body .credits { color: #999; }
 .info-photos { border: 0; background: none; padding: 0; cursor: pointer; }
 
 
-/* מתגי שכבות בסרגל הכלים: כבוי – אפור עם קו אלכסוני (כמו "לשבילים" בתכנון) */
-#controls .ly .slash { display: none; }
-#controls .ly.off svg { opacity: .5; }
-#controls .ly.off .slash { display: inline; }
+/* מתגי בידוד בסרגל הכלים: דלוק – רקע כחול מלא (כמו GPS); בשבילים מסומנים – שלושה קווים צבעוניים מקבילים (אדום, לבן, כחול) */
+#controls .mk svg .c1 { stroke: #e0262b; }
+#controls .mk svg .c2e { stroke: #6b6f74; stroke-width: 3.4; }
+#controls .mk svg .c2 { stroke: #fff; }
+#controls .mk svg .c3 { stroke: #1f5bd8; }
+#controls .mk.pressed svg .c1, body.night #controls .mk svg .c1 { stroke: #ff5a5a; }
+#controls .mk.pressed svg .c3, body.night #controls .mk svg .c3 { stroke: #8fb4ff; }
+#controls .mk.pressed svg .c2e { stroke: rgba(0,0,0,.35); }
 
 /* "עצירת ההורדה" – כפתור קטן באמצע המשבצת שבהורדה שנגעו בה */
 .dl-here { position: fixed; translate: -50% -50%; z-index: 6; width: max-content; padding: 6px 14px; border: 0; border-radius: 22px;

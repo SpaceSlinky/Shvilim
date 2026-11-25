@@ -34,11 +34,12 @@
           <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
           </button>
-          <button id="btn-ly-trails" class="ly" title="שבילים" aria-label="שבילים מסומנים ודרכי עפר">
-            <svg viewBox="0 0 24 24"><path d="M5 21c2-5 9-3 8-9s4-6 6-8" fill="none" stroke-dasharray="3 2.5"/><path class="slash" d="M4 4l16 16" fill="none"/></svg>
+          <!-- בידוד: רק דרכי עפר / רק שבילים מסומנים / שניהם; שניהם כבויים – מפה מלאה -->
+          <button id="btn-iso-dirt" class="ly" title="רק דרכי עפר" aria-label="רק דרכי עפר" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path d="M5 21c2-5 9-3 8-9s4-6 6-8" fill="none" stroke-dasharray="3 2.5"/></svg>
           </button>
-          <button id="btn-ly-rest" class="ly" title="כבישים, נחלים, נקודות ושמות" aria-label="כל השאר">
-            <svg viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z" fill="none"/><path d="M3 14l9 5 9-5" fill="none"/><path class="slash" d="M4 4l16 16" fill="none"/></svg>
+          <button id="btn-iso-marked" class="ly mk" title="רק שבילים מסומנים" aria-label="רק שבילים מסומנים" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><g fill="none" stroke-width="2"><path class="c1" d="M2 16.5c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/><path class="c2e" d="M4.6 19.1c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/><path class="c2" d="M4.6 19.1c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/><path class="c3" d="M7.2 21.7c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/></g></svg>
           </button>
           <button id="btn-theme" title="בהיר / כהה" aria-label="בהיר / כהה">
             <svg viewBox="0 0 24 24" class="i-moon"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none"/></svg>
