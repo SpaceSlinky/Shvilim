@@ -132,7 +132,7 @@
       // משבצות שנבחרו להורדה – לבנות; זו שיורדת עכשיו – לבנה עם "בהורדה", שאחריה בתור – רק קו מתאר עם "ממתין"
       // (פעם: הבהוב – "נראה לא טוב")
       { id: 'dl-tap-fill', type: 'fill', source: 'dl-tap', filter: ['all', ['==', ['geometry-type'], 'Polygon'], ['!=', ['get', 'q'], 2]],
-        paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.5 } },
+        paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.25 } },
       { id: 'dl-tap-line', type: 'line', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffffff', 'line-width': 1 } },
       { id: 'dl-busy-label', type: 'symbol', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.4,
         layout: { 'text-field': ['case', ['==', ['get', 'q'], 1], 'בהורדה…', 'ממתין'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
