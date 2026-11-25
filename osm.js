@@ -81,6 +81,10 @@ out center tags;`;
 
   function convert(osm) {
     const feats = [];
+    // דרכים ששייכות למסלול הליכה מסומן – אף פעם לא "לאופניים בלבד" (ב-OSM סימנו הרבה שבילים משותפים כ-bicycle=designated)
+    const hikeWays = new Set();
+    for (const el of osm.elements || []) if (el.type === 'relation' && /^(hiking|foot)$/.test(el.tags?.route || ''))
+      for (const m of el.members || []) if (m.type === 'way') hikeWays.add(m.ref);
     const add = (type, coordinates, properties) => feats.push({ type: 'Feature', geometry: { type, coordinates }, properties });
     for (const el of osm.elements || []) {
       const t = el.tags || {};
@@ -102,8 +106,9 @@ out center tags;`;
         if (!t.waterway) {
           if (t.foot === 'no' || t.access === 'no' || t.access === 'private') props.fn = 1;
           // שביל ייעודי לאופניים (סינגל) – בתכנון הליכה משתמשים בו רק אם ביקשו
-          if (t.highway === 'cycleway' || (t.highway === 'path' && (t.bicycle === 'designated' || t['mtb:scale'])
-            && !['designated', 'yes'].includes(t.foot))) props.b = 1;
+          // (פעם גם mtb:scale לבד הספיק – אבל זה רק דרגת קושי לרוכבים, לא איסור להולכים)
+          if (!hikeWays.has(el.id) && !['designated', 'yes', 'permissive'].includes(t.foot)
+            && (t.highway === 'cycleway' || (t.highway === 'path' && t.bicycle === 'designated'))) props.b = 1;
         }
         if (n) props.n = n;
         const segs = lines(el.geometry);
@@ -203,14 +208,18 @@ out center tags;`;
     return fc;
   }
   // הורדה ברקע (Background Fetch – רק GET, בלי גוף): אותה שאילתה בכתובת, מהשרת הראשון
-  const bgUrl = (bbox) => OVERPASS[0] + '?data=' + encodeURIComponent(query(bbox));
+  // השרת שענה לאחרונה – ראשון בתור (גם להורדה ברקע, שיש לה שרת אחד בלבד). פעם תמיד overpass-api.de – כשהוא נפל,
+  // ההורדה ברקע נתקעה
+  const goodSrv = () => { const i = +(root.localStorage?.getItem('ovGood') || 0); return i >= 0 && i < OVERPASS.length ? i : 0; };
+  const servers = () => { const g = goodSrv(); return [OVERPASS[g], ...OVERPASS.filter((_, i) => i !== g)]; };
+  const bgUrl = (bbox, srv = goodSrv()) => OVERPASS[srv] + '?data=' + encodeURIComponent(query(bbox));
   /** הורדה: מנסים שרת אחרי שרת (ועד שני סבבים כשהשרתים עמוסים). signal – ביטול מבחוץ (למשל כשהמשתמש מבקש אזור אחר) */
   async function download(bbox, onProgress, signal) {
     let reasons = [];
     for (let pass = 0; pass < 2; pass++) {
       reasons = [];
       let busy = false;
-      for (const url of OVERPASS) {
+      for (const url of servers()) {
         if (signal?.aborted) throw signal.reason;
         const ctl = new AbortController();
         const stop = () => ctl.abort();
@@ -224,6 +233,7 @@ out center tags;`;
           const json = await res.json();
           // שגיאה באמצע (זמן, זיכרון) מגיעה עם 200 ונתונים חלקיים – לא שומרים מפה חסרה
           if (/error/i.test(json.remark || '')) { busy = true; throw new Error('השרת לא סיים'); }
+          try { root.localStorage?.setItem('ovGood', String(OVERPASS.indexOf(url))); } catch { /* ignore */ }
           return fromJson(json, bbox);
         } catch (e) {
           if (signal?.aborted) throw signal.reason;
@@ -295,7 +305,7 @@ out center tags;`;
     return best;
   }
 
-  const OSM = { query, convert, fromJson, bgUrl, glyphRanges, download, trailColor, merge, canonColor, changedSince };
+  const OSM = { query, convert, fromJson, bgUrl, goodSrv, glyphRanges, download, trailColor, merge, canonColor, changedSince };
   if (typeof module !== 'undefined' && module.exports) module.exports = OSM;
   root.OSM = OSM;
 })(typeof self !== 'undefined' ? self : globalThis);

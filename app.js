@@ -680,6 +680,8 @@
     updateOverviewHi(); // האזורים השמורים השתנו (הורדה / מחיקה)
     if (PERF.data == null) PERF.data = performance.now();
     const trailGeoms = markShared(fc);
+    // דרך שעובר עליה שביל הליכה מסומן – לא "לאופניים בלבד" (גם בנתונים שכבר שמורים; ב-OSM סימנו שבילים משותפים כ-bicycle=designated)
+    for (const f of fc.features) if (f.properties.b && f.properties.k === 'road' && trailGeoms.has(JSON.stringify(f.geometry.coordinates))) delete f.properties.b;
     buildSharedIdx(fc);
     pieceCache = null; // הקטעים המשותפים השתנו
     mapFC = fc;
@@ -928,7 +930,8 @@
     for (const u of new Set(cells.flatMap((c) => Elev.prefetchUrls(c)))) if (!(await data.match(u))) tiles.push(u);
     const id = 'maps-' + Date.now();
     try {
-      await reg.backgroundFetch.fetch(id, [...cells.map((c) => OSM.bgUrl(c)), ...tiles], {
+      q.srv = OSM.goodSrv(); // אותו שרת גם כשמחפשים את התשובות (במטמון / ברשומות)
+      await reg.backgroundFetch.fetch(id, [...cells.map((c) => OSM.bgUrl(c, q.srv)), ...tiles], {
         title: cells.length > 1 ? `מוריד מפות של ${cells.length} משבצות` : 'מוריד את מפות האזור',
         icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
       });
@@ -947,7 +950,7 @@
   async function fromBg(q, c) {
     const f = await (await swReg())?.backgroundFetch?.get(q.bg).catch(() => null);
     if (!f) { await endBg(q); return null; } // נגמרה (ה-SW שמר במטמון – takeBg)
-    const rec = await f.match(OSM.bgUrl(c)).catch(() => null);
+    const rec = await f.match(OSM.bgUrl(c, q.srv)).catch(() => null);
     if (!rec) return null;
     let last = f.downloaded, since = Date.now();
     const res = await new Promise((resolve) => {
@@ -968,7 +971,7 @@
 
   async function takeBg(c) {
     if (!self.caches) return null;
-    const cache = await caches.open('shvilim-bg'), u = OSM.bgUrl(c);
+    const cache = await caches.open('shvilim-bg'), u = OSM.bgUrl(c, batchQ?.srv);
     const res = await cache.match(u);
     if (!res) return null;
     try { return OSM.fromJson(await res.json(), c); } catch { return null; } finally { cache.delete(u); }
