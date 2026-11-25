@@ -551,7 +551,7 @@
     return job.done;
   }
   async function runDownload(bbox, { quiet, area, cells, batch, pre, signal }) {
-    const say = (m, ms) => { if (area) dlMsg = m; else if (!quiet) toast(m, ms); };
+    const say = (m, ms) => { if (area) { dlMsg = m; if (batch) progress(m); } else if (!quiet) toast(m, ms); };
     if (area) { dlErr = ''; say('מוריד את מפות האזור…'); }
     try {
       const fresh = pre || await OSM.download(bbox, (m) => say(m, 120000), signal); // pre – כבר ירד ברקע
@@ -780,7 +780,7 @@
   const DL_MAX = 20; // משבצות בכל הורדה – השרתים הציבוריים עמוסים
   let areasUpd = new Set(), updChecked = new Set(), areasChecking = false, areasBusy = ''; // עדכונים; בדיקה / הורדה שרצות
   let batchShown = false; // ההורדה שרצה מוצגת בדוק (אחרי "סגירה" – רק השורה הקטנה מעל "מסלולים")
-  const inMaps = () => !!(areaSel.size || dlSel.size || (batchShown && batchQ));
+  const inMaps = () => !!(areaSel.size || (batchShown && batchQ)); // בחירה להורדה – כפתור על המשבצת, לא בדוק
   const sizeOf = (boxes) => {
     const tests = boxes.map(inBox);
     let size = 0;
@@ -806,13 +806,10 @@
     const busy = !!(batchShown && batchQ), on = navigator.onLine;
     $('ab-close').querySelector('span').textContent = busy ? 'סגירה' : 'ביטול';
     $('ab-stop').hidden = !busy;
-    $('ab-dl').hidden = busy || !dlSel.size || !on;
     $('ab-upd').hidden = busy || !sel.some((a) => areasUpd.has(a.b.join())) || !on || !!batchQ;
     $('ab-del').hidden = busy || !sel.length;
     const info = $('ab-info');
     if (busy) return (info.textContent = areasBusy || 'מוריד…');
-    if (dlSel.size) return info.replaceChildren(bEl(dlSel.size === 1 ? 'משבצת אחת להורדה' : `${dlSel.size} משבצות להורדה`),
-      document.createTextNode(on ? (batchQ ? ' · אחרי ההורדה שרצה' : '') : ' · צריך אינטרנט'));
     if (!sel.length) return (info.textContent = '');
     const nUpd = sel.filter((a) => areasUpd.has(a.b.join())).length;
     const upd = areasChecking ? ' · בודק עדכונים…' : nUpd ? (sel.length === 1 ? ' · יש עדכון' : ` · יש עדכון ל-${nUpd}`) : '';
@@ -841,6 +838,7 @@
   function mapsChanged() {
     renderAreasMap();
     placeDlHere();
+    placeStop();
     if ((dockMode() === 'areas') !== ($('dock').dataset.mode === 'areas')) renderDock();
     setTimeout(syncBack);
   }
@@ -881,18 +879,12 @@
     if (dlSel.has(k)) dlSel.delete(k);
     else if (dlSel.size >= DL_MAX) return toast(`עד ${DL_MAX} משבצות בכל הורדה`, 2500);
     else dlSel.add(k);
+    dlLast = dlSel.has(k) ? c : [...dlSel].map(keyCell).pop() || null;
     mapsChanged();
     if (map.getZoom() < 8.4 && dlSel.has(k)) map.easeTo({ center: [(c[0] + c[2]) / 2, (c[1] + c[3]) / 2], zoom: 9, duration: 700 });
   });
   $('ab-close').addEventListener('click', () => (batchShown && batchQ ? ((batchShown = false), mapsChanged()) : clearMaps()));
   $('ab-stop').addEventListener('click', () => stopBatch());
-  $('ab-dl').addEventListener('click', () => {
-    const cells = [...dlSel].map((k) => k.split(',').map(Number));
-    if (!cells.length || !navigator.onLine) return;
-    if (batchQ) return toast('הורדה אחרת עוד רצה', 2000);
-    dlSel.clear();
-    runBatch({ kind: 'dl', cells, done: 0, fails: 0, err: '' });
-  });
   $('ab-del').addEventListener('click', async () => {
     const sel = dlAreas().filter((a) => areaSel.has(a.b.join()));
     if (!sel.length) return;
@@ -918,15 +910,16 @@
     try { dlWake = await navigator.wakeLock.request('screen'); dlWake.addEventListener('release', () => (dlWake = null)); } catch { /* לא נתמך */ }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { hiddenAt = Date.now(); if (batchQ && !batchQ.cancel && !batchQ.bg) handOff(batchQ); }
+    if (document.hidden) hiddenAt = Date.now();
     else if (batchQ) holdScreen(true);
     else resumeBatch();
   });
-  // הורדה ממש ברקע (Background Fetch, כרום באנדרואיד): כשיוצאים מהאפליקציה / המסך כבה באמצע – מה שנשאר עובר למערכת
-  // (התראה עם התקדמות; ממשיכה גם כשהאפליקציה נסגרה). השרת הראשון בלבד; התשובות נשמרות במטמון (sw.js) ומעובדות
-  // כשחוזרים לאפליקציה. מה שלא ירד שם – יורד כרגיל כשחוזרים
+  // הורדה ממש ברקע (Background Fetch, כרום באנדרואיד): נרשמת כבר בתחילת ההורדה, כשהאפליקציה פתוחה (שנרשמה ביציאה
+  // מהאפליקציה – כרום השהה אותה עד שחוזרים: "נראה כאילו מוריד ברקע", אבל לא). הדף לוקח כל משבצת מהרשומה שלה ברגע
+  // שהיא מוכנה; כשיוצאים – ההורדה ממשיכה במערכת (התראה), וה-SW שומר את התשובות (sw.js) לעיבוד כשחוזרים.
+  // משבצת שהשרת דחה ברקע / ההורדה ברקע תקועה (75 שנ' בלי בית אחד כשהאפליקציה פתוחה) – יורדת כרגיל, עם החלפת שרתים
   const swReg = () => navigator.serviceWorker?.getRegistration().catch(() => null) ?? Promise.resolve(null);
-  async function handOff(q) {
+  async function startBg(q) {
     const reg = await swReg();
     if (!reg?.backgroundFetch || q.cancel || q.done >= q.cells.length) return;
     const cells = q.cells.slice(q.done);
@@ -939,41 +932,40 @@
         title: cells.length > 1 ? `מוריד מפות של ${cells.length} משבצות` : 'מוריד את מפות האזור',
         icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
       });
-    } catch (e) { return console.warn('background fetch', e); }
+    } catch (e) { bgLog('register', e.message); return console.warn('background fetch', e); }
     q.bg = id;
     saveQueue(q);
-    dlJob?.ctl.abort(new DOMException('הופסק', 'AbortError')); // ההורדה בדף – נעצרת, הרקע ממשיך
   }
-  // ממתינים שההורדה ברקע תיגמר (ההתקדמות – בשורת המידע)
-  async function waitBg(q) {
-    const reg = await swReg();
-    // כשהאפליקציה פתוחה וההורדה ברקע לא מתקדמת 20 שניות – מבטלים אותה וממשיכים כאן (עם החלפת שרתים); נכשלה – אומרים למה
-    let last = -1, since = Date.now(), doneAt = 0, why = '';
-    for (;;) {
-      const f = await reg?.backgroundFetch?.get(q.bg).catch(() => null);
-      if (!f || q.cancel) break;
-      if (f.result) {
-        if (f.result === 'failure') why = f.failureReason || 'failure';
-        if (!doneAt) doneAt = Date.now();
-        else if (Date.now() - doneAt > 15000) break; // ה-SW לא סיים לשמור – לא מחכים לנצח
-      } else {
-        areasBusy = 'מוריד ברקע…' + (f.downloaded ? ` ${fmtSize(f.downloaded)}` : '');
-        showBusy();
-        if (f.downloaded !== last) { last = f.downloaded; since = Date.now(); }
-        else if (!document.hidden && Date.now() - since > 20000) { f.abort(); why = 'stalled'; break; }
-      }
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    if (why) {
-      const W = { 'bad-status': 'השרת סירב', 'fetch-error': 'שגיאת רשת', 'quota-exceeded': 'אין מקום בטלפון', aborted: 'בוטלה', stalled: 'לא התקדמה' };
-      toast(`ההורדה ברקע לא הצליחה (${W[why] || why}) – ממשיכים כאן`, 4000);
-      try { localStorage.setItem('bgFail', JSON.stringify({ why, t: Date.now() })); } catch { /* ignore */ }
-    }
-    if (q.cancel) (await reg?.backgroundFetch?.get(q.bg).catch(() => null))?.abort();
+  const bgLog = (why, x) => { try { localStorage.setItem('bgFail', JSON.stringify({ why, x, t: Date.now() })); } catch { /* ignore */ } };
+  async function endBg(q, abort) {
+    if (!q.bg) return;
+    if (abort) (await (await swReg())?.backgroundFetch?.get(q.bg).catch(() => null))?.abort();
     delete q.bg;
     saveQueue(q);
   }
-  // התשובה של Overpass שירדה ברקע למשבצת (אם יש ותקינה)
+  // התשובה למשבצת מההורדה ברקע שרצה (מחכים לה); null – לא הצליח ברקע, מורידים כרגיל
+  async function fromBg(q, c) {
+    const f = await (await swReg())?.backgroundFetch?.get(q.bg).catch(() => null);
+    if (!f) { await endBg(q); return null; } // נגמרה (ה-SW שמר במטמון – takeBg)
+    const rec = await f.match(OSM.bgUrl(c)).catch(() => null);
+    if (!rec) return null;
+    let last = f.downloaded, since = Date.now();
+    const res = await new Promise((resolve) => {
+      let iv = 0;
+      const fin = (v) => { clearInterval(iv); resolve(v); };
+      rec.responseReady.then(fin, () => fin(null));
+      iv = setInterval(() => {
+        if (q.cancel) return fin(null);
+        if (f.downloaded !== last || document.hidden) { last = f.downloaded; since = Date.now(); }
+        else if (Date.now() - since > 75000) { bgLog('stalled'); toast('ההורדה ברקע לא מתקדמת – ממשיכים כאן', 3000); endBg(q, true); fin(null); }
+        if (f.result) setTimeout(() => fin(null), 3000);
+      }, 1000);
+    });
+    if (!res) return null;
+    if (!res.ok) { bgLog('status', res.status); return null; }
+    try { return OSM.fromJson(await res.json(), c); } catch { return null; }
+  }
+
   async function takeBg(c) {
     if (!self.caches) return null;
     const cache = await caches.open('shvilim-bg'), u = OSM.bgUrl(c);
@@ -988,15 +980,19 @@
   const saveQueue = (q) => { try { q ? localStorage.setItem('dlQueue', JSON.stringify(q)) : localStorage.removeItem('dlQueue'); } catch { /* ignore */ } };
   async function runBatch(q) {
     if (batchQ || areasBusy) return;
+    if (!q.bg && self.caches) await caches.delete('shvilim-bg').catch(() => {}); // שאריות מהורדות קודמות
     batchQ = q; saveQueue(q);
+    progress('start');
     showBusy();
-    if (q.bg) await waitBg(q);
+    if (!q.bg && navigator.onLine) await startBg(q);
     let retries = 0;
-    while (q.done < q.cells.length && !q.cancel && !q.bg) {
+    while (q.done < q.cells.length && !q.cancel) {
       await whenVisible();
-      if (q.bg) break;
       const c = q.cells[q.done], n = q.cells.length;
-      const pre = await takeBg(c);
+      progress('start');
+      let pre = await takeBg(c);
+      if (!pre && q.bg) pre = (await fromBg(q, c)) || (await takeBg(c));
+      if (q.cancel) break;
       if (!pre && !navigator.onLine) break;
       areasBusy = (pre ? 'שומר' : q.kind === 'upd' ? 'מעדכן' : 'מוריד') + (n > 1 ? ` ${q.done + 1} מתוך ${n}…` : '…');
       showBusy();
@@ -1004,20 +1000,21 @@
       const t0 = Date.now();
       dlErr = '';
       await downloadArea(c, { area: true, cells: [c], batch: true, pre });
-      if (q.cancel || q.bg) break; // עצרו / עבר להורדה ברקע
+      if (q.cancel) break;
       // נקטע כי הדף הוסתר (מסך כבוי / יצאו מהאפליקציה) או שהרשת נפלה – אותה משבצת שוב, כשחוזרים
       if (dlErr && (document.hidden || hiddenAt >= t0 || !navigator.onLine) && retries++ < 3) continue;
       retries = 0;
       if (dlErr) { q.fails++; q.err = dlErr; } else areasUpd.delete(c.join());
       q.done++;
+      progress('done');
       saveQueue(q);
     }
+    if (q.cancel || q.done >= q.cells.length) await endBg(q, true);
     holdScreen(false);
     batchQ = null; areasBusy = '';
     const n = q.cells.length;
     showBusy();
     if (q.cancel) return void saveQueue(null);
-    if (q.bg) return void setTimeout(resumeBatch); // עבר להורדה ברקע – ממתינים לה (ומעבדים כשהדף חי)
     if (q.done < n) return toast('אין אינטרנט – ההורדה תמשיך כשהחיבור יחזור', 4000); // התור נשאר שמור
     saveQueue(null);
     const upd = q.kind === 'upd';
@@ -1038,7 +1035,7 @@
     runBatch({ kind: 'upd', cells, done: 0, fails: 0, err: '' });
   });
   // מה שרואים בזמן הורדה/עדכון: שורת המידע במצב מפות, והשורה בדוק (בשיטוט), והמשבצות בתור – בתכלת על המפה
-  function showBusy() { if (!batchQ) batchShown = false; mapsChanged(); placeStop(); }
+  function showBusy() { if (!batchQ) { batchShown = false; clearInterval(progTimer); } mapsChanged(); placeStop(); }
   function stopBatch() {
     if (!batchQ) return;
     batchQ.cancel = true;
@@ -1110,26 +1107,71 @@
   }
   function checkArea() { buildGrids(); placeDlHere(); placeStop(); }
   // כפתור "עצירה" קטן באמצע המשבצת שבהורדה שנגעו בה (באמצע החלק שלה שעל המסך; לא רחב מהמשבצת; כמעט מחוץ למסך – נעלם)
-  let stopCell = null;
-  const stopBtn = Object.assign(document.createElement('button'), { className: 'dl-here', textContent: 'עצירת ההורדה' });
-  document.body.appendChild(stopBtn);
+  // כפתורים קטנים על המשבצות עצמן (במקום בדוק): "הורדה" על המשבצת שנבחרה אחרונה, "עצירת ההורדה" על משבצת שבהורדה
+  // שנגעו בה, ופס התקדמות קטן מתחת ל"בהורדה…" – באמצע החלק של המשבצת שעל המסך; לא רחב מהמשבצת, כמעט מחוץ למסך – נעלם
+  let stopCell = null, dlLast = null, progCell = null, progVal = 0;
+  const DL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
+  const mk = (cls, html) => { const b = Object.assign(document.createElement('button'), { className: cls }); b.innerHTML = html; document.body.appendChild(b); return b; };
+  const stopBtn = mk('dl-here', 'עצירת ההורדה'), goBtn = mk('dl-here dl-go', ''), progEl = mk('dl-prog', '<i></i>');
+  progEl.tabIndex = -1;
   stopBtn.addEventListener('click', () => { stopCell = null; placeStop(); stopBatch(); });
-  function placeStop() {
-    const c = stopCell;
-    if (c && !batchQ?.cells.slice(batchQ.done).some((x) => x.join() === c.join())) stopCell = null;
-    if (!stopCell) return stopBtn.classList.remove('on');
+  goBtn.addEventListener('click', () => {
+    const cells = [...dlSel].map(keyCell);
+    if (!cells.length || !navigator.onLine) return;
+    if (batchQ) return toast('הורדה אחרת עוד רצה', 2000);
+    dlSel.clear(); dlLast = null;
+    runBatch({ kind: 'dl', cells, done: 0, fails: 0, err: '' });
+  });
+  function cellRect(c) {
     const W = innerWidth, top = 70, bottom = innerHeight - ($('dock')?.offsetHeight || 120) - 10;
     const pts = [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]]].map((p) => map.project(p));
     const x0 = Math.max(0, Math.min(...pts.map((p) => p.x))), x1 = Math.min(W, Math.max(...pts.map((p) => p.x)));
     const y0 = Math.max(top, Math.min(...pts.map((p) => p.y))), y1 = Math.min(bottom, Math.max(...pts.map((p) => p.y)));
-    if (x1 - x0 < 50 || y1 - y0 < 30) return stopBtn.classList.remove('on');
-    stopBtn.textContent = batchQ.kind === 'upd' ? 'עצירת העדכון' : 'עצירת ההורדה';
-    stopBtn.style.left = (x0 + x1) / 2 + 'px';
-    stopBtn.style.top = (y0 + y1) / 2 + 'px';
-    stopBtn.style.scale = Math.min(1, (0.9 * (x1 - x0)) / (stopBtn.offsetWidth || 1));
-    stopBtn.classList.add('on');
+    return x1 - x0 < 50 || y1 - y0 < 30 ? null : { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0 };
   }
-  map.on('move', () => stopCell && placeStop());
+  function putOn(btn, r, dy = 0) {
+    if (!r) return btn.classList.remove('on');
+    btn.style.left = r.x + 'px';
+    btn.style.top = r.y + dy + 'px';
+    btn.style.scale = 1;
+    btn.style.scale = Math.min(1, (0.9 * r.w) / (btn.offsetWidth || 1));
+    btn.classList.add('on');
+  }
+  function placeStop() {
+    const live = (c) => c && batchQ?.cells.slice(batchQ.done).some((x) => x.join() === c.join());
+    if (!live(stopCell)) stopCell = null;
+    if (stopCell) stopBtn.textContent = batchQ.kind === 'upd' ? 'עצירת העדכון' : 'עצירת ההורדה';
+    putOn(stopBtn, stopCell && cellRect(stopCell));
+    // "הורדה" – על המשבצת שנבחרה אחרונה (בשיטוט בלבד)
+    if (dlLast && !dlSel.has(dlLast.join())) dlLast = [...dlSel].map(keyCell).pop() || null;
+    const showGo = dlLast && dockMode() === 'lib';
+    if (showGo) {
+      const n = dlSel.size, off = !navigator.onLine;
+      goBtn.innerHTML = off ? 'צריך אינטרנט' : DL_ICON + (n > 1 ? `הורדה (${n})` : 'הורדה');
+      goBtn.disabled = off;
+    }
+    putOn(goBtn, showGo && cellRect(dlLast));
+    // פס ההתקדמות – מתחת ל"בהורדה…" במשבצת שיורדת עכשיו (כשאין עליה כפתור עצירה)
+    progCell = batchQ ? batchQ.cells[batchQ.done] : null;
+    progEl.firstChild.style.width = Math.round(progVal * 100) + '%';
+    putOn(progEl, progCell && !(stopCell && stopCell.join() === progCell.join()) && cellRect(progCell), 16);
+  }
+  map.on('move', () => (stopCell || dlLast || progCell) && placeStop());
+  // התקדמות בתוך משבצת: ההמתנה לשרת (לא ידוע כמה) – מתקרבת בהדרגה ל-60%; עיבוד, גופנים וגובה – 65–95%
+  let progT0 = 0, progBase = 0, progTimer = 0;
+  function progress(stage) {
+    if (stage === 'start') { progT0 = Date.now(); progBase = 0; }
+    else if (stage === 'done') progBase = 1;
+    else progBase = Math.max(progBase, { 'מעבד…': 0.65, 'שומר גופנים…': 0.78, 'שומר נתוני גובה…': 0.88 }[stage] || progBase);
+    clearInterval(progTimer);
+    const tick = () => {
+      const wait = 0.6 * (1 - Math.exp(-(Date.now() - progT0) / 20000));
+      progVal = Math.max(progBase, progBase < 0.6 ? wait : progBase);
+      placeStop();
+    };
+    tick();
+    if (batchQ && progBase < 0.6) progTimer = setInterval(tick, 500);
+  }
   let landCells = null; // Set של "i,j" – משבצות עם יבשה בישראל וביו"ש (tools/land_cells.py)
   fetch('land.json').then((r) => r.json()).then((j) => { landCells = new Set(j.cells.map((c) => c.join(','))); }).catch(() => {});
   const canPick = (c) => !landCells || landCells.has(Math.round(c[0] / CELL) + ',' + Math.round(c[1] / CELL)); // בלי ים ובלי מחוץ לגבולות
@@ -3479,7 +3521,7 @@
   // כשאין לאן לחזור – הרשומה יורדת, ו"חזור" הבא יוצא מהאפליקציה כרגיל.
   const openDialog = () => [...document.querySelectorAll('dialog[open]')].pop(); // העליון (אישור מעל השכבות)
   function canGoBack() {
-    return !!(openDialog() || !$('dock-ask').hidden || $('search-input').value || dockMode() !== 'lib' || dock.libOpen);
+    return !!(openDialog() || !$('dock-ask').hidden || $('search-input').value || dlSel.size || dockMode() !== 'lib' || dock.libOpen);
   }
   let backArmed = false, backIgnore = false;
   function syncBack() {
@@ -3494,6 +3536,7 @@
     if (d) d.close();
     else if (!$('dock-ask').hidden) $('dock-ask').hidden = true;
     else if ($('search-input').value) closeSearch();
+    else if (dlSel.size && dockMode() === 'lib') { dlSel.clear(); dlLast = null; mapsChanged(); }
     else dockBack();
     setTimeout(syncBack, 50); // אם עדיין יש לאן לחזור – שוב רשומה
   });

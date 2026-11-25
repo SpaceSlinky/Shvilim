@@ -564,3 +564,15 @@ body.night #dock .lib-body .credits { color: #999; }
   opacity: 0; pointer-events: none; transition: opacity .2s; }
 .dl-here.on { opacity: 1; pointer-events: auto; }
 body.night .dl-here { background: #262c32; color: #ef5350; }
+/* "הורדה" על המשבצת שנבחרה אחרונה – ירוק עם אייקון */
+.dl-here.dl-go { display: inline-flex; align-items: center; gap: 4px; color: var(--green); }
+.dl-here.dl-go svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.dl-here.dl-go:disabled { color: #777; }
+body.night .dl-here.dl-go { color: #81c784; }
+/* פס התקדמות קטן מתחת ל"בהורדה…" */
+.dl-prog { position: fixed; translate: -50% -50%; z-index: 5; width: 64px; height: 4px; padding: 0; border: 0; border-radius: 2px;
+  background: rgba(0,0,0,.18); overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.dl-prog.on { opacity: 1; }
+.dl-prog i { display: block; height: 100%; width: 0; background: var(--green); border-radius: 2px; transition: width .45s linear; }
+body.night .dl-prog { background: rgba(255,255,255,.2); }
+body.night .dl-prog i { background: #81c784; }
