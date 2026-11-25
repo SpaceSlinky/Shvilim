@@ -278,6 +278,9 @@
     l.minzoom = f[0];
     l.paint['line-opacity'] = fade(f[0], f[1], typeof l.paint['line-opacity'] === 'number' ? l.paint['line-opacity'] : 1);
   }
+  // המשבצות שבחירה/הורדה/מחיקה והכיתוב שלהן – מעל הכל (מעל השבילים, השמות, התצלום והמסלול)
+  { const TOP = new Set(['ad-fill', 'ad-line', 'dl-tap-fill', 'dl-tap-line', 'dl-busy-label']);
+    style.layers = [...style.layers.filter((l) => !TOP.has(l.id)), ...style.layers.filter((l) => TOP.has(l.id))]; }
   style.layers = style.layers.flatMap((l) => {
     if (l.id !== 'ov-coast' && l.id !== 'ov-border') return [l]; // רק קווי המתאר ממשיכים מקרוב
     const hi = { ...l, id: 'ovh-' + l.id.slice(3), source: 'overview-hi', minzoom: 10 };
