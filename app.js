@@ -74,11 +74,11 @@
   const fade = (z0, z1, max = 1) => ['interpolate', ['linear'], ['zoom'], z0, 0, z1, max];
   // המעטפת: מופיעה 8.5–9, נעלמת 10.3–11 (בדיוק כשהשבילים המסומנים מופיעים, 10–10.7)
   // הנקודה והשם מרחוק – מלאים עד 8.6, נעלמים עד 9.2 (בדיוק כשהמעטפת והשם בתוכה מופיעים)
-  const ENV_FADE = (max) => ['interpolate', ['linear'], ['zoom'], 10.3, max, 11, 0];
+  const ENV_FADE = (max) => ['interpolate', ['linear'], ['zoom'], 9.6, max, 10.4, 0];
   const FADES = { // שכבה: [מתחיל להופיע, מלא]
-    'minor-casing': [11.5, 12], minor: [11.5, 12], path: [11.5, 12], track: [11, 11.5], bike: [11, 11.5],
+    'minor-casing': [11.5, 12], minor: [11.5, 12], path: [11.2, 11.8], track: [10.3, 10.9], bike: [10.3, 10.9],
     water: [10.5, 11], 'medium-casing': [10.5, 11.2], medium: [10.5, 11.2], 'major-casing': [10.5, 11.2], major: [10.5, 11.2],
-    'trail-casing': [10, 10.7], trail: [10, 10.7],
+    'trail-casing': [9.2, 9.8], trail: [9.2, 9.8], // השבילים המסומנים – ראשונים, כבר כשרואים כמה משבצות
   };
   const style = {
     version: 8,
@@ -120,7 +120,7 @@
       // פנימיים), עם גוון קל ושם; בהתרחקות נוספת גם היא נעלמת (ובהתקרבות – מתחלפת בשבילים עצמם)
       // המפות שהורדו – משבצות ירוקות בכל זום (מרחוק מילוי חזק יותר), ונעלמות כשהשבילים עצמם מופיעים; בלי שמות
       { id: 'env-fill', type: 'fill', source: 'areas-env', filter: ['==', ['geometry-type'], 'Polygon'], maxzoom: 11,
-        paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9.5, 0.15, 10.3, 0.12, 11, 0] } },
+        paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9, 0.15, 9.6, 0.1, 10.4, 0] } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 0.6, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
@@ -947,14 +947,27 @@
   // ממתינים שההורדה ברקע תיגמר (ההתקדמות – בשורת המידע)
   async function waitBg(q) {
     const reg = await swReg();
+    // כשהאפליקציה פתוחה וההורדה ברקע לא מתקדמת 20 שניות – מבטלים אותה וממשיכים כאן (עם החלפת שרתים); נכשלה – אומרים למה
+    let last = -1, since = Date.now(), doneAt = 0, why = '';
     for (;;) {
       const f = await reg?.backgroundFetch?.get(q.bg).catch(() => null);
       if (!f || q.cancel) break;
-      if (!f.result) {
+      if (f.result) {
+        if (f.result === 'failure') why = f.failureReason || 'failure';
+        if (!doneAt) doneAt = Date.now();
+        else if (Date.now() - doneAt > 15000) break; // ה-SW לא סיים לשמור – לא מחכים לנצח
+      } else {
         areasBusy = 'מוריד ברקע…' + (f.downloaded ? ` ${fmtSize(f.downloaded)}` : '');
         showBusy();
+        if (f.downloaded !== last) { last = f.downloaded; since = Date.now(); }
+        else if (!document.hidden && Date.now() - since > 20000) { f.abort(); why = 'stalled'; break; }
       }
       await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (why) {
+      const W = { 'bad-status': 'השרת סירב', 'fetch-error': 'שגיאת רשת', 'quota-exceeded': 'אין מקום בטלפון', aborted: 'בוטלה', stalled: 'לא התקדמה' };
+      toast(`ההורדה ברקע לא הצליחה (${W[why] || why}) – ממשיכים כאן`, 4000);
+      try { localStorage.setItem('bgFail', JSON.stringify({ why, t: Date.now() })); } catch { /* ignore */ }
     }
     if (q.cancel) (await reg?.backgroundFetch?.get(q.bg).catch(() => null))?.abort();
     delete q.bg;
