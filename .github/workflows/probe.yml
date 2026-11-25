@@ -6,13 +6,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          Q='[out:json][timeout:60];(way(32.720,35.030,32.740,35.060)["highway"~"path|footway|track|cycleway"];)->.w;.w out tags;relation(bw.w)["route"];out tags;'
-          curl -sS --retry 3 -m 120 https://overpass-api.de/api/interpreter --data-urlencode "data=$Q" -o o.json || curl -sS -m 120 https://overpass.private.coffee/api/interpreter --data-urlencode "data=$Q" -o o.json
-          python3 -c "
-          import json;d=json.load(open('o.json'))
+          Q='[out:json][timeout:60];way(32.720,35.030,32.740,35.060)["highway"~"path|footway|track|cycleway"]->.w;.w out tags;relation(bw.w)["route"];out tags;'
+          for u in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do
+            curl -sS -m 120 -A "shvilim-probe/1.0" -w "\nHTTP %{http_code}\n" "$u" --data-urlencode "data=$Q" -o o.json; head -c 300 o.json; echo
+            python3 -c "import json;json.load(open('o.json'))" 2>/dev/null && break
+          done
+          python3 - <<'PY'
+          import json
+          d=json.load(open('o.json'))
           K=('highway','name','name:he','bicycle','foot','mtb:scale','route','colour','osmc:symbol','network','ref','access')
           for e in d['elements']:
-            t=e.get('tags',{})
-            if e['type']=='relation' or any(k in t for k in ('bicycle','mtb:scale','colour','osmc:symbol')):
-              print(e['type'],e['id'],{k:v for k,v in t.items() if k in K})
-          "
+              t=e.get('tags',{})
+              if e['type']=='relation' or any(k in t for k in ('bicycle','mtb:scale','colour','osmc:symbol')):
+                  print(e['type'],e['id'],{k:v for k,v in t.items() if k in K})
+          PY
