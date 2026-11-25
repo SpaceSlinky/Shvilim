@@ -329,6 +329,56 @@
     return { data: await blob.arrayBuffer() };
   });
 
+  const DARK = ['#222222', '#000000', '#000', '#111111', '#111', '#1a1a1a', '#333333', '#333'];
+  const THEME = [ // [שכבה, מאפיין, יום, לילה]
+    ['bg', 'background-color', '#e6e1d1', '#15191e'],
+    ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
+    ['major-casing', 'line-color', '#b8742a', '#4d3215'],
+    ['major', 'line-color', '#f7a656', '#9a6430'],
+    ['medium-casing', 'line-color', '#c4a03a', '#4a3e18'],
+    ['medium', 'line-color', '#ffe38f', '#7d6f38'],
+    ['minor-casing', 'line-color', '#b5b5b5', '#2c2f33'],
+    ['minor', 'line-color', '#ffffff', '#5a5e63'],
+    ['track', 'line-color', '#8b6b3e', '#a98b5e'],
+    ['path', 'line-color', ['case', ['==', ['get', 'b'], 1], '#f57c00', '#4a3d30'], ['case', ['==', ['get', 'b'], 1], '#ffa040', '#b3a596']],
+    // בלילה: שביל שחור נשאר שחור אבל מקבל מסגרת בהירה בולטת
+    ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
+      ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
+    ['trail-casing', 'line-opacity', fade(10, 10.7, 0.85), fade(10, 10.7, 1)],
+    ['env-fill', 'fill-color', '#2e7d4f', '#81c784'],
+    ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
+    ...GRID_LEVELS.map(({ m }) => ['dl-grid-' + m, 'line-color', '#6b6470', '#9aa3ab']),
+    ['env-line', 'line-color', '#2e7d4f', '#81c784'],
+    ['dl-busy-label', 'text-color', '#2b3035', '#ffffff'],
+    ['dl-busy-label', 'text-halo-color', 'rgba(255,255,255,.7)', 'rgba(0,0,0,.45)'],
+    ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
+    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
+      .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
+    ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
+    ['road-label', 'text-color', '#555555', '#b9b9b9'],
+    ['trail-label', 'text-color', '#222222', '#eeeeee'],
+    ['poi-label', 'text-color', '#333333', '#dddddd'],
+    ['peak', 'text-color', '#6d4c2f', '#d9b48c'],
+    ['place-minor', 'text-color', '#444444', '#cccccc'],
+    ['place-major', 'text-color', '#222222', '#f2f2f2'],
+    ...['ov-city', 'ovh-place'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
+    ['ov-sea', 'fill-color', '#aad3df', '#1c2f3e'],
+    ['ov-coast', 'line-color', '#7fa7c9', '#3d6a8f'],
+    ['ov-border', 'line-color', '#7a6f80', '#8d8494'],
+    ['area-label', 'text-color', '#e06000', '#ffa040'],
+    ['dim', 'fill-color', '#ffffff', '#000000'],
+    ['route-walked', 'line-color', '#ffffff', '#1b1f24'],
+  ];
+  for (const t of THEME.slice()) if (t[0] === 'ov-coast' || t[0] === 'ov-border') THEME.push(['ovh-' + t[0].slice(3), ...t.slice(1)]);
+  // פתיחה בתמה האחרונה: הצבעים של הלילה כבר בסגנון ההתחלתי – בלי הבזק בהיר
+  if (localStorage.getItem('theme') === 'dark') {
+    for (const [id, prop, , nightV] of THEME) {
+      const l = style.layers.find((x) => x.id === id);
+      if (!l) continue;
+      (l.paint ||= {})[prop] = nightV;
+    }
+    for (const l of style.layers) if (l.id === 'base-sat' || l.id === 'sat-top') (l.paint ||= {})['raster-brightness-max'] = 0.7;
+  }
   const map = new maplibregl.Map({
     container: 'map',
     style,
@@ -3112,49 +3162,8 @@
   mapReady.then(applyLayers);
 
   // ---------- מצב לילה ----------
-  const DARK = ['#222222', '#000000', '#000', '#111111', '#111', '#1a1a1a', '#333333', '#333'];
-  const THEME = [ // [שכבה, מאפיין, יום, לילה]
-    ['bg', 'background-color', '#e6e1d1', '#15191e'],
-    ['water', 'line-color', '#5aa9e6', '#3d7fb3'],
-    ['major-casing', 'line-color', '#b8742a', '#4d3215'],
-    ['major', 'line-color', '#f7a656', '#9a6430'],
-    ['medium-casing', 'line-color', '#c4a03a', '#4a3e18'],
-    ['medium', 'line-color', '#ffe38f', '#7d6f38'],
-    ['minor-casing', 'line-color', '#b5b5b5', '#2c2f33'],
-    ['minor', 'line-color', '#ffffff', '#5a5e63'],
-    ['track', 'line-color', '#8b6b3e', '#a98b5e'],
-    ['path', 'line-color', ['case', ['==', ['get', 'b'], 1], '#f57c00', '#4a3d30'], ['case', ['==', ['get', 'b'], 1], '#ffa040', '#b3a596']],
-    // בלילה: שביל שחור נשאר שחור אבל מקבל מסגרת בהירה בולטת
-    ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
-      ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
-    ['trail-casing', 'line-opacity', fade(10, 10.7, 0.85), fade(10, 10.7, 1)],
-    ['env-fill', 'fill-color', '#2e7d4f', '#81c784'],
-    ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
-    ...GRID_LEVELS.map(({ m }) => ['dl-grid-' + m, 'line-color', '#6b6470', '#9aa3ab']),
-    ['env-line', 'line-color', '#2e7d4f', '#81c784'],
-    ['dl-busy-label', 'text-color', '#2b3035', '#ffffff'],
-    ['dl-busy-label', 'text-halo-color', 'rgba(255,255,255,.7)', 'rgba(0,0,0,.45)'],
-    ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
-    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
-      .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
-    ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
-    ['road-label', 'text-color', '#555555', '#b9b9b9'],
-    ['trail-label', 'text-color', '#222222', '#eeeeee'],
-    ['poi-label', 'text-color', '#333333', '#dddddd'],
-    ['peak', 'text-color', '#6d4c2f', '#d9b48c'],
-    ['place-minor', 'text-color', '#444444', '#cccccc'],
-    ['place-major', 'text-color', '#222222', '#f2f2f2'],
-    ...['ov-city', 'ovh-place'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
-    ['ov-sea', 'fill-color', '#aad3df', '#1c2f3e'],
-    ['ov-coast', 'line-color', '#7fa7c9', '#3d6a8f'],
-    ['ov-border', 'line-color', '#7a6f80', '#8d8494'],
-    ['area-label', 'text-color', '#e06000', '#ffa040'],
-    ['dim', 'fill-color', '#ffffff', '#000000'],
-    ['route-walked', 'line-color', '#ffffff', '#1b1f24'],
-  ];
-  for (const t of THEME.slice()) if (t[0] === 'ov-coast' || t[0] === 'ov-border') THEME.push(['ovh-' + t[0].slice(3), ...t.slice(1)]);
   function applyTheme(night) {
-    document.body.classList.toggle('night', night);
+    document.body.classList.toggle('night', night); document.documentElement.classList.toggle('night', night);
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
     for (const id of ['base-sat', 'sat-top']) map.setPaintProperty(id, 'raster-brightness-max', night ? 0.7 : 1);

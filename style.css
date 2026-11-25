@@ -42,6 +42,7 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none;
   font-family: "Noto Sans Hebrew", system-ui, sans-serif; }
+html.night, html.night body { background: #15191e; }
 button, input, select, textarea { font-family: inherit; }
 #map { position: fixed; inset: 0; }
 
