@@ -383,16 +383,6 @@ section.open .lib-body { grid-template-rows: 1fr; }
 .cf-btns button { flex: 1; margin: 0; }
 .danger-btn { background: #c62828 !important; border-color: #c62828 !important; color: #fff !important; font-weight: 700; }
 
-/* הורדת מפות מהשיטוט: שורה קטנה בדוק מעל "מסלולים" – נפתחת ונסגרת ברכות */
-.lib-dl { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .3s cubic-bezier(.22,1,.36,1), opacity .25s; }
-.lib-dl > div { overflow: hidden; min-height: 0; }
-.lib-dl.on { grid-template-rows: 1fr; opacity: 1; }
-.lib-dl:not(.on) button { pointer-events: none; }
-.ld-row { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 2px 0 6px; font-size: 14px; }
-.ld-t { color: #1e6fb8; font-weight: 500; }
-.ld-x { width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: rgba(0,0,0,.06); color: inherit; font-size: 14px; }
-body.night .ld-t { color: #90caf9; }
-body.night body.night .ld-x { background: rgba(255,255,255,.08); }
 
 /* עיצוב רשימת המסלולים: חלון למעלה, הרשימה נראית מתחתיו ומשתנה בזמן אמת */
 #style-dlg { margin: 12px auto auto; max-height: 56vh; overflow: hidden; padding: 14px 16px; }
@@ -562,7 +552,6 @@ body.night #dock .lib-body .credits { color: #999; }
 #photo-cap { margin: 0; padding: 8px 12px; text-align: center; font-size: 14px; color: #eee; }
 .info-photos { border: 0; background: none; padding: 0; cursor: pointer; }
 
-.ld-t { cursor: pointer; }
 
 /* מתגי שכבות בסרגל הכלים: כבוי – אפור עם קו אלכסוני (כמו "לשבילים" בתכנון) */
 #controls .ly .slash { display: none; }
