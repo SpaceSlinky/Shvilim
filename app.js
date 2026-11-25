@@ -1117,17 +1117,20 @@
   });
 
   // ---------- הקשה על המפה: מה רשום ב-OpenStreetMap ----------
-  const SV_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.2"/><path d="M9.5 21v-6.5H8v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v4h-1.5V21z"/></svg>';
   const HW = { path: 'שביל', footway: 'שביל הליכה', track: 'דרך עפר', steps: 'מדרגות', bridleway: 'שביל רכיבה', cycleway: 'שביל אופניים',
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
+  const INFO_MIN_Z = 14;
+  let infoPop = null;
   const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
   map.on('click', (e) => {
     if (e.shvSel || inMaps() || plan || Date.now() - longPressAt < 800) return;
+    // חלון פתוח – נגיעה (בכל מקום) רק סוגרת אותו
+    if (infoPop) { infoPop.remove(); infoPop = null; return; }
+    // רק מקרוב – כשרואים על מה הוא מצביע (מרחוק נגיעה תופסת כמה דרכים צפופות)
+    if (map.getZoom() < INFO_MIN_Z) return;
     const { x, y } = e.point;
     const feats = map.queryRenderedFeatures([[x - 10, y - 10], [x + 10, y + 10]], { layers: INFO_LAYERS.filter((l) => map.getLayer(l)) });
-    // בתוך מפה שמורה (מקרוב, כשהשבילים נראים) – גם שורת האזור, ו"בחירה" לניהול (עדכון, מחיקה)
-    const saved = !showingRoute() && map.getZoom() >= 10.8 ? savedAt(e.lngLat.lng, e.lngLat.lat) : null;
-    if (!feats.length && !saved) return;
+    if (!feats.length) return;
     // שבילים מסומנים – ריבוע בצבע השביל, הכי שמאלי בשורה (אחרי שם הדרך וסוגה) (ולא שורה "שביל מסומן ירוק")
     const trails = feats.filter((f) => f.properties.k === 'trail');
     const colors = [...new Set(trails.map((f) => f.properties.c))];
@@ -1162,16 +1165,11 @@
     // שביל מסומן בלי דרך מתחתיו
     if (colors.length && !gotSquares) rows.unshift(`<div class="info-row">${trailName ? `<b>${esc(trailName)}</b> ` : ''}שביל${squares}</div>`);
     if (cam) rows.push(`<div class="info-row">${cam}</div>`);
-    if (saved) {
-      const g = areaGroups().find((x) => x.areas.some((y) => y.b.join() === saved.b.join()));
-      rows.push(`<div class="info-row info-area">מפה שמורה · ${esc(g?.name || '')} · ${fmtSize(sizeOf([saved.b]))}<button class="info-sel">בחירה</button></div>`);
-    }
     if (!rows.length) return;
-    // "איך זה נראה": Street View הכי קרוב לנקודה, ב-Google Maps (רק עם רשת; אם אין צילום קרוב – גוגל מראה מפה)
-    if (navigator.onLine) rows.push(`<div class="info-row info-sv-row"><a class="info-sv" target="_blank" rel="noopener" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${e.lngLat.lat.toFixed(6)},${e.lngLat.lng.toFixed(6)}">${SV_SVG}איך זה נראה</a></div>`);
     const pop = new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
     pop.getElement().querySelector('.info-photos')?.addEventListener('click', (ev) => { const d = ev.currentTarget.dataset; showPhoto(d.ph, d.n); });
-    pop.getElement().querySelector('.info-sel')?.addEventListener('click', () => { pop.remove(); selectSaved(saved); });
+    infoPop = pop;
+    pop.on('close', () => { if (infoPop === pop) infoPop = null; });
   });
   // התמונה מהתגית: קישור ישיר, קובץ בוויקישיתוף, ויקינתונים (P18) או ויקיפדיה (התמונה הראשית של הערך)
   const commonsFile = (f) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f.replace(/^(File|קובץ):/i, ''))}?width=900`;
@@ -2987,8 +2985,11 @@
  { sat: 0, labels: true, smooth: true, dimDay: 0.55, dimNight: 0.5, ...Object.fromEntries(Object.keys(GROUPS).map((g) => [g, true])) },
     (() => { try { return JSON.parse(localStorage.getItem('layers')) || {}; } catch { return {}; } })());
   layerPrefs.route = true; // המסלול תמיד מוצג (אין לו יותר תיבה בשכבות)
-  // אין יותר בחירה של שכבה-שכבה: כולן דלוקות, ו"הסתרת שכבות" (overlay) מסתירה את כולן יחד
-  for (const g of Object.keys(GROUPS)) layerPrefs[g] = true;
+  // שני מתגים בסרגל הכלים: שבילים (מסומנים, שבילים ודרכי עפר, אופניים) וכל השאר (כבישים, נחלים, נקודות, שמות, חניות)
+  const LAYER_SETS = { lyTrails: ['trails', 'paths', 'tracks', 'bike'], lyRest: ['roads', 'water', 'poi', 'places', 'parking'] };
+  for (const k of Object.keys(LAYER_SETS)) if (typeof layerPrefs[k] !== 'boolean') layerPrefs[k] = true;
+  const syncSets = () => { for (const [k, gs] of Object.entries(LAYER_SETS)) for (const g of gs) layerPrefs[g] = layerPrefs[k]; };
+  syncSets();
   layerPrefs.labels = true;
   // תצלום אוויר: שקיפות 0–1 (סליידר). פעם היה "סוג מפה" (מפה/תצלום/טופו) ו"הסתרת שכבות" – בוטלו
   if ('base' in layerPrefs) { layerPrefs.sat = layerPrefs.base === 'sat' ? 1 : 0; delete layerPrefs.base; }
@@ -3083,6 +3084,12 @@
   document.body.classList.toggle('night', isNight);
   showTheme();
   mapReady.then(() => applyTheme(isNight));
+  for (const [id, k] of [['btn-ly-trails', 'lyTrails'], ['btn-ly-rest', 'lyRest']]) {
+    const b = $(id);
+    const show = () => { b.classList.toggle('off', !layerPrefs[k]); b.setAttribute('aria-pressed', layerPrefs[k]); };
+    show();
+    b.addEventListener('click', () => { infoPop?.remove(); layerPrefs[k] = !layerPrefs[k]; syncSets(); show(); applyLayers(); layoutTools(); });
+  }
   $('btn-theme').addEventListener('click', () => {
     isNight = !isNight;
     try { localStorage.setItem('theme', isNight ? 'dark' : 'light'); } catch { /* ignore */ }
@@ -3533,6 +3540,8 @@
   function pinned(b) {
     if (b.id === 'btn-compass') return compassMode || Math.abs(map.getBearing()) > 0.5;
     if (b.id === 'btn-locate') return watchId != null && !follow && followedOnce;
+    if (b.id === 'btn-ly-trails') return !layerPrefs.lyTrails; // שכבה כבויה – נשאר על המסך, שיהיה ברור שמשהו מוסתר
+    if (b.id === 'btn-ly-rest') return !layerPrefs.lyRest;
     return false;
   }
   function layoutTools() {

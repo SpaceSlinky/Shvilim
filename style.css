@@ -562,16 +562,9 @@ body.night #dock .lib-body .credits { color: #999; }
 #photo-cap { margin: 0; padding: 8px 12px; text-align: center; font-size: 14px; color: #eee; }
 .info-photos { border: 0; background: none; padding: 0; cursor: pointer; }
 
-/* שורת המפה השמורה בחלון המידע: "בחירה" – לניהול (עדכון, מחיקה) */
-.info-area { color: #666; font-size: 13px; }
-.info-sel { margin-inline-start: 8px; padding: 2px 10px; border: 0; border-radius: 999px; background: rgba(46,125,79,.12); color: var(--green); font: inherit; font-size: 13px; font-weight: 600; }
-body.night .info-area { color: #aaa; }
-body.night .info-sel { background: rgba(129,199,132,.15); color: #81c784; }
 .ld-t { cursor: pointer; }
 
-/* "איך זה נראה" – Street View הקרוב, בגוגל מפות */
-.info-sv-row { margin-top: 4px; }
-.info-sv { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 8px; border-radius: 999px; background: rgba(66,133,244,.12);
-  color: #1a73e8; font-size: 13px; font-weight: 600; text-decoration: none; }
-.info-sv svg { width: 14px; height: 14px; fill: currentColor; }
-body.night .info-sv { background: rgba(138,180,248,.15); color: #8ab4f8; }
+/* מתגי שכבות בסרגל הכלים: כבוי – אפור עם קו אלכסוני (כמו "לשבילים" בתכנון) */
+#controls .ly .slash { display: none; }
+#controls .ly.off svg { opacity: .5; }
+#controls .ly.off .slash { display: inline; }
