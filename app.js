@@ -866,9 +866,12 @@
       e.shvSel = true;
       return selectSaved(a);
     }
-    if (batchQ?.cells.slice(batchQ.done).some((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3])) {
-      e.shvSel = true;
-      return ask(batchQ.kind === 'upd' ? 'לעצור את העדכון?' : 'לעצור את ההורדה?', 'עצירה', stopBatch);
+    const busy = batchQ?.cells.slice(batchQ.done).find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
+    if (busy || stopCell) { // נגיעה במשבצת שבהורדה/ממתינה – כפתור "עצירה" באמצעה; נגיעה נוספת / במקום אחר – נעלם
+      const same = busy && stopCell && busy.join() === stopCell.join();
+      stopCell = busy && !same ? busy : null;
+      placeStop();
+      if (busy) { e.shvSel = true; return; }
     }
     const c = dlAll.find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
     if (!c || !canPick(c)) return;
@@ -1022,7 +1025,7 @@
     runBatch({ kind: 'upd', cells, done: 0, fails: 0, err: '' });
   });
   // מה שרואים בזמן הורדה/עדכון: שורת המידע במצב מפות, והשורה בדוק (בשיטוט), והמשבצות בתור – בתכלת על המפה
-  function showBusy() { if (!batchQ) batchShown = false; mapsChanged(); }
+  function showBusy() { if (!batchQ) batchShown = false; mapsChanged(); placeStop(); }
   function stopBatch() {
     if (!batchQ) return;
     batchQ.cancel = true;
@@ -1092,7 +1095,28 @@
     map.getSource('dl-grid')?.setData({ type: 'FeatureCollection', features: dlAll.map((c) => ({ type: 'Feature', properties: {},
       geometry: { type: 'LineString', coordinates: [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]], [c[0], c[1]]] } })) });
   }
-  function checkArea() { buildGrids(); placeDlHere(); }
+  function checkArea() { buildGrids(); placeDlHere(); placeStop(); }
+  // כפתור "עצירה" קטן באמצע המשבצת שבהורדה שנגעו בה (באמצע החלק שלה שעל המסך; לא רחב מהמשבצת; כמעט מחוץ למסך – נעלם)
+  let stopCell = null;
+  const stopBtn = Object.assign(document.createElement('button'), { className: 'dl-here', textContent: 'עצירת ההורדה' });
+  document.body.appendChild(stopBtn);
+  stopBtn.addEventListener('click', () => { stopCell = null; placeStop(); stopBatch(); });
+  function placeStop() {
+    const c = stopCell;
+    if (c && !batchQ?.cells.slice(batchQ.done).some((x) => x.join() === c.join())) stopCell = null;
+    if (!stopCell) return stopBtn.classList.remove('on');
+    const W = innerWidth, top = 70, bottom = innerHeight - ($('dock')?.offsetHeight || 120) - 10;
+    const pts = [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]]].map((p) => map.project(p));
+    const x0 = Math.max(0, Math.min(...pts.map((p) => p.x))), x1 = Math.min(W, Math.max(...pts.map((p) => p.x)));
+    const y0 = Math.max(top, Math.min(...pts.map((p) => p.y))), y1 = Math.min(bottom, Math.max(...pts.map((p) => p.y)));
+    if (x1 - x0 < 50 || y1 - y0 < 30) return stopBtn.classList.remove('on');
+    stopBtn.textContent = batchQ.kind === 'upd' ? 'עצירת העדכון' : 'עצירת ההורדה';
+    stopBtn.style.left = (x0 + x1) / 2 + 'px';
+    stopBtn.style.top = (y0 + y1) / 2 + 'px';
+    stopBtn.style.scale = Math.min(1, (0.9 * (x1 - x0)) / (stopBtn.offsetWidth || 1));
+    stopBtn.classList.add('on');
+  }
+  map.on('move', () => stopCell && placeStop());
   let landCells = null; // Set של "i,j" – משבצות עם יבשה בישראל וביו"ש (tools/land_cells.py)
   fetch('land.json').then((r) => r.json()).then((j) => { landCells = new Set(j.cells.map((c) => c.join(','))); }).catch(() => {});
   const canPick = (c) => !landCells || landCells.has(Math.round(c[0] / CELL) + ',' + Math.round(c[1] / CELL)); // בלי ים ובלי מחוץ לגבולות
