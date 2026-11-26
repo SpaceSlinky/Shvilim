@@ -67,6 +67,7 @@
   // עולה בהדרגה (taperSplit) – אחרת יש "מדרגה" במקום שבו הקו עובר מהאמצע לצד
   const SHARED_V = ['*', ['-', SI, ['/', ['-', SN, 1], 2]], ['coalesce', ['get', 'tf'], 1]];
   const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, SHARED_V]);
+  const GLOW_LAYERS = [];
   const SOFT_DAY = 'rgba(255,255,255,.5)', SOFT_NIGHT = 'rgba(16,19,23,.55)';
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
@@ -283,9 +284,20 @@
   { const TOP = new Set(['ad-fill', 'ad-line', 'dl-tap-fill', 'dl-tap-line', 'dl-busy-label']);
     style.layers = [...style.layers.filter((l) => !TOP.has(l.id)), ...style.layers.filter((l) => TOP.has(l.id))]; }
   // שמות: הילה רכה ומטושטשת במקום קו מתאר חד (text-halo-blur – בלי עלות נוספת בעיבוד)
+  // שמות נקודתיים (יישובים, נקודות, פסגות): במקום הילה – "גראד" רך מתחת לטקסט: תמונה מטושטשת שנמתחת
+  // על הטקסט (icon-text-fit) ומבהירה/מכהה את הרקע בעדינות. לא משפיעה על ההתנגשויות (icon-ignore-placement).
+  // שמות לאורך קווים (שבילים, דרכים, נחלים) מתעקלים – שם נשארת ההילה הרכה
   for (const l of style.layers) {
-    const p = l.paint;
+    const p = l.paint, y = l.layout;
     if (l.type !== 'symbol' || !p || p['text-halo-width'] == null || l.id === 'dl-busy-label') continue;
+    if (y['symbol-placement'] !== 'line' && !y['icon-image']) {
+      Object.assign(y, { 'icon-image': 'glow-d', 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 5, 1, 5],
+        'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-optional': false, 'text-optional': false });
+      p['text-halo-width'] = 0;
+      if (p['text-opacity'] != null) p['icon-opacity'] = p['text-opacity'];
+      GLOW_LAYERS.push(l.id);
+      continue;
+    }
     const w = p['text-halo-width'];
     p['text-halo-width'] = w + 1.2;
     p['text-halo-blur'] = w + 1.2; // טשטוש מלא – דועך לאורך כל ההילה
@@ -399,6 +411,7 @@
       (l.paint ||= {})[prop] = nightV;
     }
     for (const l of style.layers) if (l.id === 'base-sat' || l.id === 'sat-top') (l.paint ||= {})['raster-brightness-max'] = 0.7;
+    for (const l of style.layers) if (GLOW_LAYERS.includes(l.id)) l.layout['icon-image'] = 'glow-n';
   }
   const map = new maplibregl.Map({
     container: 'map',
@@ -581,8 +594,21 @@
       localStorage.setItem('view', JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }));
     } catch { /* ignore */ }
   });
+  // הגראד מתחת לשמות: מלבן מעוגל מטושטש (shadowBlur – מצויר מחוץ לקנבס, רק הצל נכנס); המרכז נמתח, השוליים הרכים לא
+  function glowImage(rgb, a) {
+    const S = 96, M = 30, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.shadowColor = `rgba(${rgb},${a})`; g.shadowBlur = 22; g.shadowOffsetX = 1000;
+    g.fillStyle = '#000';
+    g.beginPath(); g.roundRect(M - 1000, M, S - 2 * M, S - 2 * M, 14); g.fill();
+    return g.getImageData(0, 0, S, S);
+  }
+  const GLOW_OPT = { pixelRatio: 2, stretchX: [[44, 52]], stretchY: [[44, 52]], content: [30, 30, 66, 66] };
   map.on('styleimagemissing', (e) => {
     if (map.hasImage(e.id)) return;
+    if (e.id === 'glow-d') map.addImage(e.id, glowImage('255,255,255', 0.75), GLOW_OPT);
+    if (e.id === 'glow-n') map.addImage(e.id, glowImage('16,19,23', 0.8), GLOW_OPT);
     if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
@@ -3188,6 +3214,7 @@
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
     for (const id of ['base-sat', 'sat-top']) map.setPaintProperty(id, 'raster-brightness-max', night ? 0.7 : 1);
+    for (const id of GLOW_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'icon-image', night ? 'glow-n' : 'glow-d');
   }
   // בהיר / כהה: כפתור אחד שמחליף מיד (בלי מצב אוטומטי). נשמר ב-localStorage `theme`
   let isNight = localStorage.getItem('theme') === 'dark';
