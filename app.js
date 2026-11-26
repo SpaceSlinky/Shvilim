@@ -297,8 +297,11 @@
     const i = rest.findIndex((l) => l.id === 'sat-top') + 1;
     // וגם שמות היישובים – נשארים גם ב"רק תצלום"; הסדר ביניהם נשמר
     const PLACES = new Set(['place-minor', 'place-major', 'ov-city', 'ovh-place']);
-    const names = rest.slice(0, i).filter((l) => PLACES.has(l.id));
-    style.layers = [...rest.slice(0, i).filter((l) => !PLACES.has(l.id)), ...env, ...names, ...rest.slice(i)]; }
+    // והגריד של המשבצות (dl-grid, dl-grid-*) – מתחת למשבצות שהורדו
+    const up = (l) => PLACES.has(l.id) || l.id.startsWith('dl-grid');
+    const below = rest.slice(0, i);
+    style.layers = [...below.filter((l) => !up(l)), ...below.filter((l) => l.id.startsWith('dl-grid')), ...env,
+      ...below.filter((l) => PLACES.has(l.id)), ...rest.slice(i)]; }
   style.layers = style.layers.flatMap((l) => {
     if (l.id !== 'ov-coast' && l.id !== 'ov-border') return [l]; // רק קווי המתאר ממשיכים מקרוב
     const hi = { ...l, id: 'ovh-' + l.id.slice(3), source: 'overview-hi', minzoom: 10 };
