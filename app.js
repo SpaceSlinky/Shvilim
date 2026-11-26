@@ -281,6 +281,11 @@
   // המשבצות שבחירה/הורדה/מחיקה והכיתוב שלהן – מעל הכל (מעל השבילים, השמות, התצלום והמסלול)
   { const TOP = new Set(['ad-fill', 'ad-line', 'dl-tap-fill', 'dl-tap-line', 'dl-busy-label']);
     style.layers = [...style.layers.filter((l) => !TOP.has(l.id)), ...style.layers.filter((l) => TOP.has(l.id))]; }
+  // המשבצות שהורדו (ירוק) – מעל התצלום העליון, כך שרואים אותן גם ב"רק תצלום" (ממילא נעלמות בזום אין)
+  { const ENV = new Set(['env-fill', 'env-line']);
+    const env = style.layers.filter((l) => ENV.has(l.id)), rest = style.layers.filter((l) => !ENV.has(l.id));
+    const i = rest.findIndex((l) => l.id === 'sat-top') + 1;
+    style.layers = [...rest.slice(0, i), ...env, ...rest.slice(i)]; }
   style.layers = style.layers.flatMap((l) => {
     if (l.id !== 'ov-coast' && l.id !== 'ov-border') return [l]; // רק קווי המתאר ממשיכים מקרוב
     const hi = { ...l, id: 'ovh-' + l.id.slice(3), source: 'overview-hi', minzoom: 10 };
