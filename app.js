@@ -67,7 +67,7 @@
   // עולה בהדרגה (taperSplit) – אחרת יש "מדרגה" במקום שבו הקו עובר מהאמצע לצד
   const SHARED_V = ['*', ['-', SI, ['/', ['-', SN, 1], 2]], ['coalesce', ['get', 'tf'], 1]];
   const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, SHARED_V]);
-  const SOFT_DAY = 'rgba(255,255,255,.85)', SOFT_NIGHT = 'rgba(16,19,23,.85)';
+  const SOFT_DAY = 'rgba(255,255,255,.5)', SOFT_NIGHT = 'rgba(16,19,23,.55)';
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
@@ -287,8 +287,8 @@
     const p = l.paint;
     if (l.type !== 'symbol' || !p || p['text-halo-width'] == null || l.id === 'dl-busy-label') continue;
     const w = p['text-halo-width'];
-    p['text-halo-width'] = w + 0.9;
-    p['text-halo-blur'] = w + 0.4;
+    p['text-halo-width'] = w + 1.2;
+    p['text-halo-blur'] = w + 1.2; // טשטוש מלא – דועך לאורך כל ההילה
     if (p['text-halo-color'] === '#fff') p['text-halo-color'] = SOFT_DAY;
   }
   // המשבצות שהורדו (ירוק) – מעל התצלום העליון, כך שרואים אותן גם ב"רק תצלום" (ממילא נעלמות בזום אין)
