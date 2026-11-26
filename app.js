@@ -67,6 +67,7 @@
   // עולה בהדרגה (taperSplit) – אחרת יש "מדרגה" במקום שבו הקו עובר מהאמצע לצד
   const SHARED_V = ['*', ['-', SI, ['/', ['-', SN, 1], 2]], ['coalesce', ['get', 'tf'], 1]];
   const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, SHARED_V]);
+  const SOFT_DAY = 'rgba(255,255,255,.85)', SOFT_NIGHT = 'rgba(16,19,23,.85)';
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
@@ -281,6 +282,15 @@
   // המשבצות שבחירה/הורדה/מחיקה והכיתוב שלהן – מעל הכל (מעל השבילים, השמות, התצלום והמסלול)
   { const TOP = new Set(['ad-fill', 'ad-line', 'dl-tap-fill', 'dl-tap-line', 'dl-busy-label']);
     style.layers = [...style.layers.filter((l) => !TOP.has(l.id)), ...style.layers.filter((l) => TOP.has(l.id))]; }
+  // שמות: הילה רכה ומטושטשת במקום קו מתאר חד (text-halo-blur – בלי עלות נוספת בעיבוד)
+  for (const l of style.layers) {
+    const p = l.paint;
+    if (l.type !== 'symbol' || !p || p['text-halo-width'] == null || l.id === 'dl-busy-label') continue;
+    const w = p['text-halo-width'];
+    p['text-halo-width'] = w + 0.9;
+    p['text-halo-blur'] = w + 0.4;
+    if (p['text-halo-color'] === '#fff') p['text-halo-color'] = SOFT_DAY;
+  }
   // המשבצות שהורדו (ירוק) – מעל התצלום העליון, כך שרואים אותן גם ב"רק תצלום" (ממילא נעלמות בזום אין)
   { const ENV = new Set(['env-fill', 'env-line']);
     const env = style.layers.filter((l) => ENV.has(l.id)), rest = style.layers.filter((l) => !ENV.has(l.id));
@@ -357,8 +367,8 @@
     ['dl-busy-label', 'text-color', '#2b3035', '#ffffff'],
     ['dl-busy-label', 'text-halo-color', 'rgba(255,255,255,.7)', 'rgba(0,0,0,.45)'],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
-    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
-      .flatMap((id) => [[id, 'text-halo-color', '#ffffff', '#101317']]),
+    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'parking-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
+      .flatMap((id) => [[id, 'text-halo-color', SOFT_DAY, SOFT_NIGHT]]),
     ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
     ['road-label', 'text-color', '#555555', '#b9b9b9'],
     ['trail-label', 'text-color', '#222222', '#eeeeee'],
