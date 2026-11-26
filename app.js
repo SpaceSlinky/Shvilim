@@ -295,7 +295,9 @@
   { const ENV = new Set(['env-fill', 'env-line']);
     const env = style.layers.filter((l) => ENV.has(l.id)), rest = style.layers.filter((l) => !ENV.has(l.id));
     const i = rest.findIndex((l) => l.id === 'sat-top') + 1;
-    style.layers = [...rest.slice(0, i), ...env, ...rest.slice(i)]; }
+    // וגם כל השמות (שכבות symbol שמתחת לתצלום העליון) – נשארים גם ב"רק תצלום"; הסדר ביניהם נשמר
+    const names = rest.slice(0, i).filter((l) => l.type === 'symbol');
+    style.layers = [...rest.slice(0, i).filter((l) => l.type !== 'symbol'), ...env, ...names, ...rest.slice(i)]; }
   style.layers = style.layers.flatMap((l) => {
     if (l.id !== 'ov-coast' && l.id !== 'ov-border') return [l]; // רק קווי המתאר ממשיכים מקרוב
     const hi = { ...l, id: 'ovh-' + l.id.slice(3), source: 'overview-hi', minzoom: 10 };
