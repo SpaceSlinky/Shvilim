@@ -607,8 +607,8 @@
   const GLOW_OPT = { pixelRatio: 2, stretchX: [[44, 52]], stretchY: [[44, 52]], content: [30, 30, 66, 66] };
   map.on('styleimagemissing', (e) => {
     if (map.hasImage(e.id)) return;
-    if (e.id === 'glow-d') map.addImage(e.id, glowImage('255,255,255', 0.75), GLOW_OPT);
-    if (e.id === 'glow-n') map.addImage(e.id, glowImage('16,19,23', 0.8), GLOW_OPT);
+    if (e.id === 'glow-d') map.addImage(e.id, glowImage('255,255,255', 0.4), GLOW_OPT);
+    if (e.id === 'glow-n') map.addImage(e.id, glowImage('16,19,23', 0.45), GLOW_OPT);
     if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
