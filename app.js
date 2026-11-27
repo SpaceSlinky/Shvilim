@@ -324,9 +324,10 @@
     // וגם שמות היישובים – נשארים גם ב"רק תצלום"; הסדר ביניהם נשמר
     const PLACES = new Set(['place-minor', 'place-major', 'ov-city', 'ovh-place']);
     // והגריד של המשבצות (dl-grid, dl-grid-*) – מתחת למשבצות שהורדו
-    const up = (l) => PLACES.has(l.id) || l.id.startsWith('dl-grid');
+    // וגם קו המתאר של ישראל – נראה גם על התצלום (שחור), ובמפה – שחור ביום / לבן בלילה (applyLayers)
+    const up = (l) => PLACES.has(l.id) || l.id.startsWith('dl-grid') || l.id === 'ov-border';
     const below = rest.slice(0, i);
-    style.layers = [...below.filter((l) => !up(l)), ...below.filter((l) => l.id.startsWith('dl-grid')), ...env,
+    style.layers = [...below.filter((l) => !up(l)), ...below.filter((l) => l.id.startsWith('dl-grid')), ...below.filter((l) => l.id === 'ov-border'), ...env,
       ...below.filter((l) => PLACES.has(l.id)), ...rest.slice(i)]; }
   style.layers = style.layers.flatMap((l) => {
     if (l.id !== 'ov-coast' && l.id !== 'ov-border') return [l]; // רק קווי המתאר ממשיכים מקרוב
@@ -413,7 +414,6 @@
     ...['ov-city', 'ovh-place'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
     ['ov-sea', 'fill-color', '#aad3df', '#1c2f3e'],
     ['ov-coast', 'line-color', '#7fa7c9', '#3d6a8f'],
-    ['ov-border', 'line-color', '#7a6f80', '#8d8494'],
     ['area-label', 'text-color', '#e06000', '#ffa040'],
     ['dim', 'fill-color', '#ffffff', '#000000'],
     ['route-walked', 'line-color', '#ffffff', '#1b1f24'],
@@ -3431,6 +3431,9 @@
     map.setLayoutProperty('base-sat', 'visibility', vis(under > 0));
     map.setPaintProperty('base-sat', 'raster-opacity', under);
     map.setLayoutProperty('sat-top', 'visibility', vis(over > 0));
+    // קו המתאר של ישראל: על תצלום – שחור; על המפה – שחור ביום, לבן בלילה
+    const borderCol = v >= 0.25 || !document.body.classList.contains('night') ? '#000000' : '#ffffff';
+    for (const id of ['ov-border', 'ovh-border']) if (map.getLayer(id)) map.setPaintProperty(id, 'line-color', borderCol);
     map.setPaintProperty('sat-top', 'raster-opacity', over);
     for (const [g, ids] of Object.entries(GROUPS))
       for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
