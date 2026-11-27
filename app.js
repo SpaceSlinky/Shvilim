@@ -432,9 +432,9 @@
   const map = new maplibregl.Map({
     container: 'map',
     style,
-    // פתיחה ראשונה – כל הארץ (מתוקן מיד ל-israelMinZoom); אחר כך – איפה שהיית
-    center: saved?.center || [35.0, 31.4],
-    zoom: saved?.zoom || 6,
+    // כל פתיחה – כל הארץ, בזום הכי רחוק (מתוקן מיד ל-israelMinZoom); פעם – איפה שהיית
+    center: [35.0, 31.4],
+    zoom: 6,
     minZoom: 6, // מעודכן מיד לפי גודל המסך (israelMinZoom)
     maxZoom: 19,
     dragRotate: true,
@@ -466,7 +466,7 @@
     return cam;
   }
   const israelCam = israelMinZoom();
-  if (!saved && israelCam) map.jumpTo(israelCam); // פתיחה ראשונה – כל הארץ
+  if (israelCam) map.jumpTo(israelCam); // כל פתיחה – כל הארץ
   map.on('resize', israelMinZoom);
   // בזום הכי רחוק – מפת ישראל ישרה וקבועה: בלי סיבוב ובלי גרירה (הכול על המסך ממילא). ננעל כשהזום נגמר (zoomend),
   // ומשתחרר ברגע שמתקרבים – לא באמצע מחווה
