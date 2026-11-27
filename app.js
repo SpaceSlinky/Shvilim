@@ -126,8 +126,8 @@
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9, 0.15, 9.6, 0.1, 10.4, 0] } },
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 0.6, 'line-opacity': ENV_FADE(0.9) } },
-      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'line-width': 0.6 } },
+      { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.14, 0.06] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#e53935', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'sel'], 1], 1.6, 0.6] } },
       // הגריד תמיד על המפה וידוע מראש (buildGrids – לא מתעדכן בזום ובתנועה): מרחוק – 0.6°, ומזום ~8.4 הוא מתחלף
       // בפייד בריבועי ההורדה הרגילים (רק החסרים)
       { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
@@ -547,8 +547,9 @@
     map.getSource('areas-env')?.setData({ type: 'FeatureCollection', features: feats });
   }
   map.on('click', 'env-fill', (e) => {
-    if (inMaps() || map.getZoom() >= 10.8) return;
+    if (inMaps() || areaSel.size || map.getZoom() >= SEL_Z0) return;
     const { lng, lat } = e.lngLat;
+    try { if (!localStorage.getItem('hintDel')) { localStorage.setItem('hintDel', '1'); setTimeout(() => toast('נגיעה במשבצת שמורה – מחיקה או עדכון', 4000), 1000); } } catch { /* ignore */ }
     const g = envGroups.find((x) => lng >= x.bbox[0] && lng <= x.bbox[2] && lat >= x.bbox[1] && lat <= x.bbox[3]);
     if (g) map.fitBounds([[g.bbox[0], g.bbox[1]], [g.bbox[2], g.bbox[3]]], { padding: 40, duration: 900 });
   });
@@ -880,6 +881,7 @@
   // ---------- ניהול מפות – בשיטוט עצמו, והדוק משתנה לפי מה שנבחר (פעם: מצב "מפות" נפרד מכפתור בכלים).
   // נגיעה במשבצת בלי מפה – בחירה להורדה (תכלת); לחיצה ארוכה על מפה שמורה (או "בחירה" בחלון המידע) – בחירה לניהול (אדום),
   // ואז נגיעות מוסיפות/מורידות משבצות. כשיש בחירה – הדוק במצב `areas`: מידע + ביטול · הורדה / עדכון · מחיקה
+  const SEL_Z0 = 8.4, SEL_Z1 = 10.4; // זום האמצע: נגיעה במשבצת שמורה – בחירה (מחיקה/עדכון)
   const areaSel = new Set(); // מפות שמורות שנבחרו (מפתח b.join())
   const dlSel = new Set(); // משבצות בלי מפה שנבחרו להורדה (מפתח c.join())
   const DL_MAX = 20; // משבצות בכל הורדה – השרתים הציבוריים עמוסים
@@ -967,7 +969,10 @@
     const { lng, lat } = e.lngLat;
     const a = savedAt(lng, lat);
     if (a && !batchQ?.cells.slice(batchQ.done).some((x) => x.join() === a.b.join())) {
-      if (!areaSel.size) return;
+      // בזום האמצע (רואים את המשבצות הבודדות, לפני שהשבילים מופיעים) – נגיעה בוחרת, כמו משבצת להורדה;
+      // מרחוק – זום למעטפת (env-fill); מקרוב – מידע על השבילים; לחיצה ארוכה – בכל זום
+      const z = map.getZoom();
+      if (!areaSel.size && (z < SEL_Z0 || z >= SEL_Z1)) return;
       e.shvSel = true;
       return selectSaved(a);
     }
@@ -1273,8 +1278,9 @@
     delBtn.innerHTML = TRASH_ICON + (sel > 1 ? `מחיקה (${sel})` : 'מחיקה');
     updBtn.innerHTML = DL_ICON + (nUpd > 1 ? `עדכון (${nUpd})` : 'עדכון');
     const ar = sel && areaLast && dockMode() === 'lib' && cellRect(areaLast);
-    putOn(delBtn, ar);
-    putOn(updBtn, ar && nUpd && navigator.onLine && !batchQ && ar, 44);
+    const showUpd = !!(ar && nUpd && navigator.onLine && !batchQ);
+    putOn(delBtn, ar, showUpd ? -22 : 0); // שניים – זוג ממורכז במשבצת
+    putOn(updBtn, showUpd && ar, 22);
     // ההתקדמות – המשבצת שיורדת עכשיו מתמלאת בירוק מלמטה (רק כשמשהו השתנה, לא בכל תזוזה)
     progCell = batchQ ? batchQ.cells[batchQ.done] : null;
     if (progCell) busyBtn.textContent = batchQ.kind === 'upd' ? 'מפה בעדכון…' : 'מפה בהורדה…';

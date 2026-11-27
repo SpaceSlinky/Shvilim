@@ -576,7 +576,8 @@ body.night #dock .lib-body .credits { color: #999; }
 #controls .mk.pressed svg .c2e { stroke: rgba(0,0,0,.35); }
 
 /* "עצירת ההורדה" – כפתור קטן באמצע המשבצת שבהורדה שנגעו בה */
-.dl-here { position: fixed; translate: -50% -50%; z-index: 6; width: max-content; padding: 6px 14px; border: 0; border-radius: 22px;
+.dl-here { position: fixed; translate: -50% -50%; z-index: 6; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 132px; box-sizing: border-box; padding: 7px 16px; border: 0; border-radius: 22px; line-height: 1.3;
   background: #fff; color: #c62828; font: inherit; font-size: 14px; font-weight: 500; box-shadow: 0 1px 8px rgba(0,0,0,.2);
   opacity: 0; pointer-events: none; transition: opacity .2s; }
 .dl-here.on { opacity: 1; pointer-events: auto; }
@@ -584,7 +585,7 @@ body.night .dl-here { background: #262c32; color: #ef5350; }
 .dl-here.dl-busy { color: #2b3035; }
 body.night .dl-here.dl-busy { color: #e6e6e6; }
 /* "הורדה" על המשבצת שנבחרה אחרונה – ירוק עם אייקון */
-.dl-here.dl-go { display: inline-flex; align-items: center; gap: 4px; color: var(--green); }
+.dl-here.dl-go { color: var(--green); }
 .dl-here.dl-go svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dl-here.dl-go:disabled { color: #777; }
 .dl-here.dl-go.dl-del { color: #c62828; }
