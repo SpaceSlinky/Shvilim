@@ -1305,12 +1305,18 @@
   const HW = { path: 'שביל', footway: 'שביל הליכה', track: 'דרך עפר', steps: 'מדרגות', bridleway: 'שביל רכיבה', cycleway: 'שביל אופניים',
     residential: 'רחוב', unclassified: 'דרך', tertiary: 'כביש', secondary: 'כביש', primary: 'כביש ראשי' };
   const INFO_MIN_Z = 14;
-  let infoPop = null;
+  let infoPop = null, infoClosedAt = 0;
+  // חלון פתוח – כל נגיעה שלא בתוכו (גם בכלים, בחיפוש, בדוק) סוגרת אותו; אותה נגיעה לא פותחת חלון חדש
+  addEventListener('pointerdown', (e) => {
+    if (!infoPop || infoPop.getElement().contains(e.target)) return;
+    infoPop.remove(); infoPop = null; infoClosedAt = Date.now();
+  }, true);
   const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
   map.on('click', (e) => {
     if (e.shvSel || inMaps() || plan || Date.now() - longPressAt < 800) return;
     // חלון פתוח – נגיעה (בכל מקום) רק סוגרת אותו
     if (infoPop) { infoPop.remove(); infoPop = null; return; }
+    if (Date.now() - infoClosedAt < 700) return;
     // רק מקרוב – כשרואים על מה הוא מצביע (מרחוק נגיעה תופסת כמה דרכים צפופות)
     if (map.getZoom() < INFO_MIN_Z) return;
     const { x, y } = e.point;
@@ -1358,40 +1364,103 @@
   });
   // התמונה מהתגית: קישור ישיר, קובץ בוויקישיתוף, ויקינתונים (P18) או ויקיפדיה (התמונה הראשית של הערך)
   const commonsFile = (f) => `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(f.replace(/^(File|קובץ):/i, ''))}?width=900`;
-  async function photoUrl(ph) {
+  // כל התמונות של המקום (לדפדוף): קישור / קובץ / קטגוריה בוויקישיתוף; ויקינתונים – כל ה-P18, הקטגוריה (P373),
+  // ואם אין – הערך בוויקיפדיה; ויקיפדיה – התמונה הראשית ואחריה התמונות שבערך (media-list, בלי ציורים/סמלים)
+  const getJson = async (u) => (await fetch(u)).json();
+  async function commonsCat(cat) {
+    const j = await getJson(`https://commons.wikimedia.org/w/api.php?action=query&list=categorymembers&cmtype=file&cmlimit=20&format=json&origin=*&cmtitle=${encodeURIComponent('Category:' + cat.replace(/^category:/i, ''))}`);
+    return (j.query?.categorymembers || []).map((m) => m.title).filter((t) => /\.(jpe?g|png|webp)$/i.test(t)).map(commonsFile);
+  }
+  async function wikiPhotos(lang, title) {
+    const t = encodeURIComponent(title);
+    const out = [];
+    try {
+      const j = await getJson(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${t}`);
+      const u = j.originalimage?.source || j.thumbnail?.source;
+      if (u) out.push(u);
+    } catch { /* ignore */ }
+    try {
+      const j = await getJson(`https://${lang}.wikipedia.org/api/rest_v1/page/media-list/${t}`);
+      for (const it of j.items || []) {
+        if (it.type !== 'image' || it.showInGallery === false || !/\.(jpe?g|png|webp)$/i.test(it.title || '')) continue;
+        out.push(commonsFile(it.title));
+      }
+    } catch { /* ignore */ }
+    return out;
+  }
+  async function photoUrls(ph) {
     const [kind, ...rest] = ph.split(':'), v = rest.join(':').trim();
     if (kind === 'img') {
       const m = /commons\.wikimedia\.org\/wiki\/(File:[^?#]+)/i.exec(v);
-      return m ? commonsFile(decodeURIComponent(m[1])) : v;
+      return [m ? commonsFile(decodeURIComponent(m[1])) : v];
     }
-    if (kind === 'c') return /^category:/i.test(v) ? null : commonsFile(v);
+    if (kind === 'c') return /^category:/i.test(v) ? commonsCat(v) : [commonsFile(v)];
     if (kind === 'wd') {
       const q = v.split(';')[0];
-      const j = await (await fetch(`https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(q)}.json`)).json();
-      const ent = j.entities?.[q], f = ent?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
-      if (f) return commonsFile(f);
-      const he = ent?.sitelinks?.hewiki?.title || ent?.sitelinks?.enwiki?.title;
-      return he ? photoUrl(`wp:${ent.sitelinks.hewiki ? 'he' : 'en'}:${he}`) : null;
+      const ent = (await getJson(`https://www.wikidata.org/wiki/Special:EntityData/${encodeURIComponent(q)}.json`)).entities?.[q];
+      const out = (ent?.claims?.P18 || []).map((c) => c.mainsnak?.datavalue?.value).filter(Boolean).map(commonsFile);
+      const wiki = ent?.sitelinks?.hewiki || ent?.sitelinks?.enwiki;
+      if (wiki) out.push(...await wikiPhotos(ent.sitelinks.hewiki ? 'he' : 'en', wiki.title));
+      const cat = ent?.claims?.P373?.[0]?.mainsnak?.datavalue?.value;
+      if (cat && out.length < 3) out.push(...await commonsCat(cat).catch(() => []));
+      return out;
     }
     if (kind === 'wp') {
       const [lang, ...t] = v.includes(':') ? v.split(':') : ['he', v];
-      const j = await (await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t.join(':'))}`)).json();
-      return j.originalimage?.source || j.thumbnail?.source || null;
+      return wikiPhotos(lang, t.join(':'));
     }
-    return null;
+    return [];
+  }
+  // אותה תמונה בגדלים שונים (ויקיפדיה/שיתוף) – פעם אחת
+  const photoKey = (u) => decodeURIComponent(u).replace(/^.*\//, '').replace(/^\d+px-/, '').replace(/\?.*$/, '').replace(/_/g, ' ').toLowerCase();
+  // החלון: תמונה מוצגת רק אחרי שנטענה (בלי הקודמת שמתחלפת); כמה תמונות – דפדוף בהחלקה או בחצים, "2 / 5"; נגיעה סוגרת
+  let photos = [], photoIdx = 0, photoName = '', photoReq = 0;
+  const loadImg = (u) => new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(u); i.onerror = bad; i.src = u; });
+  async function showPhotoAt(i) {
+    const req = ++photoReq;
+    try { await loadImg(photos[i]); } catch {
+      photos.splice(i, 1);
+      if (!photos.length) { $('photo-dlg').close(); return toast('לא הצלחתי לטעון את התמונה', 2500); }
+      return showPhotoAt(Math.min(i, photos.length - 1));
+    }
+    if (req !== photoReq) return;
+    photoIdx = i;
+    $('photo-img').src = photos[i];
+    $('photo-cap').textContent = photoName + (photos.length > 1 ? `  ·  ${i + 1} / ${photos.length}` : '');
+    $('photo-dlg').classList.toggle('many', photos.length > 1);
+    if (!$('photo-dlg').open) $('photo-dlg').showModal();
+    if (photos[i + 1]) loadImg(photos[i + 1]).catch(() => {}); // הבאה – מראש
   }
   async function showPhoto(ph, name) {
     toast('טוען תמונה…', 1500);
-    let url = null;
-    try { url = await photoUrl(ph); } catch { /* ignore */ }
-    if (!url) return toast('אין תמונה זמינה למקום הזה', 2500);
-    const img = $('photo-img');
-    img.onerror = () => { $('photo-dlg').close(); toast('לא הצלחתי לטעון את התמונה', 2500); };
-    img.src = url;
-    $('photo-cap').textContent = name || '';
-    $('photo-dlg').showModal();
+    let list = [];
+    try { list = await photoUrls(ph); } catch { /* ignore */ }
+    const seen = new Set();
+    photos = list.filter((u) => u && !seen.has(photoKey(u)) && seen.add(photoKey(u))).slice(0, 20);
+    if (!photos.length) return toast('אין תמונה זמינה למקום הזה', 2500);
+    photoName = name || '';
+    $('photo-img').removeAttribute('src');
+    showPhotoAt(0);
   }
-  $('photo-dlg').addEventListener('click', () => $('photo-dlg').close());
+  const photoStep = (d) => photos.length > 1 && showPhotoAt((photoIdx + d + photos.length) % photos.length);
+  { const dlg = $('photo-dlg');
+    let sx = null, sy = 0, swiped = false;
+    dlg.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; swiped = false; });
+    dlg.addEventListener('pointerup', (e) => {
+      if (sx == null) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      sx = null;
+      // RTL: הבאה משמאל – גוררים ימינה
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { swiped = true; photoStep(dx > 0 ? 1 : -1); }
+    });
+    dlg.addEventListener('click', (e) => {
+      if (swiped) return;
+      const nav = e.target.closest('.ph-nav');
+      if (nav) return photoStep(nav.dataset.d === 'next' ? 1 : -1);
+      dlg.close();
+    });
+    dlg.addEventListener('close', () => { photoReq++; });
+  }
   const CAM_SVG = '<svg viewBox="0 0 24 24"><path d="M4 8h3.5l1.5-2.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 

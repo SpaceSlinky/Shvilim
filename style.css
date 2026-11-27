@@ -551,6 +551,13 @@ body.night #dock .lib-body .credits { color: #999; }
 #photo-dlg { padding: 0; width: min(94vw, 560px); overflow: hidden; background: #000; }
 #photo-img { display: block; width: 100%; max-height: 75vh; object-fit: contain; background: #000; }
 #photo-cap { margin: 0; padding: 8px 12px; text-align: center; font-size: 14px; color: #eee; }
+#photo-dlg { position: fixed; touch-action: pan-y; user-select: none; }
+#photo-img { -webkit-user-drag: none; }
+.ph-nav { display: none; position: absolute; top: calc(50% - 40px); width: 40px; height: 40px; border: 0; border-radius: 999px; padding: 0;
+  background: rgba(0,0,0,.35); color: #fff; font-size: 28px; line-height: 36px; }
+#photo-dlg.many .ph-nav { display: block; }
+.ph-nav[data-d="prev"] { right: 8px; }
+.ph-nav[data-d="next"] { left: 8px; }
 .info-photos { border: 0; background: none; padding: 0; cursor: pointer; }
 
 
