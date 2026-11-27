@@ -1358,8 +1358,23 @@
     if (cam) rows.push(`<div class="info-row">${cam}</div>`);
     if (!rows.length) return;
     const pop = new maplibregl.Popup({ closeButton: false, maxWidth: '280px' }).setLngLat(e.lngLat).setHTML(rows.join('')).addTo(map);
-    pop.getElement().querySelector('.info-photos')?.addEventListener('click', (ev) => { const d = ev.currentTarget.dataset; showPhoto(d.ph, d.n); });
+    const camClick = (ev) => { const b = ev.currentTarget; showPhoto(b.dataset.ph || '', b.dataset.n || '', b._extra || []); };
+    pop.getElement().querySelector('.info-photos')?.addEventListener('click', camClick);
     infoPop = pop;
+    // תמונות מהסביבה (ויקישיתוף לפי מיקום, עד 300 מ'): מצטרפות לתמונות של המקום, או מצלמה חדשה בסוף השורה הראשונה
+    if (navigator.onLine) nearbyPhotos(e.lngLat).then((urls) => {
+      if (!urls.length || infoPop !== pop) return;
+      const el = pop.getElement();
+      let btn = el.querySelector('.info-photos');
+      if (!btn) {
+        btn = Object.assign(document.createElement('button'), { className: 'info-photos', innerHTML: CAM_SVG });
+        btn.setAttribute('aria-label', 'תמונות מהסביבה');
+        btn.dataset.n = el.querySelector('.info-row b')?.textContent || '';
+        btn.addEventListener('click', camClick);
+        el.querySelector('.info-row')?.appendChild(btn);
+      }
+      btn._extra = urls;
+    });
     pop.on('close', () => { if (infoPop === pop) infoPop = null; });
   });
   // התמונה מהתגית: קישור ישיר, קובץ בוויקישיתוף, ויקינתונים (P18) או ויקיפדיה (התמונה הראשית של הערך)
@@ -1411,6 +1426,15 @@
     }
     return [];
   }
+  // תמונות עם מיקום בוויקישיתוף סביב הנקודה – מהקרובה לרחוקה (נשמר לפי ~100 מ', כדי לא לשאול שוב)
+  const nearCache = new Map();
+  function nearbyPhotos(ll) {
+    const key = ll.lat.toFixed(3) + ',' + ll.lng.toFixed(3);
+    if (!nearCache.has(key)) nearCache.set(key, getJson(`https://commons.wikimedia.org/w/api.php?action=query&list=geosearch&gsnamespace=6&gsradius=300&gslimit=20&format=json&origin=*&gscoord=${ll.lat.toFixed(5)}|${ll.lng.toFixed(5)}`)
+      .then((j) => (j.query?.geosearch || []).filter((g) => /\.(jpe?g|png|webp)$/i.test(g.title)).map((g) => commonsFile(g.title)))
+      .catch(() => { nearCache.delete(key); return []; }));
+    return nearCache.get(key);
+  }
   // אותה תמונה בגדלים שונים (ויקיפדיה/שיתוף) – פעם אחת
   const photoKey = (u) => decodeURIComponent(u).replace(/^.*\//, '').replace(/^\d+px-/, '').replace(/\?.*$/, '').replace(/_/g, ' ').toLowerCase();
   // החלון: תמונה מוצגת רק אחרי שנטענה (בלי הקודמת שמתחלפת); כמה תמונות – דפדוף בהחלקה או בחצים, "2 / 5"; נגיעה סוגרת
@@ -1431,10 +1455,11 @@
     if (!$('photo-dlg').open) $('photo-dlg').showModal();
     if (photos[i + 1]) loadImg(photos[i + 1]).catch(() => {}); // הבאה – מראש
   }
-  async function showPhoto(ph, name) {
+  async function showPhoto(ph, name, extra = []) {
     toast('טוען תמונה…', 1500);
     let list = [];
-    try { list = await photoUrls(ph); } catch { /* ignore */ }
+    if (ph) try { list = await photoUrls(ph); } catch { /* ignore */ }
+    list = [...list, ...extra];
     const seen = new Set();
     photos = list.filter((u) => u && !seen.has(photoKey(u)) && seen.add(photoKey(u))).slice(0, 20);
     if (!photos.length) return toast('אין תמונה זמינה למקום הזה', 2500);
