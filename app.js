@@ -75,8 +75,11 @@
   // עולה בהדרגה (taperSplit) – אחרת יש "מדרגה" במקום שבו הקו עובר מהאמצע לצד
   const SHARED_V = ['*', ['-', SI, ['/', ['-', SN, 1], 2]], ['coalesce', ['get', 'tf'], 1]];
   const SHARED_OFFSET = zwShared(1.5, 4.5, (w) => ['*', w * SHARED_STEP, SHARED_V]);
-  const GLOW_LAYERS = [];
-  const SOFT_DAY = 'rgba(255,255,255,.5)', SOFT_NIGHT = 'rgba(16,19,23,.55)';
+  // שמות על המפה: קו מתאר חד ושקוף (בלי טשטוש, בלי פס/גראד מתחת). הצבעים לפי הרקע ולא רק לפי התמה:
+  // על מפה בהירה – טקסט כהה וקו בהיר; על רקע כהה (לילה, או כשהתצלום כבר שולט) – טקסט בהיר וקו כהה (applyLabels)
+  const LABELS_ALL = ['water-label', 'road-label', 'trail-label', 'poi-label', 'parking-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label'];
+  const HALO_LIGHT = 'rgba(255,255,255,.7)', HALO_DARK = 'rgba(20,24,28,.7)', HALO_W = 1.4;
+  const SAT_DARK = 0.35; // מכאן בסליידר (תצלום 70% מתחת למפה) – הרקע נחשב כהה
   const halo = { 'text-halo-color': '#fff', 'text-halo-width': 1.6 };
   const empty = { type: 'FeatureCollection', features: [] };
 
@@ -297,26 +300,9 @@
   // המשבצות שבחירה/הורדה/מחיקה והכיתוב שלהן – מעל הכל (מעל השבילים, השמות, התצלום והמסלול)
   { const TOP = new Set(['ad-fill', 'ad-line', 'dl-prog-fill', 'dl-tap-fill', 'dl-tap-line', 'dl-busy-label']);
     style.layers = [...style.layers.filter((l) => !TOP.has(l.id)), ...style.layers.filter((l) => TOP.has(l.id))]; }
-  // שמות: הילה רכה ומטושטשת במקום קו מתאר חד (text-halo-blur – בלי עלות נוספת בעיבוד)
-  // שמות נקודתיים (יישובים, נקודות, פסגות): במקום הילה – "גראד" רך מתחת לטקסט: תמונה מטושטשת שנמתחת
-  // על הטקסט (icon-text-fit) ומבהירה/מכהה את הרקע בעדינות. לא משפיעה על ההתנגשויות (icon-ignore-placement).
-  // שמות לאורך קווים (שבילים, דרכים, נחלים) מתעקלים – שם נשארת ההילה הרכה
   for (const l of style.layers) {
-    const p = l.paint, y = l.layout;
-    if (l.type !== 'symbol' || !p || p['text-halo-width'] == null || l.id === 'dl-busy-label') continue;
-    if (y['symbol-placement'] !== 'line' && !y['icon-image']) {
-      const place = ['place-minor', 'place-major', 'ov-city', 'ovh-place'].includes(l.id);
-      Object.assign(y, { 'icon-image': place ? 'glow-pd' : 'glow-d', 'icon-text-fit': 'both', 'icon-text-fit-padding': place ? [1, 4, 1, 4] : [1, 5, 1, 5],
-        'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-optional': false, 'text-optional': false });
-      p['text-halo-width'] = 0;
-      if (p['text-opacity'] != null) p['icon-opacity'] = p['text-opacity'];
-      GLOW_LAYERS.push(l.id);
-      continue;
-    }
-    const w = p['text-halo-width'];
-    p['text-halo-width'] = w + 1.2;
-    p['text-halo-blur'] = w + 1.2; // טשטוש מלא – דועך לאורך כל ההילה
-    if (p['text-halo-color'] === '#fff') p['text-halo-color'] = SOFT_DAY;
+    if (!LABELS_ALL.includes(l.id)) continue;
+    Object.assign(l.paint, { 'text-halo-width': HALO_W, 'text-halo-blur': 0, 'text-halo-color': HALO_LIGHT }); // בלילה – THEME למטה
   }
   // המשבצות שהורדו (ירוק) – מעל התצלום העליון, כך שרואים אותן גם ב"רק תצלום" (ממילא נעלמות בזום אין)
   { const ENV = new Set(['env-fill', 'env-line']);
@@ -403,8 +389,7 @@
     ['dl-busy-label', 'text-color', '#2b3035', '#ffffff'],
     ['dl-busy-label', 'text-halo-color', 'rgba(255,255,255,.7)', 'rgba(0,0,0,.45)'],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
-    ...['water-label', 'road-label', 'trail-label', 'poi-label', 'parking-label', 'peak', 'place-minor', 'place-major', 'ov-city', 'ovh-place', 'area-label']
-      .flatMap((id) => [[id, 'text-halo-color', SOFT_DAY, SOFT_NIGHT]]),
+    ...LABELS_ALL.map((id) => [id, 'text-halo-color', HALO_LIGHT, HALO_DARK]),
     ['water-label', 'text-color', '#2a74b5', '#7dbbec'],
     ['road-label', 'text-color', '#555555', '#b9b9b9'],
     ['trail-label', 'text-color', '#222222', '#eeeeee'],
@@ -428,7 +413,6 @@
       (l.paint ||= {})[prop] = nightV;
     }
     for (const l of style.layers) if (l.id === 'base-sat' || l.id === 'sat-top') (l.paint ||= {})['raster-brightness-max'] = 0.7;
-    for (const l of style.layers) if (GLOW_LAYERS.includes(l.id)) l.layout['icon-image'] = l.layout['icon-image'].replace(/d$/, 'n');
   }
   const map = new maplibregl.Map({
     container: 'map',
@@ -612,35 +596,8 @@
       localStorage.setItem('view', JSON.stringify({ center: [c.lng, c.lat], zoom: map.getZoom() }));
     } catch { /* ignore */ }
   });
-  // הגראד מתחת לשמות: מלבן מעוגל מטושטש (shadowBlur – מצויר מחוץ לקנבס, רק הצל נכנס); המרכז נמתח, השוליים הרכים לא
-  function glowImage(rgb, a) {
-    const S = 96, M = 30, c = document.createElement('canvas');
-    c.width = c.height = S;
-    const g = c.getContext('2d');
-    g.shadowColor = `rgba(${rgb},${a})`; g.shadowBlur = 22; g.shadowOffsetX = 1000;
-    g.fillStyle = '#000';
-    g.beginPath(); g.roundRect(M - 1000, M, S - 2 * M, S - 2 * M, 14); g.fill();
-    return g.getImageData(0, 0, S, S);
-  }
-  const GLOW_OPT = { pixelRatio: 2, stretchX: [[44, 52]], stretchY: [[44, 52]], content: [30, 30, 66, 66] };
-  // שמות היישובים: פס מלבני חד (בלי טשטוש) מאחורי השם – ביום מכהה את הרקע ב-35%, בלילה מבהיר ב-35%
-  function pillImage(rgb, a) {
-    const W = 128, H = 96, M = 30, c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const g = c.getContext('2d');
-    g.fillStyle = `rgba(${rgb},${a})`;
-    g.fillRect(M, M, W - 2 * M, H - 2 * M);
-    return g.getImageData(0, 0, W, H);
-  }
-  const PILL_OPT = { pixelRatio: 2, stretchX: [[34, 94]], stretchY: [[34, 62]], content: [30, 30, 98, 66] };
-  const PLACE_GLOW = new Set(['place-minor', 'place-major', 'ov-city', 'ovh-place']);
-  const glowFor = (id, night) => (PLACE_GLOW.has(id) ? 'glow-p' : 'glow-') + (night ? 'n' : 'd');
   map.on('styleimagemissing', (e) => {
     if (map.hasImage(e.id)) return;
-    if (e.id === 'glow-d') map.addImage(e.id, glowImage('255,255,255', 0.4), GLOW_OPT);
-    if (e.id === 'glow-n') map.addImage(e.id, glowImage('16,19,23', 0.45), GLOW_OPT);
-    if (e.id === 'glow-pd') map.addImage(e.id, pillImage('0,0,0', 0.35), PILL_OPT); // ביום – מכהה
-    if (e.id === 'glow-pn') map.addImage(e.id, pillImage('255,255,255', 0.35), PILL_OPT); // בלילה – מבהיר
     if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
@@ -3427,6 +3384,15 @@
   // הסתרת הרקע – ערך אחד ליום וללילה (פעם היו שניים: ממשיכים מהערך של המצב הנוכחי)
   if (layerPrefs.dim == null) layerPrefs.dim = (localStorage.getItem('theme') === 'dark' ? layerPrefs.dimNight : layerPrefs.dimDay) ?? 0.55;
 
+  // צבעי השמות לפי הרקע: כהה בלילה או כשהסליידר כבר על התצלום (גם ביום) – טקסט בהיר וקו כהה, כמו במפות לוויין
+  const LABEL_ROW = (id, prop) => LABELS_ALL.includes(id) && (prop === 'text-color' || prop === 'text-halo-color');
+  let labelsDark = null;
+  function applyLabels() {
+    const dark = document.body.classList.contains('night') || sliderVal() >= SAT_DARK;
+    if (dark === labelsDark) return;
+    labelsDark = dark;
+    for (const [id, prop, day, nightV] of THEME) if (LABEL_ROW(id, prop) && map.getLayer(id)) map.setPaintProperty(id, prop, dark ? nightV : day);
+  }
   function applyLayers() {
     const vis = (on) => (on ? 'visible' : 'none');
     // סליידר אחד, שלושה מצבים. בשיטוט: 0 – מפה; 0.5 – תצלום מלא מתחת למפה; 1 – רק תצלום (מעל המפה).
@@ -3440,6 +3406,7 @@
     const borderCol = v >= 0.25 || !document.body.classList.contains('night') ? '#000000' : '#ffffff';
     for (const id of ['ov-border', 'ovh-border']) if (map.getLayer(id)) map.setPaintProperty(id, 'line-color', borderCol);
     map.setPaintProperty('sat-top', 'raster-opacity', over);
+    applyLabels();
     for (const [g, ids] of Object.entries(GROUPS))
       for (const id of ids) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis(layerPrefs[g] && (!LABELS.has(id) || layerPrefs.labels)));
     map.setLayoutProperty('dim', 'visibility', vis(dimValue() > 0 && layerPrefs.route && (!!active || !!plan)));
@@ -3455,9 +3422,9 @@
   function applyTheme(night) {
     document.body.classList.toggle('night', night); document.documentElement.classList.toggle('night', night);
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
-    for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
+    for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id) && !LABEL_ROW(id, prop)) map.setPaintProperty(id, prop, night ? nightV : day);
     for (const id of ['base-sat', 'sat-top']) map.setPaintProperty(id, 'raster-brightness-max', night ? 0.7 : 1);
-    for (const id of GLOW_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'icon-image', glowFor(id, night));
+    applyLabels();
   }
   // בהיר / כהה: כפתור אחד שמחליף מיד (בלי מצב אוטומטי). נשמר ב-localStorage `theme`
   let isNight = localStorage.getItem('theme') === 'dark';
