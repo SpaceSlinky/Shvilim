@@ -18,7 +18,7 @@ jobs:
         with:
           ref: main
       # קובץ מוכן של כל ישראל ופלסטין (Geofabrik, מתעדכן כל יום) – מהיר ואמין, במקום שרת Overpass הציבורי העמוס
-      - run: curl -sSfL --retry 3 -o il.osm.pbf https://download.geofabrik.de/asia/israel-and-palestine-latest.osm.pbf && ls -la il.osm.pbf
+      - run: curl -sSfL --retry 5 --retry-all-errors --retry-delay 30 -o il.osm.pbf https://download.geofabrik.de/asia/israel-and-palestine-latest.osm.pbf && ls -la il.osm.pbf
       - run: pip install -q osmium
       - run: python3 tools/overview.py israel.json --pbf il.osm.pbf
       - name: commit + גרסה חדשה לאפליקציה
