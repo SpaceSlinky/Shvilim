@@ -10,7 +10,15 @@
   if ('serviceWorker' in navigator) {
     // עדכון אוטומטי: כשגרסה חדשה של האפליקציה מותקנת ברקע – טוענים אותה מחדש
     const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener('controllerchange', () => hadController && location.reload());
+    // גרסה חדשה – נטענת מחדש רק כשהאפליקציה ברקע (או מיד, אם כבר ברקע), כדי שחזרה אליה לא תיתקע בטעינה מחדש
+    let pendingReload = false;
+    const tryReload = () => {
+      let nav = false;
+      try { nav = !!active?.nav; } catch { /* לפני ההפעלה */ }
+      if (pendingReload && document.hidden && !nav) location.reload(); // לא באמצע ניווט (ה-GPS ממשיך ברקע)
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) { pendingReload = true; tryReload(); } });
+    document.addEventListener('visibilitychange', tryReload);
     navigator.serviceWorker.register('sw.js').then((r) => r.update()).catch(console.error);
   }
   if (typeof maplibregl === 'undefined') {
@@ -78,7 +86,7 @@
   // הנקודה והשם מרחוק – מלאים עד 8.6, נעלמים עד 9.2 (בדיוק כשהמעטפת והשם בתוכה מופיעים)
   const ENV_FADE = (max) => ['interpolate', ['linear'], ['zoom'], 9.6, max, 10.4, 0];
   const FADES = { // שכבה: [מתחיל להופיע, מלא]
-    'minor-casing': [11.5, 12], minor: [11.5, 12], path: [11.2, 11.8], track: [10.3, 10.9], bike: [10.3, 10.9],
+    'minor-casing': [11.5, 12], minor: [11.5, 12], path: [11.2, 11.8], track: [10.3, 10.9], bike: [10.3, 10.9], 'path-bike': [10.3, 10.9],
     water: [10.5, 11], 'medium-casing': [10.5, 11.2], medium: [10.5, 11.2], 'major-casing': [10.5, 11.2], major: [10.5, 11.2],
     'trail-casing': [9.2, 9.8], trail: [9.2, 9.8], // השבילים המסומנים – ראשונים, כבר כשרואים כמה משבצות
   };
@@ -161,8 +169,10 @@
       { id: 'track', type: 'line', source: 'osm', filter: road('track'), minzoom: 11,
         paint: { 'line-color': '#8b6b3e', 'line-width': zw(0.8, 2.4), 'line-dasharray': [3, 1.5] } },
       // שביל לאופניים בלבד (סינגל) – כתום, כדי שיהיה ברור שלא נכנסים אליו ברגל
-      { id: 'path', type: 'line', source: 'osm', filter: road('path'), minzoom: 12,
-        paint: { 'line-color': ['case', ['==', ['get', 'b'], 1], '#f57c00', '#4a3d30'], 'line-width': zw(0.6, 1.8), 'line-dasharray': [2, 1.5] } },
+      { id: 'path', type: 'line', source: 'osm', filter: ['all', road('path'), ['!=', ['get', 'b'], 1]], minzoom: 12,
+        paint: { 'line-color': '#4a3d30', 'line-width': zw(0.6, 1.8), 'line-dasharray': [2, 1.5] } },
+      { id: 'path-bike', type: 'line', source: 'osm', filter: ['all', road('path'), ['==', ['get', 'b'], 1]], minzoom: 10.3,
+        paint: { 'line-color': '#f57c00', 'line-width': zw(0.6, 1.8), 'line-dasharray': [2, 1.5] } },
       // שבילי אופניים (מסלולי MTB)
       { id: 'bike', type: 'line', source: 'osm', filter: k('bike'), minzoom: 11, layout: { 'line-join': 'round', visibility: 'none' },
         paint: { 'line-color': '#ff6d00', 'line-width': zw(1, 3), 'line-dasharray': [2, 1.2], 'line-opacity': 0.9 } },
@@ -375,7 +385,8 @@
     ['minor-casing', 'line-color', '#b5b5b5', '#2c2f33'],
     ['minor', 'line-color', '#ffffff', '#5a5e63'],
     ['track', 'line-color', '#8b6b3e', '#a98b5e'],
-    ['path', 'line-color', ['case', ['==', ['get', 'b'], 1], '#f57c00', '#4a3d30'], ['case', ['==', ['get', 'b'], 1], '#ffa040', '#b3a596']],
+    ['path', 'line-color', '#4a3d30', '#b3a596'],
+    ['path-bike', 'line-color', '#f57c00', '#ffa040'],
     // בלילה: שביל שחור נשאר שחור אבל מקבל מסגרת בהירה בולטת
     ['trail-casing', 'line-color', ['case', ['==', ['get', 'c'], '#ffffff'], '#3a3a3a', '#ffffff'],
       ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
@@ -1337,7 +1348,7 @@
     if (!infoPop || infoPop.getElement().contains(e.target)) return;
     infoPop.remove(); infoPop = null; infoClosedAt = Date.now();
   }, true);
-  const INFO_LAYERS = ['trail', 'bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
+  const INFO_LAYERS = ['trail', 'bike', 'path-bike', 'path', 'track', 'minor', 'medium', 'major', 'water', 'poi-icon', 'peak'];
   map.on('click', (e) => {
     if (e.shvSel || inMaps() || plan || Date.now() - longPressAt < 800) return;
     // חלון פתוח – נגיעה (בכל מקום) רק סוגרת אותו
@@ -3365,7 +3376,7 @@
     roads: ['major-casing', 'major', 'medium-casing', 'medium', 'minor-casing', 'minor', 'road-label'],
     water: ['water', 'water-label'],
     poi: ['poi-icon', 'poi-label', 'peak'],
-    bike: ['bike'],
+    bike: ['bike', 'path-bike'],
     places: ['place-minor', 'place-major', 'ov-city', 'ovh-place'],
     parking: ['parking-icon', 'parking-label'],
     route: ['route-casing', 'route-line', 'route-walked', 'route-ends', 'wpts'],
@@ -3377,11 +3388,11 @@
   layerPrefs.route = true; // המסלול תמיד מוצג (אין לו יותר תיבה בשכבות)
   // שני מתגים בסרגל הכלים שמבודדים (לא מסתירים): דרכי עפר (דרכי עפר, שבילים ואופניים) ושבילים מסומנים. שניהם כבויים –
   // מפה מלאה; אחד דלוק – רק הוא; שניהם – שניהם (ובכל מקרה שמות היישובים, המפה הכללית והמסלול נשארים)
-  const ISO = { isoDirt: ['paths', 'tracks', 'bike'], isoMarked: ['trails'] };
+  const ISO = { isoDirt: ['paths', 'tracks', 'bike'], isoMarked: ['trails'], isoBike: ['bike'] }; // אופניים: מסלולי אופניים ושבילים לאופניים בלבד
   delete layerPrefs.lyTrails; delete layerPrefs.lyRest; // המתגים הקודמים (הסתרה)
   for (const k of Object.keys(ISO)) layerPrefs[k] = layerPrefs[k] === true;
   const syncSets = () => {
-    const any = layerPrefs.isoDirt || layerPrefs.isoMarked;
+    const any = layerPrefs.isoDirt || layerPrefs.isoMarked || layerPrefs.isoBike;
     for (const g of ['trails', 'paths', 'tracks', 'bike', 'roads', 'water', 'poi', 'parking']) layerPrefs[g] = !any;
     for (const [k, gs] of Object.entries(ISO)) if (layerPrefs[k]) for (const g of gs) layerPrefs[g] = true;
     layerPrefs.places = true;
@@ -3391,10 +3402,10 @@
   // תצלום אוויר: שקיפות 0–1 (סליידר). פעם היה "סוג מפה" (מפה/תצלום/טופו) ו"הסתרת שכבות" – בוטלו
   if ('base' in layerPrefs) { layerPrefs.sat = layerPrefs.base === 'sat' ? 1 : 0; delete layerPrefs.base; }
   delete layerPrefs.overlay;
-  layerPrefs.sat = Math.max(0, Math.min(1, +layerPrefs.sat || 0));
+  layerPrefs.sat = 0; // כל פתיחה של האפליקציה מתחילה ב"רק מפה" (הערך נשמר רק בתוך אותה פתיחה)
   // ערך אחד לסליידר בכל האפליקציה, נשמר (layers.sat) – בשיטוט ובתוך מסלול הידית באותו מקום, רק המשמעות משתנה
   // (פעם: בתוך מסלול ערך נפרד שהתחיל תמיד מ-0 – בוטל)
-  const FOCUS_DIM = 0.85; // מסלול ממוקד: כמה המפה מוסתרת
+  const ROUTE_DIM = 0.35; // מסלול מוצג: המפה סביבו מעומעמת מעט (פעם – הסליידר שלט בזה: "מסלול ממוקד" 0.85 – בוטל)
   const inRoute = () => !!active && !plan;
   const sliderVal = () => layerPrefs.sat;
   // הסתרת הרקע – ערך אחד ליום וללילה (פעם היו שניים: ממשיכים מהערך של המצב הנוכחי)
@@ -3405,7 +3416,7 @@
     // סליידר אחד, שלושה מצבים. בשיטוט: 0 – מפה; 0.5 – תצלום מלא מתחת למפה; 1 – רק תצלום (מעל המפה).
     // בתוך מסלול: 0 – מסלול ממוקד (המפה כמעט מוסתרת); 0.5 – מפה מלאה; 1 – המסלול על תצלום (מעל המפה)
     const v = sliderVal();
-    const under = inRoute() ? 0 : Math.min(1, v * 2), over = Math.max(0, v * 2 - 1);
+    const under = Math.min(1, v * 2), over = Math.max(0, v * 2 - 1); // אותה משמעות בשיטוט ובמסלול
     map.setLayoutProperty('base-sat', 'visibility', vis(under > 0));
     map.setPaintProperty('base-sat', 'raster-opacity', under);
     map.setLayoutProperty('sat-top', 'visibility', vis(over > 0));
@@ -3435,7 +3446,7 @@
   document.body.classList.toggle('night', isNight);
   showTheme();
   mapReady.then(() => applyTheme(isNight));
-  for (const [id, k] of [['btn-iso-dirt', 'isoDirt'], ['btn-iso-marked', 'isoMarked']]) {
+  for (const [id, k] of [['btn-iso-dirt', 'isoDirt'], ['btn-iso-marked', 'isoMarked'], ['btn-iso-bike', 'isoBike']]) {
     const b = $(id);
     const show = () => { b.classList.toggle('pressed', layerPrefs[k]); b.setAttribute('aria-pressed', layerPrefs[k]); };
     show();
@@ -3576,14 +3587,14 @@
   // ---------- הסתרת הרקע מתחת למסלול: צבע מלא (לבן ביום, שחור בלילה). בלי סליידר (הוחלף בתצלום האוויר):
   // הערך השמור, ופוחת ככל שמעלים את התצלום – כדי שהתצלום לא ייראה דהוי ----------
   function dimValue() {
-    if (inRoute()) return FOCUS_DIM * Math.max(0, 1 - layerPrefs.sat * 2);
+    if (inRoute()) return ROUTE_DIM * (1 - Math.min(1, layerPrefs.sat * 2)); // עמעום קבוע ועדין סביב המסלול
     return layerPrefs.dim * (1 - Math.min(1, layerPrefs.sat * 2));
   }
   // ---------- הסליידר שליד הכלים ----------
   function showSat() {
     $('sat-v').style.setProperty('--f', sliderVal());
     $('sat-v').setAttribute('aria-valuenow', Math.round(sliderVal() * 100));
-    $('sat-v').setAttribute('aria-label', inRoute() ? 'מסלול ממוקד / מפה / תצלום' : 'תצלום אוויר');
+    $('sat-v').setAttribute('aria-label', 'תצלום אוויר');
   }
   (() => {
     const tr = document.querySelector('#sat-v .vs-track');
@@ -3593,7 +3604,7 @@
       let f = Math.round(Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) * 100) / 100;
       // סנאפ עדין באמצע (תצלום מלא מתחת למפה) ובקצוות; רטט קצר כשנתפס באמצע
       if (Math.abs(f - 0.5) < 0.05) f = 0.5; else if (f < 0.03) f = 0; else if (f > 0.97) f = 1;
-      const was = sliderVal(), satFrom = inRoute() ? 0.5 : 0; // מאיפה מתחיל התצלום
+      const was = sliderVal(), satFrom = 0; // מאיפה מתחיל התצלום
       if (f === 0.5 && was !== 0.5) navigator.vibrate?.(8);
       if (f > satFrom && was <= satFrom && !navigator.onLine) toast('תצלום אוויר דורש אינטרנט', 3000);
       if (f === was) return;
@@ -3895,10 +3906,9 @@
   // העיגולים לא זזים מה-☰: כל אחד גדל במקומו (אחד אחרי השני), ונעלם באותה צורה. כשסגור נשארים רק "נעוצים":
   // מצפן (המפה מסובבת / במצב מצפן) ומיקום (GPS פועל והמפה זזה ממך) – ועולים למקום הפנוי הראשון
   function pinned(b) {
-    if (b.id === 'btn-compass') return compassMode || Math.abs(map.getBearing()) > 0.5;
-    if (b.id === 'btn-locate') return watchId != null && !follow && followedOnce;
     if (b.id === 'btn-iso-dirt') return layerPrefs.isoDirt; // בידוד דלוק – נשאר על המסך, שיהיה ברור שהמפה מסוננת
     if (b.id === 'btn-iso-marked') return layerPrefs.isoMarked;
+    if (b.id === 'btn-iso-bike') return layerPrefs.isoBike;
     return false;
   }
   function layoutTools() {
@@ -3924,10 +3934,17 @@
       k++;
     }
     layoutTools.shown = now; // (מאפיין ולא let – נקרא גם מ-renderDock לפני שהשורה הזו רצה)
-    const h = all.length * 56 - 10; // גובה העמודה כשפתוחה – גם של הסליידר
     col.style.height = Math.max(0, show.length * 56 - 10) + 'px';
-    $('sat-v').style.height = h + 'px';
-    $('sat-v').style.setProperty('--draw', (all.length - 1) * STAGGER + 120 + 'ms'); // הקו יורד באותו קצב שהכפתורים מופיעים
+    // הסליידר (אורך קבוע) מתחת לכפתורים – מצטייר אחריהם; בהיר/כהה מתחתיו – גדל אחרי שהקו הצטייר
+    const drawFrom = open ? all.length * STAGGER : 0;
+    $('sat-v').style.setProperty('--draw', '220ms');
+    $('sat-v').style.setProperty('--dd', drawFrom + 'ms');
+    const th = $('btn-theme');
+    th.style.setProperty('--d', open ? drawFrom + 240 + 'ms' : '0ms');
+    th.classList.toggle('on', open);
+    // מיקום – תמיד; מצפן – רק כשהמפה מסובבת או במצב מצפן; כשהדוק תופס את רוב המסך – נעלמים
+    try { $('btn-compass').classList.toggle('show', compassMode || Math.abs(map.getBearing()) > 0.5); } catch { /* לפני ההפעלה */ }
+    $('fabs').classList.toggle('away', ($('dock')?.offsetHeight || 0) > innerHeight * 0.55);
   }
   function setKnife(on) {
     knifeOpen = on;

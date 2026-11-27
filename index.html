@@ -30,12 +30,6 @@
           <button id="btn-fit" title="כל המסלול על המסך" aria-label="כל המסלול על המסך" hidden>
             <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none"/><path d="M8 15c2-1 2-5 4-6s3 1 4-1" fill="none"/></svg>
           </button>
-          <button id="btn-compass" title="מצפן: הקשה – סיבוב לפי כיוון הטלפון / צפון למעלה" aria-label="מצפן">
-            <svg viewBox="0 0 24 24" id="compass-needle" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg>
-          </button>
-          <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
-          </button>
           <!-- בידוד: רק דרכי עפר / רק שבילים מסומנים / שניהם; שניהם כבויים – מפה מלאה -->
           <button id="btn-iso-dirt" class="ly" title="רק דרכי עפר" aria-label="רק דרכי עפר" aria-pressed="false">
             <svg viewBox="0 0 24 24"><path d="M5 21c2-5 9-3 8-9s4-6 6-8" fill="none" stroke-dasharray="3 2.5"/></svg>
@@ -43,15 +37,29 @@
           <button id="btn-iso-marked" class="ly mk" title="רק שבילים מסומנים" aria-label="רק שבילים מסומנים" aria-pressed="false">
             <svg viewBox="0 0 24 24"><g fill="none" stroke-width="2"><path class="c1" d="M2 16.5c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/><path class="c2e" d="M4.6 19.1c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/><path class="c2" d="M4.6 19.1c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/><path class="c3" d="M7.2 21.7c2.5-5 6.5-3 7.5-7.5s3.5-5 7-5"/></g></svg>
           </button>
-          <button id="btn-theme" title="בהיר / כהה" aria-label="בהיר / כהה">
-            <svg viewBox="0 0 24 24" class="i-moon"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none"/></svg>
-            <svg viewBox="0 0 24 24" class="i-sun"><circle cx="12" cy="12" r="4" fill="none"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none"/></svg>
+          <button id="btn-iso-bike" class="ly" title="רק שבילי אופניים" aria-label="רק שבילי אופניים" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><circle cx="6" cy="16" r="3.6" fill="none"/><circle cx="18" cy="16" r="3.6" fill="none"/><path d="M6 16l4-7h6l2 7M10 9l3 7h-7M14.5 6.5H17" fill="none"/></svg>
           </button>
       </div>
       <!-- תצלום אוויר: למעלה – מפה; באמצע – תצלום מלא מתחת למפה; למטה – רק תצלום (מעל המפה) -->
       <div id="sat-v" class="vslider" aria-label="תצלום אוויר" role="slider" aria-valuemin="0" aria-valuemax="100">
           <div class="vs-track"><div class="vs-fill"></div><i class="vs-mid"></i><div class="vs-thumb"></div></div>
       </div>
+      <div class="kcol2">
+          <button id="btn-theme" title="בהיר / כהה" aria-label="בהיר / כהה">
+            <svg viewBox="0 0 24 24" class="i-moon"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="none"/></svg>
+            <svg viewBox="0 0 24 24" class="i-sun"><circle cx="12" cy="12" r="4" fill="none"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" fill="none"/></svg>
+          </button>
+      </div>
+    </div>
+    <!-- מיקום – תמיד על המסך, מעל הדוק; מצפן – רק כשהמפה מסובבת / במצב מצפן -->
+    <div id="fabs">
+          <button id="btn-compass" title="מצפן: הקשה – סיבוב לפי כיוון הטלפון / צפון למעלה" aria-label="מצפן">
+            <svg viewBox="0 0 24 24" id="compass-needle" class="needle"><path d="M12 3l4 9h-8z" class="n"/><path d="M12 21l-4-9h8z" class="s"/></svg>
+          </button>
+          <button id="btn-locate" title="המיקום שלי (לחיצה ארוכה: כיבוי GPS)" aria-label="המיקום שלי">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" fill="none"/></svg>
+          </button>
     </div>
   </div>
   </div>
