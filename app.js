@@ -951,10 +951,12 @@
     areaSel.clear(); dlSel.clear(); batchShown = false;
     mapsChanged();
   }
+  let areaLast = null; // המשבצת השמורה שנבחרה אחרונה – עליה כפתורי "מחיקה" / "עדכון"
   function selectSaved(a) {
     const k = a.b.join();
     dlSel.clear();
     areaSel.has(k) ? areaSel.delete(k) : areaSel.add(k);
+    areaLast = areaSel.has(k) ? a.b : [...areaSel].map(keyCell).pop() || null;
     mapsChanged();
     clearTimeout(selectSaved.t); selectSaved.t = setTimeout(checkAreaUpdates, 400);
   }
@@ -969,6 +971,8 @@
       e.shvSel = true;
       return selectSaved(a);
     }
+    // נבחרו מפות שמורות ונגעו מחוץ להן – הבחירה מתבטלת (ולא בוחרים משבצת להורדה באותה נגיעה)
+    if (areaSel.size) { e.shvSel = true; areaLast = null; return clearMaps(); }
     const busy = batchQ?.cells.slice(batchQ.done).find((x) => lng >= x[0] && lng < x[2] && lat >= x[1] && lat < x[3]);
     if (busy || stopCell) { // נגיעה במשבצת שבהורדה/ממתינה – כפתור "עצירה" באמצעה; נגיעה נוספת / במקום אחר – נעלם
       const same = busy && stopCell && busy.join() === stopCell.join();
@@ -1226,6 +1230,11 @@
   // המשבצת שיורדת עכשיו – כפתור "מפה בהורדה…" באותו מקום ובאותה צורה; נגיעה בו מחליפה אותו ל"עצירת ההורדה"
   const busyBtn = mk('dl-here dl-busy', '');
   busyBtn.addEventListener('click', () => { stopCell = progCell; placeStop(); });
+  // מפות שמורות שנבחרו (לחיצה ארוכה): "מחיקה" על המשבצת שנבחרה אחרונה, ומתחתיו "עדכון" כשיש
+  const TRASH_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/></svg>';
+  const delBtn = mk('dl-here dl-go dl-del', ''), updBtn = mk('dl-here dl-go', '');
+  delBtn.addEventListener('click', () => $('ab-del').click());
+  updBtn.addEventListener('click', () => { areaLast = null; $('ab-upd').click(); mapsChanged(); });
   goBtn.addEventListener('click', () => {
     const cells = [...dlSel].map(keyCell);
     if (!cells.length || !navigator.onLine) return;
@@ -1262,6 +1271,13 @@
       goBtn.disabled = off;
     }
     putOn(goBtn, showGo && cellRect(dlLast));
+    if (areaLast && !areaSel.has(areaLast.join())) areaLast = [...areaSel].map(keyCell).pop() || null;
+    const sel = areaSel.size, nUpd = [...areaSel].filter((k) => areasUpd.has(k)).length;
+    delBtn.innerHTML = TRASH_ICON + (sel > 1 ? `מחיקה (${sel})` : 'מחיקה');
+    updBtn.innerHTML = DL_ICON + (nUpd > 1 ? `עדכון (${nUpd})` : 'עדכון');
+    const ar = sel && areaLast && dockMode() === 'lib' && cellRect(areaLast);
+    putOn(delBtn, ar);
+    putOn(updBtn, ar && nUpd && navigator.onLine && !batchQ && ar, 44);
     // ההתקדמות – המשבצת שיורדת עכשיו מתמלאת בירוק מלמטה (רק כשמשהו השתנה, לא בכל תזוזה)
     progCell = batchQ ? batchQ.cells[batchQ.done] : null;
     if (progCell) busyBtn.textContent = batchQ.kind === 'upd' ? 'מפה בעדכון…' : 'מפה בהורדה…';
@@ -1274,7 +1290,7 @@
         geometry: { type: 'Polygon', coordinates: [[[c[0], c[1]], [c[2], c[1]], [c[2], top], [c[0], top], [c[0], c[1]]]] } } : empty);
     }
   }
-  map.on('move', () => (stopCell || dlLast || progCell) && placeStop());
+  map.on('move', () => (stopCell || dlLast || progCell || areaLast) && placeStop());
   // התקדמות בתוך משבצת: ההמתנה לשרת (לא ידוע כמה) – מתקרבת בהדרגה ל-60%; עיבוד, גופנים וגובה – 65–95%
   let progT0 = 0, progBase = 0, progTimer = 0;
   function progress(stage) {
@@ -3513,7 +3529,7 @@
   function dockMode() {
     if (plan) return 'plan';
     if (active && route?.pts.length > 1) return 'route';
-    return inMaps() ? 'areas' : 'lib';
+    return batchShown && batchQ ? 'areas' : 'lib'; // בחירה של מפות שמורות – כפתורים על המשבצת, לא בדוק
   }
   let lastMode = null;
   function renderDock() {
@@ -3705,7 +3721,7 @@
   // כשאין לאן לחזור – הרשומה יורדת, ו"חזור" הבא יוצא מהאפליקציה כרגיל.
   const openDialog = () => [...document.querySelectorAll('dialog[open]')].pop(); // העליון (אישור מעל השכבות)
   function canGoBack() {
-    return !!(openDialog() || !$('dock-ask').hidden || $('search-input').value || dlSel.size || dockMode() !== 'lib' || dock.libOpen);
+    return !!(openDialog() || !$('dock-ask').hidden || $('search-input').value || dlSel.size || areaSel.size || dockMode() !== 'lib' || dock.libOpen);
   }
   let backArmed = false, backIgnore = false;
   function syncBack() {
@@ -3720,7 +3736,7 @@
     if (d) d.close();
     else if (!$('dock-ask').hidden) $('dock-ask').hidden = true;
     else if ($('search-input').value) closeSearch();
-    else if (dlSel.size && dockMode() === 'lib') { dlSel.clear(); dlLast = null; mapsChanged(); }
+    else if ((dlSel.size || areaSel.size) && dockMode() === 'lib') { clearMaps(); dlLast = null; }
     else dockBack();
     setTimeout(syncBack, 50); // אם עדיין יש לאן לחזור – שוב רשומה
   });
