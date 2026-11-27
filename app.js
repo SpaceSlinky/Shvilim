@@ -127,7 +127,7 @@
       { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 0.6, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['==', ['get', 'sel'], 1], 0.5, 0.32], 12.5, ['case', ['==', ['get', 'sel'], 1], 0.25, 0.08]] } },
-      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', ['==', ['get', 'upd'], 1], '#f9a825', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'upd'], 1], 1.4, 0.6] } },
+      { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'line-width': 0.6 } },
       // הגריד תמיד על המפה וידוע מראש (buildGrids – לא מתעדכן בזום ובתנועה): מרחוק – 0.6°, ומזום ~8.4 הוא מתחלף
       // בפייד בריבועי ההורדה הרגילים (רק החסרים)
       { id: 'dl-grid', type: 'line', source: 'dl-grid', minzoom: 8.2,
@@ -994,18 +994,12 @@
   });
   $('ab-close').addEventListener('click', () => (batchShown && batchQ ? ((batchShown = false), mapsChanged()) : clearMaps()));
   $('ab-stop').addEventListener('click', () => stopBatch());
-  $('ab-del').addEventListener('click', async () => {
+  // מחיקה – מיד, בלי חלון אישור: המשבצות נעלמות, והנתונים נמחקים ברקע
+  $('ab-del').addEventListener('click', () => {
     const sel = dlAreas().filter((a) => areaSel.has(a.b.join()));
     if (!sel.length) return;
-    const title = sel.length === 1 ? 'למחוק את המשבצת?' : `למחוק ${sel.length} משבצות?`;
-    // מסלולים שמורים שעוברים במשבצות – נשארים, אבל בלי המפה מתחתם, בלי גובה כשאין רשת, ובלי עריכה ותוספות
-    const tests = sel.map((a) => inBox(a.b));
-    const hit = (await libLoad().catch(() => [])).filter((r) => (r.segs || []).some((sg) => sg.coords.some((c) => tests.some((t) => t(c)))));
-    const text = !hit.length ? 'אפשר להוריד שוב כשיש אינטרנט.'
-      : hit.length === 1 ? `המסלול "${hit[0].name}" יישאר, בלי מפה מתחתיו.` : `${hit.length} מסלולים שמורים יישארו, בלי מפה מתחתם.`;
-    if (!(await confirmDlg(title, text))) return;
-    await deleteAreas(sel.map((a) => a.b));
     clearMaps();
+    deleteAreas(sel.map((a) => a.b)).catch((e) => { console.error(e); toast('המחיקה נכשלה', 3000); });
   });
   // עדכון: מורידים מחדש את המשבצות שיש להן עדכון, אחת אחרי השנייה
   // הורדה/עדכון של כמה משבצות, אחת אחרי השנייה. התור נשמר (localStorage dlQueue): כשהאפליקציה ברקע או שהמסך כבה
@@ -1158,13 +1152,16 @@
     if (dlJob?.quiet) { dlJob.ctl.abort(new DOMException('הופסק', 'AbortError')); await dlJob.done; }
     const gone = new Set(bs.map((b) => b.join()));
     const rest = dlAreas().filter((a) => !gone.has(a.b.join()));
+    // המשבצות נעלמות מיד (רשימת האזורים, המעטפת והגריד); מחיקת הנתונים והגובה – אחר כך, ברקע
+    try { localStorage.setItem('dlAreas', JSON.stringify(rest)); } catch { /* ignore */ }
+    areasChanged(); renderAreasMap();
+    await new Promise((r) => setTimeout(r, 50));
     const dels = bs.map(inBox), keep = rest.map((a) => inBox(a.b));
     const fc = mapFC || (await db.get('mapdata').catch(() => null)) || { type: 'FeatureCollection', features: [] };
     const features = fc.features.filter((f) => !dels.some((t) => touchesBox(f, t)) || keep.some((t) => touchesBox(f, t)));
     const bbox = rest.length ? rest.reduce((u, { b: x }) => [Math.min(u[0], x[0]), Math.min(u[1], x[1]), Math.max(u[2], x[2]), Math.max(u[3], x[3])], rest[0].b) : undefined;
     const nfc = { type: 'FeatureCollection', features, ...(bbox ? { bbox } : {}) };
     await db.set('mapdata', nfc); // נשאר גם כשריק – כדי שהכרמל לא יורד שוב לבד
-    try { localStorage.setItem('dlAreas', JSON.stringify(rest)); } catch { /* ignore */ }
     // גם נתוני הגובה של האזור (מה שלא משותף לאזור אחר)
     const keepUrls = new Set(rest.flatMap((a) => Elev.tileUrls(a.b)));
     const drop = [...new Set(bs.flatMap((b) => Elev.tileUrls(b)))].filter((u) => !keepUrls.has(u));
