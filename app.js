@@ -655,7 +655,7 @@
       if (navigator.onLine) await withTimeout(Promise.all(OSM.glyphRanges(fc).map((r) =>
         fetch(GLYPHS.replace('{fontstack}', encodeURIComponent(FONT[0])).replace('{range}', r)).catch(() => null))), 30000);
       say('שומר נתוני גובה…', 60000);
-      await withTimeout(Elev.prefetch(bbox).catch(() => 0), 60000);
+      await withTimeout(Elev.prefetch(bbox, batch ? (f) => progress('elev', f) : null).catch(() => 0), 60000);
       if (navigator.storage?.persist) navigator.storage.persist();
       const trails = fc.features.filter((f) => f.properties.k === 'trail').length;
       for (const c of cells || [bbox]) markArea(c); // הורדה בריבועים – כל ריבוע נרשם לבד
@@ -1098,8 +1098,8 @@
       if (dlErr && (document.hidden || hiddenAt >= t0 || !navigator.onLine) && retries++ < 3) continue;
       retries = 0;
       if (dlErr) { q.fails++; q.err = dlErr; } else areasUpd.delete(c.join());
+      if (!dlErr) { progress('done'); await progFull(); }
       q.done++;
-      progress('done');
       saveQueue(q);
     }
     if (q.cancel || q.done >= q.cells.length) await endBg(q, true);
@@ -1128,7 +1128,7 @@
     runBatch({ kind: 'upd', cells, done: 0, fails: 0, err: '' });
   });
   // מה שרואים בזמן הורדה/עדכון: שורת המידע במצב מפות, והשורה בדוק (בשיטוט), והמשבצות בתור – בתכלת על המפה
-  function showBusy() { if (!batchQ) { batchShown = false; clearInterval(progTimer); } mapsChanged(); placeStop(); }
+  function showBusy() { if (!batchQ) { batchShown = false; cancelAnimationFrame(progRaf); progRaf = 0; } mapsChanged(); placeStop(); }
   function stopBatch() {
     if (!batchQ) return;
     batchQ.cancel = true;
@@ -1276,21 +1276,29 @@
     }
   }
   map.on('move', () => (stopCell || dlLast || progCell || areaLast) && placeStop());
-  // התקדמות בתוך משבצת: ההמתנה לשרת (לא ידוע כמה) – מתקרבת בהדרגה ל-60%; עיבוד, גופנים וגובה – 65–95%
-  let progT0 = 0, progBase = 0, progTimer = 0;
-  function progress(stage) {
-    if (stage === 'start') { progT0 = Date.now(); progBase = 0; }
-    else if (stage === 'done') progBase = 1;
-    else progBase = Math.max(progBase, { 'מעבד…': 0.65, 'שומר גופנים…': 0.78, 'שומר נתוני גובה…': 0.88 }[stage] || progBase);
-    clearInterval(progTimer);
-    const tick = () => {
-      const wait = 0.6 * (1 - Math.exp(-(Date.now() - progT0) / 20000));
-      progVal = Math.max(progBase, progBase < 0.6 ? wait : progBase);
-      placeStop();
-    };
-    tick();
-    if (batchQ && progBase < 0.6) progTimer = setInterval(tick, 500);
+  // התקדמות בתוך משבצת – לפי מה שקורה באמת, ובתנועה רציפה (לא קפיצות):
+  // הנתונים 0–30% (קובץ מוכן – כשנייה; Overpass – מתקרב בהדרגה), עיבוד 35%, גופנים 42%,
+  // גובה 50–95% לפי האריחים שירדו (החלק הארוך), סוף – 100%. המילוי במפה רודף אחרי היעד בהחלקה (rAF).
+  // (פעם: ההמתנה התקרבה ל-60% לאט, כמו ל-Overpass – הקובץ המוכן ירד מיד, וראו כמה קווים ואז קפיצה לסוף)
+  let progT0 = 0, progStage = 'wait', progTarget = 0, progRaf = 0, progLast = 0;
+  const PROG_AT = { 'מעבד…': 0.35, 'שומר גופנים…': 0.42, 'שומר נתוני גובה…': 0.5 };
+  function progress(stage, frac) {
+    if (stage === 'start') { progT0 = Date.now(); progStage = 'wait'; progTarget = 0; progVal = 0; }
+    else if (stage === 'done') { progStage = 'done'; progTarget = 1; }
+    else if (stage === 'elev') progTarget = Math.max(progTarget, 0.5 + 0.45 * frac);
+    else if (PROG_AT[stage]) { progStage = stage; progTarget = Math.max(progTarget, PROG_AT[stage]); }
+    if (!progRaf) { progLast = performance.now(); progRaf = requestAnimationFrame(progStep); }
   }
+  function progStep(now) {
+    const dt = Math.min(100, now - progLast); progLast = now;
+    if (progStage === 'wait') progTarget = Math.max(progTarget, 0.3 * (1 - Math.exp(-(Date.now() - progT0) / 2500)));
+    progVal += (progTarget - progVal) * Math.min(1, dt / (progStage === 'done' ? 120 : 350)); // רודף אחרי היעד ברכות; בסוף – מהר לראש
+    if (progTarget - progVal < 0.002) progVal = progTarget;
+    placeStop();
+    progRaf = batchQ && (progVal < progTarget || progStage === 'wait') ? requestAnimationFrame(progStep) : 0;
+  }
+  // בסוף משבצת – נותנים למילוי להגיע לראש לפני שעוברים לבאה (עד 0.8 שנ')
+  const progFull = () => new Promise((res) => { const t0 = Date.now(); (function w() { progVal >= 0.995 || Date.now() - t0 > 800 ? res() : setTimeout(w, 30); })(); });
   let landCells = null; // Set של "i,j" – משבצות עם יבשה בישראל וביו"ש (tools/land_cells.py)
   fetch('land.json').then((r) => r.json()).then((j) => { landCells = new Set(j.cells.map((c) => c.join(','))); }).catch(() => {});
   const canPick = (c) => !landCells || landCells.has(Math.round(c[0] / CELL) + ',' + Math.round(c[1] / CELL)); // בלי ים ובלי מחוץ לגבולות

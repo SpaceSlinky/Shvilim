@@ -50,14 +50,15 @@
         out.push(URL_T.replace('{z}', Z).replace('{x}', x).replace('{y}', y));
     return out;
   }
-  async function prefetch(bbox) {
+  async function prefetch(bbox, onStep) { // onStep(חלק שהסתיים, 0–1) – להתקדמות בהורדה
     const [w, s, e, nn] = bbox;
     const x0 = Math.floor(worldX(w) / 256), x1 = Math.floor(worldX(e) / 256);
     const y0 = Math.floor(worldY(nn) / 256), y1 = Math.floor(worldY(s) / 256);
     const jobs = [];
     // אריח אחד נוסף מכל צד – דגימה ליד הקצה משתמשת גם בשכן
     for (let x = x0 - 1; x <= x1 + 1; x++) for (let y = y0 - 1; y <= y1 + 1; y++) jobs.push(loadTile(x, y));
-    const res = await Promise.all(jobs);
+    let n = 0;
+    const res = await Promise.all(onStep ? jobs.map((j) => j.finally(() => onStep(++n / jobs.length))) : jobs);
     return res.filter(Boolean).length;
   }
 
