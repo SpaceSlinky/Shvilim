@@ -1710,6 +1710,7 @@
   async function setActive(a, { fit = false, save = true } = {}) {
     await mapReady;
     active = a;
+    syncRotate();
     a.segs = repairSegs(a.segs);
     const lines = segsToLines(a.segs);
     route = Geo.buildRoute(lines);
@@ -1762,6 +1763,7 @@
   async function clearRoute() {
     route = active = prof = null;
     await mapReady;
+    syncRotate();
     map.getSource('route').setData(empty);
     map.getSource('wpts').setData(empty);
     setWalked(null);
@@ -2272,6 +2274,7 @@
     }
     goSay('');
     active.nav = true; prevAlong = null; paceLog = null;
+    syncRotate();
     db.set('active', active);
     startGps(); setFollow(true);
     if (lastPos) map.easeTo({ center: lastPos.p, zoom: Math.max(map.getZoom(), 16) });
@@ -2304,6 +2307,7 @@
     if (!active) return;
     finishPace();
     active.nav = false; prevAlong = null;
+    syncRotate();
     db.set('active', active);
     setFollow(false);
     if (compassMode) { compassMode = false; map.rotateTo(0, { duration: 400 }); updateCompassIcon(); }
@@ -3348,6 +3352,17 @@
   });
   // סיבוב ידני בשתי אצבעות מבטל את מצב המצפן
   map.on('rotatestart', (e) => { if (e.originalEvent && compassMode) { compassMode = false; updateCompassIcon(); } });
+  // סיבוב המפה – רק בניווט; בכל שאר הזמן (שיטוט, תצוגת מסלול, תכנון) צפון תמיד למעלה, וצביטה רק מגדילה/מקטינה
+  function syncRotate() {
+    const on = !!active?.nav;
+    if (on) { map.dragRotate.enable(); map.touchZoomRotate.enableRotation(); map.keyboard.enableRotation(); }
+    else {
+      map.dragRotate.disable(); map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();
+      if (compassMode) { compassMode = false; updateCompassIcon(); }
+      if (Math.abs(map.getBearing()) > 0.01) map.rotateTo(0, { duration: 400 });
+    }
+  }
+  syncRotate();
 
   // ---------- שכבות ----------
   const GROUPS = {
