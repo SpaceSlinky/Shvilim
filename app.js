@@ -3401,8 +3401,7 @@
   // מפה מלאה; אחד דלוק – רק הוא; שניהם – שניהם (ובכל מקרה שמות היישובים, המפה הכללית והמסלול נשארים)
   const ISO = { isoDirt: ['paths', 'tracks', 'bike'], isoMarked: ['trails'], isoBike: ['bike'] }; // אופניים: מסלולי אופניים ושבילים לאופניים בלבד
   delete layerPrefs.lyTrails; delete layerPrefs.lyRest; // המתגים הקודמים (הסתרה)
-  // כל פתיחה של האפליקציה מתחילה במפה מלאה, בלי בידוד (כמו הסליידר) – אחרת מתג שנשאר דלוק נראה כ"סרגל פתוח"
-  for (const k of Object.keys(ISO)) layerPrefs[k] = false;
+  for (const k of Object.keys(ISO)) layerPrefs[k] = layerPrefs[k] === true;
   const syncSets = () => {
     const any = layerPrefs.isoDirt || layerPrefs.isoMarked || layerPrefs.isoBike;
     for (const g of ['trails', 'paths', 'tracks', 'bike', 'roads', 'water', 'poi', 'parking']) layerPrefs[g] = !any;
@@ -3974,6 +3973,8 @@
     $('btn-menu').setAttribute('aria-expanded', knifeOpen);
   }
   $('btn-menu').addEventListener('click', () => setKnife(!knifeOpen));
+  // האפליקציה נפתחת עם סרגל הכלים פתוח (הכפתורים מצטיירים אחרי שהמפה עלתה)
+  mapReady.then(() => setTimeout(() => setKnife(true), 250));
   $('search-input').addEventListener('focus', () => setKnife(false)); // תוצאות החיפוש נפתחות מתחת – בלי עיגולים מעליהן
   // מצב ה-GPS, המעקב והסיבוב משתנים בכמה מקומות – בדיקה זולה מעדכנת את העיגולים ה"נעוצים"
   map.on('rotate', layoutTools);
