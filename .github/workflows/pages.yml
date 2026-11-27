@@ -1,0 +1,70 @@
+# פרסום האתר (GitHub Pages) + מפות המשבצות המוכנות מראש.
+# בכל push ל-main: מפרסמים את האפליקציה עם המפות האחרונות (מה-release "tiles").
+# פעם בשבועיים (ב-1 וב-15) וגם ידנית: בונים מחדש את המפות של כל המשבצות מקובץ Geofabrik (tools/tiles_extract.py →
+# tools/tiles_build.js – אותו קוד המרה כמו באפליקציה), שומרים ב-release ומפרסמים. האפליקציה מורידה קובץ מוכן
+# למשבצת (מהיר, בלי שרתי Overpass העמוסים); משבצת בלי קובץ – Overpass כמו פעם.
+name: pages
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 1 1,15 * *'
+  workflow_dispatch:
+    inputs:
+      tiles:
+        description: 'לבנות מחדש את מפות המשבצות'
+        type: boolean
+        default: true
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.tiles) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: בניית מפות המשבצות
+        if: env.BUILD == 'true'
+        run: |
+          curl -sSfL --retry 3 -o il.osm.pbf https://download.geofabrik.de/asia/israel-and-palestine-latest.osm.pbf
+          ls -la il.osm.pbf
+          pip install -q osmium
+          python3 tools/tiles_extract.py il.osm.pbf "$RUNNER_TEMP/all.jsonl"
+          ls -la "$RUNNER_TEMP/all.jsonl"
+          curl -sSfL -o "$RUNNER_TEMP/prev.json" https://spaceslinky.github.io/Shvilim/tiles/index.json || echo '{}' > "$RUNNER_TEMP/prev.json"
+          node --max-old-space-size=6000 tools/tiles_build.js "$RUNNER_TEMP/all.jsonl" tiles "$RUNNER_TEMP/prev.json"
+          du -sh tiles
+          tar czf "$RUNNER_TEMP/tiles.tgz" tiles
+          gh release view tiles >/dev/null 2>&1 || gh release create tiles --title "מפות המשבצות" --notes "נבנה אוטומטית (pages.yml) – לא למחוק"
+          gh release upload tiles "$RUNNER_TEMP/tiles.tgz" --clobber
+          rm -f il.osm.pbf
+      - name: המפות האחרונות
+        if: env.BUILD != 'true'
+        run: |
+          gh release download tiles -p tiles.tgz -D "$RUNNER_TEMP" && tar xzf "$RUNNER_TEMP/tiles.tgz" || echo "אין עדיין מפות מוכנות"
+      - name: הרכבת האתר
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          git ls-files -z | grep -zv '^\(tools\|\.github\)/' | xargs -0 cp --parents -t "$RUNNER_TEMP/site"
+          [ -d tiles ] && cp -r tiles "$RUNNER_TEMP/site/" || true
+          du -sh "$RUNNER_TEMP/site"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+      - id: deployment
+        uses: actions/deploy-pages@v4

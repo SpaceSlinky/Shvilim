@@ -206,19 +206,50 @@ out center tags;`;
     catch { return navigator.onLine ? 'לא נגיש' : 'אין רשת'; }
   }
   function fromJson(json, bbox) {
+    if (json.type === 'FeatureCollection') return { ...json, bbox }; // משבצת מוכנה (tiles/) – כבר מומרת וחתוכה
     if (/error/i.test(json.remark || '')) throw new Error('השרת לא סיים');
     const fc = clipToBox(convert(json), bbox);
     fc.bbox = bbox;
     return fc;
   }
+  // ---------- משבצות מוכנות מראש (נבנות פעם בשבועיים ב-GitHub Actions מקובץ של כל הארץ – pages.yml) ----------
+  // קובץ סטטי לכל משבצת (tiles/<i>_<j>.json) – בערך שנייה, במקום דקה ויותר בשרתי Overpass העמוסים (ולפעמים כישלון).
+  // index.json: לכל משבצת [מתי השתנתה, גודל, hash]. משבצת שאין לה קובץ (או בלי רשת לאינדקס) – Overpass כמו פעם
+  const CELL = 0.1;
+  const tileKey = (b) => (Math.abs(b[2] - b[0] - CELL) < 1e-6 && Math.abs(b[3] - b[1] - CELL) < 1e-6
+    ? Math.round(b[0] / CELL) + '_' + Math.round(b[1] / CELL) : null);
+  let tileIdx = null, tileIdxAt = 0;
+  async function tileIndex() {
+    if (tileIdx && Date.now() - tileIdxAt < 3600e3) return tileIdx;
+    try {
+      const res = await fetch('tiles/index.json', { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+      if (res.ok) { tileIdx = (await res.json()).cells || null; tileIdxAt = Date.now(); }
+    } catch { /* בלי אינדקס – Overpass */ }
+    return tileIdx;
+  }
+  const tileUrl = (b) => { const k = tileKey(b); return k && tileIdx?.[k] ? new URL(`tiles/${k}.json?h=${tileIdx[k][2]}`, root.location?.href).href : null; };
+  async function fromTile(bbox, signal) {
+    await tileIndex();
+    const u = tileUrl(bbox);
+    if (!u) return null;
+    try {
+      const res = await fetch(u, { signal });
+      if (!res.ok) return null;
+      return fromJson(await res.json(), bbox);
+    } catch (e) { if (signal?.aborted) throw signal.reason; return null; }
+  }
+
   // הורדה ברקע (Background Fetch – רק GET, בלי גוף): אותה שאילתה בכתובת, מהשרת הראשון
   // השרת שענה לאחרונה – ראשון בתור (גם להורדה ברקע, שיש לה שרת אחד בלבד). פעם תמיד overpass-api.de – כשהוא נפל,
   // ההורדה ברקע נתקעה
   const goodSrv = () => { const i = +(root.localStorage?.getItem('ovGood') || 0); return i >= 0 && i < OVERPASS.length ? i : 0; };
   const servers = () => { const g = goodSrv(); return [OVERPASS[g], ...OVERPASS.filter((_, i) => i !== g)]; };
-  const bgUrl = (bbox, srv = goodSrv()) => OVERPASS[srv] + '?data=' + encodeURIComponent(query(bbox));
+  const bgUrl = (bbox, srv = goodSrv()) => tileUrl(bbox) || OVERPASS[srv] + '?data=' + encodeURIComponent(query(bbox));
   /** הורדה: מנסים שרת אחרי שרת (ועד שני סבבים כשהשרתים עמוסים). signal – ביטול מבחוץ (למשל כשהמשתמש מבקש אזור אחר) */
   async function download(bbox, onProgress, signal) {
+    onProgress?.('מוריד…');
+    const tile = await fromTile(bbox, signal);
+    if (tile) return tile;
     let reasons = [];
     for (let pass = 0; pass < 2; pass++) {
       reasons = [];
@@ -257,6 +288,9 @@ out center tags;`;
   /** לכל משבצת ({b, t}) – האם ב-OSM יש דרכים/שבילים מסומנים שנוספו או השתנו מאז t. שאילתה אחת (out count לכל משבצת);
    *  null – אין תשובה מאף שרת */
   async function changedSince(cells) {
+    // משבצות מוכנות: לפי האינדקס (מתי התוכן השתנה) – בלי לשאול את Overpass
+    const idx = await tileIndex();
+    if (idx && cells.every((c) => idx[tileKey(c.b)])) return cells.map((c) => idx[tileKey(c.b)][0] > c.t);
     const q = '[out:json][timeout:25];' + cells.map(({ b: [w, s, e, n], t }) => {
       const bb = `${s},${w},${n},${e}`, iso = new Date(t).toISOString().slice(0, 19) + 'Z';
       return `(way["highway"](newer:"${iso}")(${bb});relation["route"~"^(hiking|foot|mtb|bicycle)$"](newer:"${iso}")(${bb}););out count;`;
@@ -309,7 +343,7 @@ out center tags;`;
     return best;
   }
 
-  const OSM = { query, convert, fromJson, bgUrl, goodSrv, glyphRanges, download, trailColor, merge, canonColor, changedSince };
+  const OSM = { query, convert, fromJson, bgUrl, tileIndex, goodSrv, glyphRanges, download, trailColor, merge, canonColor, changedSince };
   if (typeof module !== 'undefined' && module.exports) module.exports = OSM;
   root.OSM = OSM;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -1034,7 +1034,9 @@
     const id = 'maps-' + Date.now();
     try {
       q.srv = OSM.goodSrv(); // אותו שרת גם כשמחפשים את התשובות (במטמון / ברשומות)
-      await reg.backgroundFetch.fetch(id, [...cells.map((c) => OSM.bgUrl(c, q.srv)), ...tiles], {
+      await OSM.tileIndex(); // משבצת מוכנה – הקובץ שלה (מהיר); אחרת Overpass
+      q.urls = Object.fromEntries(cells.map((c) => [c.join(), OSM.bgUrl(c, q.srv)])); // הכתובת נשמרת – גם אחרי פתיחה מחדש
+      await reg.backgroundFetch.fetch(id, [...Object.values(q.urls), ...tiles], {
         title: cells.length > 1 ? `מוריד מפות של ${cells.length} משבצות` : 'מוריד את מפות האזור',
         icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
       });
@@ -1053,7 +1055,7 @@
   async function fromBg(q, c) {
     const f = await (await swReg())?.backgroundFetch?.get(q.bg).catch(() => null);
     if (!f) { await endBg(q); return null; } // נגמרה (ה-SW שמר במטמון – takeBg)
-    const rec = await f.match(OSM.bgUrl(c, q.srv)).catch(() => null);
+    const rec = await f.match(q.urls?.[c.join()] || OSM.bgUrl(c, q.srv)).catch(() => null);
     if (!rec) return null;
     let last = f.downloaded, since = Date.now();
     const res = await new Promise((resolve) => {
@@ -1074,7 +1076,7 @@
 
   async function takeBg(c) {
     if (!self.caches) return null;
-    const cache = await caches.open('shvilim-bg'), u = OSM.bgUrl(c, batchQ?.srv);
+    const cache = await caches.open('shvilim-bg'), u = batchQ?.urls?.[c.join()] || OSM.bgUrl(c, batchQ?.srv);
     const res = await cache.match(u);
     if (!res) return null;
     try { return OSM.fromJson(await res.json(), c); } catch { return null; } finally { cache.delete(u); }

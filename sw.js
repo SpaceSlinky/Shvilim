@@ -1,7 +1,7 @@
 /* Service Worker: שומר את האפליקציה, הספריות והגופנים לשימוש אופליין.
    נתוני המפה עצמם נשמרים ב-IndexedDB (ראו app.js).
    קבצי האפליקציה: מוגשים מהמטמון ומתעדכנים ברקע. ספריות וגופנים מ-CDN: מהמטמון בלבד אחרי הפעם הראשונה. */
-const CACHE = 'shvilim-v194';
+const CACHE = 'shvilim-v195';
 const SHELL = ['./', 'index.html', 'style.css', 'geo.js', 'osm.js', 'router.js', 'elev.js', 'app.js', 'land.json', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png',
   'fonts/noto-sans-hebrew-hebrew.woff2', 'fonts/noto-sans-hebrew-latin.woff2', 'fonts/noto-sans-hebrew-latin-ext.woff2'];
@@ -21,7 +21,7 @@ async function bgStore(reg) {
   const bg = await caches.open(BG), d = await caches.open(DATA);
   for (const r of await reg.matchAll()) {
     const res = await r.responseReady.catch(() => null);
-    if (res?.ok) await (r.request.url.includes('overpass') ? bg : d).put(r.request.url, res);
+    if (res?.ok) await (/overpass|\/tiles\//.test(r.request.url) ? bg : d).put(r.request.url, res);
   }
   for (const c of await self.clients.matchAll()) c.postMessage('bg-done');
 }
@@ -68,6 +68,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === location.origin;
   if (!sameOrigin && !CDN_HOSTS.includes(url.hostname)) return;
+  if (sameOrigin && url.pathname.includes('/tiles/')) return; // מפות המשבצות – תמיד מהרשת (נשמרות ב-IndexedDB)
 
   e.respondWith((async () => {
     const cache = await caches.open(sameOrigin ? CACHE : DATA);
