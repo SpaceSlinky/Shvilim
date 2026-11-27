@@ -3903,6 +3903,8 @@
     dockEl.style.height = h + 'px';
     document.documentElement.style.setProperty('--dock-h', h + 'px');
   }).observe(dockIn);
+  // מיקום/מצפן צמודים לדוק – לפי הגובה בפועל בכל פריים (גם בזמן הנפשה וגרירה), בלי השהיה
+  new ResizeObserver(() => document.documentElement.style.setProperty('--dock-now', dockEl.offsetHeight + 'px')).observe(dockEl);
   renderDock();
 
   // ---------- כלים: עיגול ☰ בקצה הימני של שורת החיפוש (וכשאין חיפוש – באותו מקום) ----------

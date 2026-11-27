@@ -447,7 +447,7 @@ body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.n
 .kcol2 > button { transform: scale(0); opacity: 0; transition: transform .18s cubic-bezier(.3,1.4,.5,1) var(--d, 0ms), opacity .12s var(--d, 0ms); }
 .kcol2 > button.on { transform: scale(1); opacity: 1; pointer-events: auto; }
 /* מיקום (תמיד) ומצפן (רק כשהמפה מסובבת) – בצד ימין, מעל הדוק */
-#fabs { position: fixed; right: 10px; bottom: calc(var(--dock-h, 120px) + 14px); display: flex; flex-direction: column; gap: 10px; transition: bottom .25s, opacity .2s; }
+#fabs { position: fixed; right: 10px; bottom: calc(var(--dock-now, var(--dock-h, 120px)) + 14px); display: flex; flex-direction: column; gap: 10px; transition: opacity .2s; }
 #fabs button { pointer-events: auto; transition: transform .18s cubic-bezier(.3,1.4,.5,1), opacity .12s; }
 #fabs #btn-compass:not(.show) { transform: scale(0); opacity: 0; pointer-events: none; }
 #fabs.away { opacity: 0; pointer-events: none; }
