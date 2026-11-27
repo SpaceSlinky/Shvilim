@@ -1461,7 +1461,7 @@
   // אותה תמונה בגדלים שונים (ויקיפדיה/שיתוף) – פעם אחת
   const photoKey = (u) => decodeURIComponent(u).replace(/^.*\//, '').replace(/^\d+px-/, '').replace(/\?.*$/, '').replace(/_/g, ' ').toLowerCase();
   // החלון: תמונה מוצגת רק אחרי שנטענה (בלי הקודמת שמתחלפת); כמה תמונות – דפדוף בהחלקה או בחצים, "2 / 5"; נגיעה סוגרת
-  let photos = [], photoIdx = 0, photoName = '', photoReq = 0;
+  let photos = [], photoIdx = 0, photoName = '', photoReq = 0, resetZoom = () => {};
   const loadImg = (u) => new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(u); i.onerror = bad; i.src = u; });
   async function showPhotoAt(i) {
     const req = ++photoReq;
@@ -1472,6 +1472,7 @@
     }
     if (req !== photoReq) return;
     photoIdx = i;
+    resetZoom();
     $('photo-img').src = photos[i];
     $('photo-cap').textContent = photoName + (photos.length > 1 ? `  ·  ${i + 1} / ${photos.length}` : '');
     $('photo-dlg').classList.toggle('many', photos.length > 1);
@@ -1491,23 +1492,68 @@
     showPhotoAt(0);
   }
   const photoStep = (d) => photos.length > 1 && showPhotoAt((photoIdx + d + photos.length) % photos.length);
-  { const dlg = $('photo-dlg');
-    let sx = null, sy = 0, swiped = false;
-    dlg.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; swiped = false; });
-    dlg.addEventListener('pointerup', (e) => {
-      if (sx == null) return;
-      const dx = e.clientX - sx, dy = e.clientY - sy;
-      sx = null;
-      // RTL: הבאה משמאל – גוררים ימינה
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { swiped = true; photoStep(dx > 0 ? 1 : -1); }
+  // מסך מלא: שתי אצבעות – הגדלה (סביב נקודת האמצע) ותזוזה; מוגדלת – אצבע אחת מזיזה אותה; לא מוגדלת – החלקה לצדדים
+  // מעבירה תמונה (RTL: גוררים ימינה = הבאה), וגם החצים בצדי המסך; נגיעה בלי תנועה – סוגרת
+  { const dlg = $('photo-dlg'), img = $('photo-img');
+    const pts = new Map();
+    let z = { s: 1, x: 0, y: 0 }, g = null, moved = false, start = null;
+    const apply = () => { img.style.transform = z.s === 1 ? '' : `translate(${z.x}px,${z.y}px) scale(${z.s})`; };
+    const clampZ = () => {
+      const r = img.getBoundingClientRect(), w = r.width / z.s, h = r.height / z.s; // הגודל הבסיסי
+      z.x = Math.min(0, Math.max(w - w * z.s, z.x));
+      z.y = Math.min(0, Math.max(h - h * z.s, z.y));
+    };
+    resetZoom = () => { z = { s: 1, x: 0, y: 0 }; apply(); };
+    const two = () => { const [a, b] = [...pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; };
+    dlg.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.ph-nav')) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size === 1) { moved = false; start = { x: e.clientX, y: e.clientY, zx: z.x, zy: z.y }; }
+      if (pts.size === 2) {
+        const t = two(), r = img.getBoundingClientRect();
+        // נקודת האמצע במערכת של התמונה הלא מוגדלת – נשארת מתחת לאצבעות
+        g = { d: t.d, s: z.s, ox: (t.mx - r.left) / z.s, oy: (t.my - r.top) / z.s, left: r.left - z.x, top: r.top - z.y };
+        moved = true;
+      }
     });
+    dlg.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pts.size >= 2 && g) {
+        const t = two();
+        z.s = Math.min(6, Math.max(1, g.s * t.d / g.d));
+        z.x = t.mx - g.left - g.ox * z.s;
+        z.y = t.my - g.top - g.oy * z.s;
+        clampZ(); apply();
+      } else if (pts.size === 1 && start) {
+        const dx = e.clientX - start.x, dy = e.clientY - start.y;
+        if (Math.hypot(dx, dy) > 8) moved = true;
+        if (z.s > 1) { z.x = start.zx + dx; z.y = start.zy + dy; clampZ(); apply(); }
+      }
+    });
+    const up = (e) => {
+      if (!pts.has(e.pointerId)) return;
+      const wasPinch = pts.size >= 2 || g;
+      pts.delete(e.pointerId);
+      if (pts.size === 1) { const [p] = [...pts.values()]; start = { x: p.x, y: p.y, zx: z.x, zy: z.y }; g = null; return; }
+      if (pts.size) return;
+      g = null;
+      if (z.s < 1.05) resetZoom();
+      if (!wasPinch && start && z.s === 1) {
+        const dx = e.clientX - start.x, dy = e.clientY - start.y;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) photoStep(dx > 0 ? 1 : -1);
+      }
+      start = null;
+    };
+    dlg.addEventListener('pointerup', up);
+    dlg.addEventListener('pointercancel', up);
     dlg.addEventListener('click', (e) => {
-      if (swiped) return;
       const nav = e.target.closest('.ph-nav');
       if (nav) return photoStep(nav.dataset.d === 'next' ? 1 : -1);
+      if (moved || z.s > 1) return; // הגדלה/גרירה – לא סוגרים
       dlg.close();
     });
-    dlg.addEventListener('close', () => { photoReq++; });
+    dlg.addEventListener('close', () => { photoReq++; pts.clear(); resetZoom(); });
   }
   const CAM_SVG = '<svg viewBox="0 0 24 24"><path d="M4 8h3.5l1.5-2.5h6L16.5 8H20v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
