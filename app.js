@@ -966,8 +966,8 @@
     mapsChanged();
   }
   let areaLast = null; // המשבצת השמורה שנבחרה אחרונה – עליה כפתורי "מחיקה" / "עדכון"
-  // בחירה למחיקה מתבטלת לבד: אחרי 10 שניות בלי נגיעה בה, או בזום רחוק מאוד (מתחת ל-8 – כשרואים רק מעטפות)
-  const SEL_IDLE = 10000;
+  // בחירה למחיקה מתבטלת לבד: אחרי 5 שניות בלי נגיעה בה, או בזום רחוק מאוד (מתחת ל-8 – כשרואים רק מעטפות)
+  const SEL_IDLE = 5000;
   let selTimer = 0;
   const armSelTimer = () => { clearTimeout(selTimer); if (areaSel.size) selTimer = setTimeout(() => { areaLast = null; clearMaps(); }, SEL_IDLE); };
   map.on('zoomend', () => { if (areaSel.size && map.getZoom() < 8) { areaLast = null; clearMaps(); } });
