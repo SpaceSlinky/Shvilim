@@ -84,10 +84,10 @@
   const fade = (z0, z1, max = 1) => ['interpolate', ['linear'], ['zoom'], z0, 0, z1, max];
   // המעטפת: מופיעה 8.5–9, נעלמת 10.3–11 (בדיוק כשהשבילים המסומנים מופיעים, 10–10.7)
   // הנקודה והשם מרחוק – מלאים עד 8.6, נעלמים עד 9.2 (בדיוק כשהמעטפת והשם בתוכה מופיעים)
-  const ENV_FADE = (max) => ['interpolate', ['linear'], ['zoom'], 9.6, max, 10.4, 0];
-  const FADES = { // שכבה: [מתחיל להופיע, מלא]
-    'minor-casing': [11.5, 12], minor: [11.5, 12], path: [11.2, 11.8], track: [10.3, 10.9], bike: [10.3, 10.9], 'path-bike': [10.3, 10.9],
-    water: [10.5, 11], 'medium-casing': [10.5, 11.2], medium: [10.5, 11.2], 'major-casing': [10.5, 11.2], major: [10.5, 11.2],
+  const ENV_FADE = (max) => ['interpolate', ['linear'], ['zoom'], 10.4, max, 11.2, 0]; // נשארת עוד קצת (פעם 9.6–10.4)
+  const FADES = { // שכבה: [מתחיל להופיע, מלא] – כבר כשכמה משבצות על המסך (קנה מידה ~5 ק"מ) רואים יותר מהשבילים המסומנים
+    'minor-casing': [11, 11.6], minor: [11, 11.6], path: [10.6, 11.2], track: [9.6, 10.2], bike: [9.6, 10.2], 'path-bike': [9.6, 10.2],
+    water: [9.8, 10.4], 'medium-casing': [9.8, 10.4], medium: [9.8, 10.4], 'major-casing': [9.8, 10.4], major: [9.8, 10.4],
     'trail-casing': [9.2, 9.8], trail: [9.2, 9.8], // השבילים המסומנים – ראשונים, כבר כשרואים כמה משבצות
   };
   const style = {
@@ -130,9 +130,9 @@
       // מעטפת המפות שהורדו (זום בינוני): כשהשבילים דוהים בהתרחקות – נשאר קו סביב האזורים השמורים (איחוד, בלי קווים
       // פנימיים), עם גוון קל ושם; בהתרחקות נוספת גם היא נעלמת (ובהתקרבות – מתחלפת בשבילים עצמם)
       // המפות שהורדו – משבצות ירוקות בכל זום (מרחוק מילוי חזק יותר), ונעלמות כשהשבילים עצמם מופיעים; בלי שמות
-      { id: 'env-fill', type: 'fill', source: 'areas-env', filter: ['==', ['geometry-type'], 'Polygon'], maxzoom: 11,
-        paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9, 0.15, 9.6, 0.1, 10.4, 0] } },
-      { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11,
+      { id: 'env-fill', type: 'fill', source: 'areas-env', filter: ['==', ['geometry-type'], 'Polygon'], maxzoom: 11.3,
+        paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9, 0.15, 10.4, 0.08, 11.2, 0] } },
+      { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11.3,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 0.6, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.14, 0.06] } },
       { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#e53935', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'sel'], 1], 1.6, 0.6] } },
@@ -892,7 +892,7 @@
   // ---------- ניהול מפות – בשיטוט עצמו, והדוק משתנה לפי מה שנבחר (פעם: מצב "מפות" נפרד מכפתור בכלים).
   // נגיעה במשבצת בלי מפה – בחירה להורדה (תכלת); לחיצה ארוכה על מפה שמורה (או "בחירה" בחלון המידע) – בחירה לניהול (אדום),
   // ואז נגיעות מוסיפות/מורידות משבצות. כשיש בחירה – הדוק במצב `areas`: מידע + ביטול · הורדה / עדכון · מחיקה
-  const SEL_Z0 = 8.4, SEL_Z1 = 10.4; // זום האמצע: נגיעה במשבצת שמורה – בחירה (מחיקה/עדכון)
+  const SEL_Z0 = 8.4, SEL_Z1 = 11.2; // זום האמצע: נגיעה במשבצת שמורה – בחירה (מחיקה/עדכון)
   const areaSel = new Set(); // מפות שמורות שנבחרו (מפתח b.join())
   const dlSel = new Set(); // משבצות בלי מפה שנבחרו להורדה (מפתח c.join())
   const DL_MAX = 20; // משבצות בכל הורדה – השרתים הציבוריים עמוסים
