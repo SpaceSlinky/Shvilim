@@ -128,7 +128,7 @@
       { id: 'ov-coast', type: 'line', source: 'overview', maxzoom: 10, filter: k('c'), paint: { 'line-color': '#7fa7c9', 'line-width': 1.2 } },
       // קו הגבול – רציף וברור (קו המתאר של הארץ)
       { id: 'ov-border', type: 'line', source: 'overview', maxzoom: 10, filter: k('b'), layout: { 'line-join': 'round' },
-        paint: { 'line-color': '#7a6f80', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1.4, 12, 2.2] } },
+        paint: { 'line-color': '#7a6f80', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 1, 12, 1.6], 'line-opacity': 0.6 } }, // דק ומעט שקוף (פעם 1.4–2.2 מלא – "חזק מדי")
       // מעטפת המפות שהורדו (זום בינוני): כשהשבילים דוהים בהתרחקות – נשאר קו סביב האזורים השמורים (איחוד, בלי קווים
       // פנימיים), עם גוון קל ושם; בהתרחקות נוספת גם היא נעלמת (ובהתקרבות – מתחלפת בשבילים עצמם)
       // המפות שהורדו – משבצות ירוקות בכל זום (מרחוק מילוי חזק יותר), ונעלמות כשהשבילים עצמם מופיעים; בלי שמות
