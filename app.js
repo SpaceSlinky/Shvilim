@@ -661,7 +661,6 @@
   }
   map.on('error', (e) => console.warn(e.error || e));
   const mapReady = new Promise((r) => map.on('load', r));
-  mapReady.then(() => (PERF.style = performance.now()));
 
   // ---------- נתוני המפה: הורדה חד-פעמית ושמירה בטלפון ----------
   // הורדה אחת בכל פעם. עדכון שקט ברקע מפנה את הדרך כשהמשתמש מבקש משהו
@@ -801,16 +800,8 @@
     }
     return groups;
   }
-  // זמני פתיחה (לחלון הפיתוח): מתי הנתונים נקראו מהטלפון, נשלחו למפה, והמפה מוכנה
-  const PERF = {};
-  function showPerf() {
-    const f = (v) => (v != null ? (v / 1000).toFixed(1) + ' ש\'' : '–');
-    $('ls-perf').textContent = `פתיחה: מפה ${f(PERF.style)} · נתונים מהטלפון ${f(PERF.data)} · עיבוד ${f(PERF.sent && PERF.data != null ? PERF.sent - PERF.data : null)} · מוכן ${f(PERF.ready)}`
-      + (mapFC ? ` · ${mapFC.features.length.toLocaleString()} קווים ונקודות` : '');
-  }
   async function setMapData(fc) {
     updateOverviewHi(); // האזורים השמורים השתנו (הורדה / מחיקה)
-    if (PERF.data == null) PERF.data = performance.now();
     const trailGeoms = markShared(fc);
     // דרך שעובר עליה שביל הליכה מסומן – לא "לאופניים בלבד" (גם בנתונים שכבר שמורים; ב-OSM סימנו שבילים משותפים כ-bicycle=designated)
     for (const f of fc.features) if (f.properties.b && f.properties.k === 'road' && trailGeoms.has(JSON.stringify(f.geometry.coordinates))) delete f.properties.b;
@@ -826,7 +817,6 @@
     if (smoothCache?.src !== fc) smoothCache = { src: fc, fc: taperTrails(Geo.smoothFC(fc, lvl, (f) => f.properties.k !== 'road' || f.properties.r === 'path' || f.properties.r === 'track'
       || trailGeoms.has(JSON.stringify(f.geometry.coordinates)))) };
     if (mapFC === fc && smoothLevel()) map.getSource('osm').setData(smoothCache.fc);
-    if (PERF.sent == null) { PERF.sent = performance.now(); map.once('idle', () => (PERF.ready = performance.now())); }
     // המסלול המוצג: מתקנים קטעים שלא עוגלו, ומזיזים עם הקווים המשותפים
     if (active && !plan) { fixActiveSegs(); map.getSource('route')?.setData(routeFeatures(active.segs)); }
   }
@@ -3774,75 +3764,6 @@
       if (dock.libOpen) return setLibOpen(false);
     }
   }
-
-  // ---------- עיצוב רשימת המסלולים (localStorage `libStyle`) – משתני CSS על :root ----------
-  const LS = [
-    { k: 'head', name: 'כותרת "מסלולים"', min: 14, max: 30, s: 20, w: 300 },
-    { k: 'cat', name: 'כותרת קטגוריה', min: 12, max: 26, s: 16, w: 400 },
-    { k: 'row', name: 'שם מסלול', min: 12, max: 24, s: 16, w: 400 },
-    { k: 'len', name: 'אורך (ק"מ)', min: 11, max: 22, s: 16, w: 400 },
-  ];
-  const LS_PAD = { min: 4, max: 22, def: 8 };
-  let libStyle = {};
-  try { libStyle = JSON.parse(localStorage.getItem('libStyle')) || {}; } catch { /* ignore */ }
-  function applyLibStyle() {
-    const r = document.documentElement.style;
-    for (const it of LS) {
-      const v = libStyle[it.k] || {};
-      r.setProperty(`--ls-${it.k}-s`, (v.s ?? it.s) + 'px');
-      r.setProperty(`--ls-${it.k}-w`, v.w ?? it.w);
-    }
-    r.setProperty('--ls-pad', (libStyle.pad ?? LS_PAD.def) + 'px');
-  }
-  applyLibStyle();
-  function saveLibStyle() {
-    try { localStorage.setItem('libStyle', JSON.stringify(libStyle)); } catch { /* ignore */ }
-    applyLibStyle();
-  }
-  function renderStyleDlg() {
-    const box = $('ls-list');
-    box.textContent = '';
-    // סליידר עם תווית קטנה והערך מימין
-    const slider = (label, min, max, step, val, onInput) => {
-      const row = el('div', 'ls-sl');
-      const top = el('div', 'ls-top', label);
-      const out = document.createElement('output');
-      out.textContent = val;
-      top.append(out);
-      const rng = document.createElement('input');
-      Object.assign(rng, { type: 'range', min, max, step, value: val });
-      rng.addEventListener('input', () => { out.textContent = rng.value; onInput(+rng.value); });
-      row.append(top, rng);
-      return row;
-    };
-    for (const it of LS) {
-      const v = (libStyle[it.k] ||= {});
-      const item = el('div', 'ls-item');
-      item.append(el('div', 'ls-name', it.name),
-        slider('גודל', it.min, it.max, 1, v.s ?? it.s, (x) => { v.s = x; saveLibStyle(); }),
-        slider('עובי', 100, 900, 50, v.w ?? it.w, (x) => { v.w = x; saveLibStyle(); }));
-      box.append(item);
-    }
-    const pad = el('div', 'ls-item');
-    pad.append(el('div', 'ls-name', 'שורות'), slider('מרווח', LS_PAD.min, LS_PAD.max, 1, libStyle.pad ?? LS_PAD.def, (x) => { libStyle.pad = x; saveLibStyle(); }));
-    box.append(pad);
-  }
-  $('dev-dot').addEventListener('click', () => {
-    showPerf();
-    if (dockMode() === 'lib' && !dock.libOpen) setLibOpen(true); // כדי לראות את השינויים על הרשימה עצמה
-    renderStyleDlg();
-    $('style-dlg').showModal();
-  });
-  $('ls-reset').addEventListener('click', () => { libStyle = {}; saveLibStyle(); renderStyleDlg(); });
-  $('ls-close').addEventListener('click', () => $('style-dlg').close());
-  // העתקת הערכים (להדבקה בצ'אט – כדי שיהפכו לברירת המחדל באפליקציה)
-  $('ls-copy').addEventListener('click', async () => {
-    const vals = { pad: libStyle.pad ?? LS_PAD.def };
-    for (const it of LS) vals[it.k] = { s: libStyle[it.k]?.s ?? it.s, w: libStyle[it.k]?.w ?? it.w };
-    const txt = 'libStyle ' + JSON.stringify(vals);
-    try { await navigator.clipboard.writeText(txt); toast('הועתק – אפשר להדביק בצ׳אט'); }
-    catch { $('ls-perf').textContent = txt; toast('לא הצלחתי להעתיק – הערכים למעלה'); }
-  });
 
   // ---------- כפתור "חזור" של הטלפון ----------
   // כשיש לאן לחזור, יש בהיסטוריה רשומה אחת שלנו; "חזור" מוריד אותה (popstate), ואנחנו עושים צעד אחד אחורה.

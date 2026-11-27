@@ -384,25 +384,6 @@ section.open .lib-body { grid-template-rows: 1fr; }
 .cf-btns button { flex: 1; margin: 0; }
 .danger-btn { background: #c62828 !important; border-color: #c62828 !important; color: #fff !important; font-weight: 700; }
 
-
-/* עיצוב רשימת המסלולים: חלון למעלה, הרשימה נראית מתחתיו ומשתנה בזמן אמת */
-#style-dlg { margin: 12px auto auto; max-height: 56vh; overflow: hidden; padding: 14px 16px; }
-#style-dlg[open] { display: flex; flex-direction: column; } /* הרשימה נגללת, הכפתורים תמיד למטה */
-#ls-list { overflow: auto; min-height: 0; flex: 1; }
-#style-dlg::backdrop { background: transparent; }
-.ls-item { padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.08); }
-.ls-item:last-of-type { border-bottom: 0; }
-.ls-name { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
-.ls-sl { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; }
-.ls-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: #555; }
-.ls-top output { font-size: 12px; color: #888; font-variant-numeric: tabular-nums; }
-.ls-sl input[type=range] { width: 100%; margin: 4px 0; accent-color: var(--green); }
-.ls-btns { display: flex; gap: 8px; margin-top: 8px; }
-#style-dlg .ls-btns button { margin: 0; }
-body.night .ls-item { border-color: rgba(255,255,255,.1); }
-body.night .ls-top { color: #bbb; }
-body.night .ls-top output { color: #999; }
-
 /* תוספת למסלול */
 .dt-box { margin-top: 8px; text-align: center; }
 .dt-title { font-size: 16px; font-weight: 700; color: #d81b60; }
@@ -477,11 +458,6 @@ body.night .kmenu i { background: #ddd; }
 dialog button, .card button, .btns button, .go, .dock-ask button, .dt-btns #dt-cancel, #areas-dlg .ls-open, .back, .stop,
 .seg, .dt-modes, .tgrp { border-radius: 999px; }
 
-/* פיתוח (זמני): נקודה קטנה משמאל למעלה */
-#dev-dot { position: fixed; top: calc(8px + var(--safe-t) + var(--kb) + 8px); left: 12px; z-index: 11; width: 12px; height: 12px; padding: 0; border: 0;
-  border-radius: 50%; background: rgba(120,120,120,.35); }
-.ls-perf { margin: 0 0 6px; font-size: 12px; color: #777; }
-body.night .ls-perf { color: #aaa; }
 
 /* מצב דלוק (GPS, מצפן, שכבות פתוחות): רקע כחול מלא ואייקון לבן – לא שקיפות */
 #controls button.pressed, #controls #btn-compass.active, #controls #btn-locate.gps-on { background: var(--blue); }
@@ -532,7 +508,7 @@ body.night .tgrp .tog.off { color: #7b848c; }
 
 .cf-btns, .ls-btns, .dt-btns, .dt-modes { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; width: fit-content; max-width: 100%; margin: 12px auto 0; gap: 1px; padding: 0;
   border: 1px solid #ddd; background: #ddd; border-radius: 999px; overflow: hidden; }
-.cf-btns button, #style-dlg .ls-btns button, .ls-btns button, .dt-btns button, .dt-btns #dt-cancel, .dt-modes button {
+.cf-btns button, .ls-btns button, .dt-btns button, .dt-btns #dt-cancel, .dt-modes button {
   width: auto; min-width: 104px; margin: 0; padding: 11px 16px; border: 0; border-radius: 0; background: #f7f7f7;
   font: inherit; font-size: 15px; color: inherit; }
 .cf-btns button:first-child, .ls-btns button:first-child, .dt-btns button:first-child, .dt-modes button:first-child { padding-inline: 22px; }
