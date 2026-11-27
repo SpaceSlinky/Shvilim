@@ -3246,7 +3246,9 @@
   }
 
   // ---------- כפתורים ותפריט ----------
-  $('btn-fit').addEventListener('click', () => { setFollow(false); fitRoute(); });
+  // "כל המסלול": דלוק (כחול, כמו המיקום) כשהמפה מציגה את כל המסלול אחרי נגיעה בו; גרירה/זום ביד – כבה
+  $('btn-fit').addEventListener('click', () => { setFollow(false); fitRoute(); $('btn-fit').classList.add('pressed'); });
+  map.on('movestart', (e) => { if (e.originalEvent) $('btn-fit').classList.remove('pressed'); });
 
   // ---------- סיבוב ומצפן ----------
   let compassMode = false;
@@ -3953,7 +3955,11 @@
     th.classList.toggle('on', open);
     // מיקום – תמיד; מצפן – רק כשהמפה מסובבת או במצב מצפן; כשהדוק תופס את רוב המסך – נעלמים
     try { $('btn-compass').classList.toggle('show', compassMode || Math.abs(map.getBearing()) > 0.5); } catch { /* לפני ההפעלה */ }
-    $('fabs').classList.toggle('away', ($('dock')?.offsetHeight || 0) > innerHeight * 0.55);
+    // מיקום/מצפן נעלמים כשהדוק תופס את רוב המסך, או כשהתפריט הפתוח מגיע עד אליהם (בניווט: הדוק גבוה, ועוד "כל המסלול" –
+    // בהיר/כהה ישב מתחת למצפן, והנגיעה נתפסה בו)
+    const fr = $('fabs').getBoundingClientRect(), kr = document.querySelector('#controls .ktools').getBoundingClientRect();
+    const kBottom = kr.top + col.offsetHeight + 10 + 172 + 10 + 46; // העמודה כשפתוחה: כפתורים, סליידר, בהיר/כהה
+    $('fabs').classList.toggle('away', ($('dock')?.offsetHeight || 0) > innerHeight * 0.55 || (open && kBottom > fr.top - 8));
   }
   function setKnife(on) {
     knifeOpen = on;
