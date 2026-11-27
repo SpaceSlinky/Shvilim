@@ -139,7 +139,7 @@
         paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.12 } },
       { id: 'dl-tap-line', type: 'line', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffffff', 'line-width': 0.6 } },
       { id: 'dl-busy-label', type: 'symbol', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.4,
-        layout: { 'text-field': ['case', ['==', ['get', 'q'], 1], 'מפה בהורדה…', 'ממתין'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
+        layout: { 'text-field': ['case', ['==', ['get', 'q'], 1], '', 'ממתין'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
         paint: { 'text-color': '#2b3035', 'text-halo-color': 'rgba(255,255,255,.7)', 'text-halo-width': 1 } },
       ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 9.4,
         paint: { 'line-color': '#6b6470', 'line-width': 0.6, 'line-dasharray': [4, 4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
@@ -1221,6 +1221,9 @@
   const mk = (cls, html) => { const b = Object.assign(document.createElement('button'), { className: cls }); b.innerHTML = html; document.body.appendChild(b); return b; };
   const stopBtn = mk('dl-here', 'עצירת ההורדה'), goBtn = mk('dl-here dl-go', '');
   stopBtn.addEventListener('click', () => { stopCell = null; placeStop(); stopBatch(); });
+  // המשבצת שיורדת עכשיו – כפתור "מפה בהורדה…" באותו מקום ובאותה צורה; נגיעה בו מחליפה אותו ל"עצירת ההורדה"
+  const busyBtn = mk('dl-here dl-busy', '');
+  busyBtn.addEventListener('click', () => { stopCell = progCell; placeStop(); });
   goBtn.addEventListener('click', () => {
     const cells = [...dlSel].map(keyCell);
     if (!cells.length || !navigator.onLine) return;
@@ -1259,6 +1262,8 @@
     putOn(goBtn, showGo && cellRect(dlLast));
     // ההתקדמות – המשבצת שיורדת עכשיו מתמלאת בירוק מלמטה (רק כשמשהו השתנה, לא בכל תזוזה)
     progCell = batchQ ? batchQ.cells[batchQ.done] : null;
+    if (progCell) busyBtn.textContent = batchQ.kind === 'upd' ? 'מפה בעדכון…' : 'מפה בהורדה…';
+    putOn(busyBtn, progCell && !(stopCell && stopCell.join() === progCell.join()) && cellRect(progCell));
     const key = progCell ? progCell.join() + ':' + progVal.toFixed(3) : '';
     if (key !== progShown && map.getSource('dl-prog')) {
       progShown = key;
