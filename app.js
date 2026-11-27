@@ -623,25 +623,24 @@
     return g.getImageData(0, 0, S, S);
   }
   const GLOW_OPT = { pixelRatio: 2, stretchX: [[44, 52]], stretchY: [[44, 52]], content: [30, 30, 66, 66] };
-  // שמות היישובים: פס (גלולה) מטושטש מעט מאחורי השם – בהיר ביום, כהה בלילה, 30% אטימות; רק החלק הישר שבאמצע נמתח
+  // שמות היישובים: פס מלבני חד (בלי טשטוש) מאחורי השם – ביום מכהה את הרקע ב-35%, בלילה מבהיר ב-35%
   function pillImage(rgb, a) {
     const W = 128, H = 96, M = 30, c = document.createElement('canvas');
     c.width = W; c.height = H;
     const g = c.getContext('2d');
-    g.shadowColor = `rgba(${rgb},${a})`; g.shadowBlur = 10; g.shadowOffsetX = 1000;
-    g.fillStyle = '#000';
-    g.beginPath(); g.roundRect(M - 1000, M, W - 2 * M, H - 2 * M, (H - 2 * M) / 2); g.fill();
+    g.fillStyle = `rgba(${rgb},${a})`;
+    g.fillRect(M, M, W - 2 * M, H - 2 * M);
     return g.getImageData(0, 0, W, H);
   }
-  const PILL_OPT = { pixelRatio: 2, stretchX: [[58, 70]], stretchY: [[47, 49]], content: [30, 30, 98, 66] };
+  const PILL_OPT = { pixelRatio: 2, stretchX: [[34, 94]], stretchY: [[34, 62]], content: [30, 30, 98, 66] };
   const PLACE_GLOW = new Set(['place-minor', 'place-major', 'ov-city', 'ovh-place']);
   const glowFor = (id, night) => (PLACE_GLOW.has(id) ? 'glow-p' : 'glow-') + (night ? 'n' : 'd');
   map.on('styleimagemissing', (e) => {
     if (map.hasImage(e.id)) return;
     if (e.id === 'glow-d') map.addImage(e.id, glowImage('255,255,255', 0.4), GLOW_OPT);
     if (e.id === 'glow-n') map.addImage(e.id, glowImage('16,19,23', 0.45), GLOW_OPT);
-    if (e.id === 'glow-pd') map.addImage(e.id, pillImage('255,255,255', 0.3), PILL_OPT);
-    if (e.id === 'glow-pn') map.addImage(e.id, pillImage('16,19,23', 0.3), PILL_OPT);
+    if (e.id === 'glow-pd') map.addImage(e.id, pillImage('0,0,0', 0.35), PILL_OPT); // ביום – מכהה
+    if (e.id === 'glow-pn') map.addImage(e.id, pillImage('255,255,255', 0.35), PILL_OPT); // בלילה – מבהיר
     if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
