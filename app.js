@@ -305,7 +305,8 @@
     const p = l.paint, y = l.layout;
     if (l.type !== 'symbol' || !p || p['text-halo-width'] == null || l.id === 'dl-busy-label') continue;
     if (y['symbol-placement'] !== 'line' && !y['icon-image']) {
-      Object.assign(y, { 'icon-image': 'glow-d', 'icon-text-fit': 'both', 'icon-text-fit-padding': [1, 5, 1, 5],
+      const place = ['place-minor', 'place-major', 'ov-city', 'ovh-place'].includes(l.id);
+      Object.assign(y, { 'icon-image': place ? 'glow-pd' : 'glow-d', 'icon-text-fit': 'both', 'icon-text-fit-padding': place ? [1, 4, 1, 4] : [1, 5, 1, 5],
         'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-optional': false, 'text-optional': false });
       p['text-halo-width'] = 0;
       if (p['text-opacity'] != null) p['icon-opacity'] = p['text-opacity'];
@@ -427,7 +428,7 @@
       (l.paint ||= {})[prop] = nightV;
     }
     for (const l of style.layers) if (l.id === 'base-sat' || l.id === 'sat-top') (l.paint ||= {})['raster-brightness-max'] = 0.7;
-    for (const l of style.layers) if (GLOW_LAYERS.includes(l.id)) l.layout['icon-image'] = 'glow-n';
+    for (const l of style.layers) if (GLOW_LAYERS.includes(l.id)) l.layout['icon-image'] = l.layout['icon-image'].replace(/d$/, 'n');
   }
   const map = new maplibregl.Map({
     container: 'map',
@@ -622,10 +623,25 @@
     return g.getImageData(0, 0, S, S);
   }
   const GLOW_OPT = { pixelRatio: 2, stretchX: [[44, 52]], stretchY: [[44, 52]], content: [30, 30, 66, 66] };
+  // שמות היישובים: פס (גלולה) מטושטש מעט מאחורי השם – בהיר ביום, כהה בלילה, 30% אטימות; רק החלק הישר שבאמצע נמתח
+  function pillImage(rgb, a) {
+    const W = 128, H = 96, M = 30, c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.shadowColor = `rgba(${rgb},${a})`; g.shadowBlur = 10; g.shadowOffsetX = 1000;
+    g.fillStyle = '#000';
+    g.beginPath(); g.roundRect(M - 1000, M, W - 2 * M, H - 2 * M, (H - 2 * M) / 2); g.fill();
+    return g.getImageData(0, 0, W, H);
+  }
+  const PILL_OPT = { pixelRatio: 2, stretchX: [[58, 70]], stretchY: [[47, 49]], content: [30, 30, 98, 66] };
+  const PLACE_GLOW = new Set(['place-minor', 'place-major', 'ov-city', 'ovh-place']);
+  const glowFor = (id, night) => (PLACE_GLOW.has(id) ? 'glow-p' : 'glow-') + (night ? 'n' : 'd');
   map.on('styleimagemissing', (e) => {
     if (map.hasImage(e.id)) return;
     if (e.id === 'glow-d') map.addImage(e.id, glowImage('255,255,255', 0.4), GLOW_OPT);
     if (e.id === 'glow-n') map.addImage(e.id, glowImage('16,19,23', 0.45), GLOW_OPT);
+    if (e.id === 'glow-pd') map.addImage(e.id, pillImage('255,255,255', 0.3), PILL_OPT);
+    if (e.id === 'glow-pn') map.addImage(e.id, pillImage('16,19,23', 0.3), PILL_OPT);
     if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
@@ -3452,7 +3468,7 @@
     document.querySelector('meta[name=theme-color]').content = night ? '#101317' : '#1f5f3a';
     for (const [id, prop, day, nightV] of THEME) if (map.getLayer(id)) map.setPaintProperty(id, prop, night ? nightV : day);
     for (const id of ['base-sat', 'sat-top']) map.setPaintProperty(id, 'raster-brightness-max', night ? 0.7 : 1);
-    for (const id of GLOW_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'icon-image', night ? 'glow-n' : 'glow-d');
+    for (const id of GLOW_LAYERS) if (map.getLayer(id)) map.setLayoutProperty(id, 'icon-image', glowFor(id, night));
   }
   // בהיר / כהה: כפתור אחד שמחליף מיד (בלי מצב אוטומטי). נשמר ב-localStorage `theme`
   let isNight = localStorage.getItem('theme') === 'dark';
