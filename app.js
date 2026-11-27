@@ -101,6 +101,7 @@
       'areas-env': { type: 'geojson', data: empty }, // מעטפת האזורים שהורדו (updateEnvelope)
       'dl-grid': { type: 'geojson', data: empty }, // ריבועי ההורדה שעוד חסרים (checkArea)
       'areas-del': { type: 'geojson', data: empty }, // מפות שמורות: האזורים שהורדו, כשרואים את כל הארץ (renderAreasMap)
+      'dl-prog': { type: 'geojson', data: empty }, // ההתקדמות: חלק המשבצת שיורדת שכבר "התמלא" בירוק (מלמטה)
       'dl-tap': { type: 'geojson', data: empty }, // משבצות שנבחרו להורדה / בתור – placeDlHere
       'dl-grid-c': { type: 'geojson', data: empty }, // הגריד המאוחד (2×2, 4×4, 8×8 ריבועים) – כך שבכל זום יש גריד על המפה
       scrub: { type: 'geojson', data: empty },
@@ -133,11 +134,12 @@
         paint: { 'line-color': '#6b6470', 'line-width': 0.6, 'line-dasharray': [4, 4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8.4, 0, 9.2, 0.4] } },
       // משבצות שנבחרו להורדה – לבנות; זו שיורדת עכשיו – לבנה עם "בהורדה", שאחריה בתור – רק קו מתאר עם "ממתין"
       // (פעם: הבהוב – "נראה לא טוב")
+      { id: 'dl-prog-fill', type: 'fill', source: 'dl-prog', paint: { 'fill-color': '#2e7d4f', 'fill-opacity': 0.35 } },
       { id: 'dl-tap-fill', type: 'fill', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'],
         paint: { 'fill-color': '#ffffff', 'fill-opacity': 0.12 } },
       { id: 'dl-tap-line', type: 'line', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': '#ffffff', 'line-width': 0.6 } },
       { id: 'dl-busy-label', type: 'symbol', source: 'dl-tap', filter: ['==', ['geometry-type'], 'Point'], minzoom: 8.4,
-        layout: { 'text-field': ['case', ['==', ['get', 'q'], 1], 'בהורדה…', 'ממתין'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
+        layout: { 'text-field': ['case', ['==', ['get', 'q'], 1], 'מפה בהורדה…', 'ממתין'], 'text-font': FONT, 'text-size': 13, 'text-allow-overlap': true },
         paint: { 'text-color': '#2b3035', 'text-halo-color': 'rgba(255,255,255,.7)', 'text-halo-width': 1 } },
       ...GRID_LEVELS.map(({ m, op }) => ({ id: 'dl-grid-' + m, type: 'line', source: 'dl-grid-c', filter: ['==', ['get', 'm'], m], maxzoom: 9.4,
         paint: { 'line-color': '#6b6470', 'line-width': 0.6, 'line-dasharray': [4, 4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], ...op] } })),
@@ -281,7 +283,7 @@
     l.paint['line-opacity'] = fade(f[0], f[1], typeof l.paint['line-opacity'] === 'number' ? l.paint['line-opacity'] : 1);
   }
   // המשבצות שבחירה/הורדה/מחיקה והכיתוב שלהן – מעל הכל (מעל השבילים, השמות, התצלום והמסלול)
-  { const TOP = new Set(['ad-fill', 'ad-line', 'dl-tap-fill', 'dl-tap-line', 'dl-busy-label']);
+  { const TOP = new Set(['ad-fill', 'ad-line', 'dl-prog-fill', 'dl-tap-fill', 'dl-tap-line', 'dl-busy-label']);
     style.layers = [...style.layers.filter((l) => !TOP.has(l.id)), ...style.layers.filter((l) => TOP.has(l.id))]; }
   // שמות: הילה רכה ומטושטשת במקום קו מתאר חד (text-halo-blur – בלי עלות נוספת בעיבוד)
   // שמות נקודתיים (יישובים, נקודות, פסגות): במקום הילה – "גראד" רך מתחת לטקסט: תמונה מטושטשת שנמתחת
@@ -379,6 +381,7 @@
       ['case', ['==', ['get', 'c'], '#ffffff'], '#777777', ['in', ['get', 'c'], ['literal', DARK]], '#e8e8e8', '#0d0f12']],
     ['trail-casing', 'line-opacity', fade(10, 10.7, 0.85), fade(10, 10.7, 1)],
     ['env-fill', 'fill-color', '#2e7d4f', '#81c784'],
+    ['dl-prog-fill', 'fill-color', '#2e7d4f', '#81c784'],
     ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
     ...GRID_LEVELS.map(({ m }) => ['dl-grid-' + m, 'line-color', '#6b6470', '#9aa3ab']),
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
@@ -1211,12 +1214,12 @@
   function checkArea() { buildGrids(); placeDlHere(); placeStop(); }
   // כפתור "עצירה" קטן באמצע המשבצת שבהורדה שנגעו בה (באמצע החלק שלה שעל המסך; לא רחב מהמשבצת; כמעט מחוץ למסך – נעלם)
   // כפתורים קטנים על המשבצות עצמן (במקום בדוק): "הורדה" על המשבצת שנבחרה אחרונה, "עצירת ההורדה" על משבצת שבהורדה
-  // שנגעו בה, ופס התקדמות קטן מתחת ל"בהורדה…" – באמצע החלק של המשבצת שעל המסך; לא רחב מהמשבצת, כמעט מחוץ למסך – נעלם
-  let stopCell = null, dlLast = null, progCell = null, progVal = 0;
+  // שנגעו בה – באמצע החלק של המשבצת שעל המסך; לא רחב מהמשבצת, כמעט מחוץ למסך – נעלם.
+  // ההתקדמות – המשבצת עצמה מתמלאת בירוק מלמטה למעלה (dl-prog; פעם: פס קטן מתחת ל"בהורדה…")
+  let stopCell = null, dlLast = null, progCell = null, progVal = 0, progShown = '';
   const DL_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
   const mk = (cls, html) => { const b = Object.assign(document.createElement('button'), { className: cls }); b.innerHTML = html; document.body.appendChild(b); return b; };
-  const stopBtn = mk('dl-here', 'עצירת ההורדה'), goBtn = mk('dl-here dl-go', ''), progEl = mk('dl-prog', '<i></i>');
-  progEl.tabIndex = -1;
+  const stopBtn = mk('dl-here', 'עצירת ההורדה'), goBtn = mk('dl-here dl-go', '');
   stopBtn.addEventListener('click', () => { stopCell = null; placeStop(); stopBatch(); });
   goBtn.addEventListener('click', () => {
     const cells = [...dlSel].map(keyCell);
@@ -1254,10 +1257,15 @@
       goBtn.disabled = off;
     }
     putOn(goBtn, showGo && cellRect(dlLast));
-    // פס ההתקדמות – מתחת ל"בהורדה…" במשבצת שיורדת עכשיו (כשאין עליה כפתור עצירה)
+    // ההתקדמות – המשבצת שיורדת עכשיו מתמלאת בירוק מלמטה (רק כשמשהו השתנה, לא בכל תזוזה)
     progCell = batchQ ? batchQ.cells[batchQ.done] : null;
-    progEl.firstChild.style.width = Math.round(progVal * 100) + '%';
-    putOn(progEl, progCell && !(stopCell && stopCell.join() === progCell.join()) && cellRect(progCell), 16);
+    const key = progCell ? progCell.join() + ':' + progVal.toFixed(3) : '';
+    if (key !== progShown && map.getSource('dl-prog')) {
+      progShown = key;
+      const c = progCell, top = c && c[1] + (c[3] - c[1]) * Math.min(1, progVal);
+      map.getSource('dl-prog').setData(c && progVal > 0 ? { type: 'Feature', properties: {},
+        geometry: { type: 'Polygon', coordinates: [[[c[0], c[1]], [c[2], c[1]], [c[2], top], [c[0], top], [c[0], c[1]]]] } } : empty);
+    }
   }
   map.on('move', () => (stopCell || dlLast || progCell) && placeStop());
   // התקדמות בתוך משבצת: ההמתנה לשרת (לא ידוע כמה) – מתקרבת בהדרגה ל-60%; עיבוד, גופנים וגובה – 65–95%
