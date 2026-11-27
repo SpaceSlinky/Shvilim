@@ -222,24 +222,24 @@
       { id: 'place-minor', type: 'symbol', source: 'osm', minzoom: 12,
         filter: ['all', k('place'), ['!', ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13 },
-        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-opacity': fade(12, 13.5) } },
+        paint: { 'text-color': '#444', 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-opacity': fade(12, 13.5) } },
       // שמות: בזום רחוק – רק ערים מרכזיות (m, ~24 לכל הארץ, להתמצאות), ולא בתוך אזור שהורד (שם – רק שם האזור);
       // מקרוב (11+) מחוץ לאזורים – כל היישובים. כל יישוב אחר – בחיפוש. הגדולים קודמים בהתנגשות (symbol-sort-key)
       { id: 'ov-city', type: 'symbol', source: 'ov-cities', maxzoom: 11,
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 13.5,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
-        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6 } },
       // שמות היישובים נכנסים בפייד איטי מזום 9.8 (לא "במכה" ב-11); ערים מרכזיות – מלא מיד (ממשיכות את ov-city)
       { id: 'ovh-place', type: 'symbol', source: 'overview-hi', minzoom: 9.8, filter: k('p'),
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8, 'text-size': 12.5,
           'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'pop'], 0]] },
-        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 1.6,
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 1.6,
           'text-opacity': ['interpolate', ['linear'], ['zoom'], 9.8, ['case', ['has', 'm'], 1, 0], 11.4, 1] } },
       { id: 'place-major', type: 'symbol', source: 'osm', minzoom: 10,
         filter: ['all', k('place'), ['in', ['get', 't'], ['literal', ['city', 'town', 'village']]]],
         layout: { 'text-field': ['get', 'n'], 'text-font': FONT, 'text-max-width': 8,
           'text-size': ['match', ['get', 't'], ['city', 'town'], 17, 15] },
-        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-opacity': fade(10, 11.4) } },
+        paint: { 'text-color': '#222', 'text-halo-color': '#fff', 'text-halo-width': 2, 'text-opacity': fade(10, 11.4) } },
       // תצלום אוויר מעל כל המפה (חצי התחתון של הסליידר); המסלול, הנקודות והמיקום – מעליו
       { id: 'sat-top', type: 'raster', source: 'sat', layout: { visibility: 'none' }, paint: { 'raster-fade-duration': 150, 'raster-opacity': 0 } },
       // מסלול פעיל: המפה מתחתיו דוהה, והמסלול מצויר בצבעי השבילים עם מסגרת לבנה (בלי קו מתאר כהה)
@@ -410,9 +410,9 @@
     ['trail-label', 'text-color', '#222222', '#eeeeee'],
     ['poi-label', 'text-color', '#333333', '#dddddd'],
     ['peak', 'text-color', '#6d4c2f', '#d9b48c'],
-    ['place-minor', 'text-color', '#000000', '#ffffff'],
-    ['place-major', 'text-color', '#000000', '#ffffff'],
-    ...['ov-city', 'ovh-place'].map((id) => [id, 'text-color', '#000000', '#ffffff']),
+    ['place-minor', 'text-color', '#444444', '#cccccc'],
+    ['place-major', 'text-color', '#222222', '#f2f2f2'],
+    ...['ov-city', 'ovh-place'].map((id) => [id, 'text-color', '#222222', '#f2f2f2']),
     ['ov-sea', 'fill-color', '#aad3df', '#1c2f3e'],
     ['ov-coast', 'line-color', '#7fa7c9', '#3d6a8f'],
     ['area-label', 'text-color', '#e06000', '#ffa040'],
@@ -639,8 +639,8 @@
     if (map.hasImage(e.id)) return;
     if (e.id === 'glow-d') map.addImage(e.id, glowImage('255,255,255', 0.4), GLOW_OPT);
     if (e.id === 'glow-n') map.addImage(e.id, glowImage('16,19,23', 0.45), GLOW_OPT);
-    if (e.id === 'glow-pd') map.addImage(e.id, pillImage('255,255,255', 0.35), PILL_OPT); // ביום – מבהיר (טקסט שחור)
-    if (e.id === 'glow-pn') map.addImage(e.id, pillImage('0,0,0', 0.35), PILL_OPT); // בלילה – מכהה (טקסט לבן)
+    if (e.id === 'glow-pd') map.addImage(e.id, pillImage('0,0,0', 0.35), PILL_OPT); // ביום – מכהה
+    if (e.id === 'glow-pn') map.addImage(e.id, pillImage('255,255,255', 0.35), PILL_OPT); // בלילה – מבהיר
     if (e.id.startsWith('poi-')) map.addImage(e.id, poiIcon(e.id.slice(4)), { pixelRatio: 2 });
   });
   const POI_ICON = { spring: ['💧', '#1e88e5'], water: ['🚰', '#1e88e5'], viewpoint: ['🔭', '#e53935'], picnic_site: ['🧺', '#43a047'],
