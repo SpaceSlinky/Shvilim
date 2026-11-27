@@ -961,15 +961,22 @@
     setTimeout(syncBack);
   }
   function clearMaps() {
+    clearTimeout(selTimer);
     areaSel.clear(); dlSel.clear(); batchShown = false;
     mapsChanged();
   }
   let areaLast = null; // המשבצת השמורה שנבחרה אחרונה – עליה כפתורי "מחיקה" / "עדכון"
+  // בחירה למחיקה מתבטלת לבד: אחרי 10 שניות בלי נגיעה בה, או בזום רחוק מאוד (מתחת ל-8 – כשרואים רק מעטפות)
+  const SEL_IDLE = 10000;
+  let selTimer = 0;
+  const armSelTimer = () => { clearTimeout(selTimer); if (areaSel.size) selTimer = setTimeout(() => { areaLast = null; clearMaps(); }, SEL_IDLE); };
+  map.on('zoomend', () => { if (areaSel.size && map.getZoom() < 8) { areaLast = null; clearMaps(); } });
   function selectSaved(a) {
     const k = a.b.join();
     dlSel.clear();
     areaSel.has(k) ? areaSel.delete(k) : areaSel.add(k);
     areaLast = areaSel.has(k) ? a.b : [...areaSel].map(keyCell).pop() || null;
+    armSelTimer();
     mapsChanged();
     clearTimeout(selectSaved.t); selectSaved.t = setTimeout(checkAreaUpdates, 400);
   }
