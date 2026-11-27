@@ -436,7 +436,8 @@ body.night .dt-modes, body.night .dt-modes button + button:not([hidden]), body.n
 #controls.open .kmenu i:nth-child(3) { transform: rotate(-45deg); }
 /* העיגולים: עמודה מתחת ל-☰, במרחקים שווים; כל אחד גדל במקומו (scale), ועובר מקום בתנועה אם צריך */
 .ktools { position: absolute; top: calc(var(--kb) + 10px); right: 0; width: var(--kb); display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: none; }
-.kcol { position: relative; width: var(--kb); transition: height .25s; }
+.kcol { position: relative; width: var(--kb); } /* בלי הנפשת גובה – הסליידר ובהיר/כהה לא זזים, רק מצטיירים במקומם */
+.kcol.snap > button { transition-property: transform, opacity; } /* בפתיחה/סגירה – כל כפתור במקומו מיד, בלי לגלוש מהמקום הקודם */
 .kcol > button { position: absolute; right: 0; top: calc(var(--slot, 0) * (var(--kb) + 10px)); transform: scale(0); opacity: 0;
   transition: transform .18s cubic-bezier(.3,1.4,.5,1) var(--d, 0ms), opacity .12s var(--d, 0ms), top .25s cubic-bezier(.22,1,.36,1); }
 .kcol > button.on { transform: scale(1); opacity: 1; pointer-events: auto; }

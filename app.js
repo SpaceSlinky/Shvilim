@@ -3963,8 +3963,11 @@
   }
   function setKnife(on) {
     knifeOpen = on;
+    const col = knife.querySelector('.kcol');
+    col.classList.add('snap');
     knife.classList.toggle('open', knifeOpen);
     layoutTools();
+    clearTimeout(setKnife.t); setKnife.t = setTimeout(() => col.classList.remove('snap'), 600);
     $('btn-menu').setAttribute('aria-expanded', knifeOpen);
   }
   $('btn-menu').addEventListener('click', () => setKnife(!knifeOpen));
