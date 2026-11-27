@@ -3401,7 +3401,8 @@
   // מפה מלאה; אחד דלוק – רק הוא; שניהם – שניהם (ובכל מקרה שמות היישובים, המפה הכללית והמסלול נשארים)
   const ISO = { isoDirt: ['paths', 'tracks', 'bike'], isoMarked: ['trails'], isoBike: ['bike'] }; // אופניים: מסלולי אופניים ושבילים לאופניים בלבד
   delete layerPrefs.lyTrails; delete layerPrefs.lyRest; // המתגים הקודמים (הסתרה)
-  for (const k of Object.keys(ISO)) layerPrefs[k] = layerPrefs[k] === true;
+  // כל פתיחה של האפליקציה מתחילה במפה מלאה, בלי בידוד (כמו הסליידר) – אחרת מתג שנשאר דלוק נראה כ"סרגל פתוח"
+  for (const k of Object.keys(ISO)) layerPrefs[k] = false;
   const syncSets = () => {
     const any = layerPrefs.isoDirt || layerPrefs.isoMarked || layerPrefs.isoBike;
     for (const g of ['trails', 'paths', 'tracks', 'bike', 'roads', 'water', 'poi', 'parking']) layerPrefs[g] = !any;
