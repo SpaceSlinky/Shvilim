@@ -2234,7 +2234,7 @@
     // התקדמות על הגרף (רק בניווט)
     const atP = nav && prevAlong != null && prof ? (prevAlong * prof.total) / (total || 1) : null;
     // לפני היציאה: יוצאים מכל נקודה על המסלול, רק כשקרובים אליו
-    $('ri-go').textContent = goMsg || '▶ יוצאים לדרך';
+    $('ri-go').textContent = goMsg || 'יוצאים לדרך';
     $('ri-go').classList.toggle('warn', !!goMsg && !goWait);
     $('ri-go').hidden = nav || !!detour;
     $('dt-box').hidden = !detour;
@@ -3937,7 +3937,8 @@
     // בהיר/כהה ישב מתחת למצפן, והנגיעה נתפסה בו)
     const fr = $('fabs').getBoundingClientRect(), kr = document.querySelector('#controls .ktools').getBoundingClientRect();
     const kBottom = kr.top + col.offsetHeight + 10 + 172 + 10 + 46; // העמודה כשפתוחה: כפתורים, סליידר, בהיר/כהה
-    $('fabs').classList.toggle('away', ($('dock')?.offsetHeight || 0) > innerHeight * 0.55 || (open && kBottom > fr.top - 8));
+    $('fabs').classList.toggle('away', ($('dock')?.offsetHeight || 0) > innerHeight * 0.55 || (open && kBottom > fr.top - 8)
+      || (dockMode() === 'lib' && dock.libOpen)); // רשימת המסלולים פתוחה – בלי מיקום/מצפן
   }
   function setKnife(on) {
     knifeOpen = on;

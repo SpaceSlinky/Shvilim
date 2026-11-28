@@ -218,7 +218,7 @@ body.night .vs-fill, body.night .vs-thumb { background: #4caf50; }
 body.night .vs-thumb { border-color: #23282e; }
 
 /* ===== הדוק התחתון: צר, ומשתנה לפי מה שעושים ===== */
-#dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; margin: 0 auto; max-width: 560px; overflow: hidden;
+#dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; /* מעל סרגל הכלים (10) – הוא לא צריך להיסגר */ margin: 0 auto; max-width: 560px; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-end; /* התוכן צמוד לתחתית: כשהגובה משתנה – הקצה העליון זז, והכפתורים נשארים במקום */
   transition: none; /* הגובה צמוד לתוכן – התוכן עצמו מונפש */
   background: #fff; border-radius: 16px 16px 0 0; box-shadow: 0 -2px 14px rgba(0,0,0,.22); }
