@@ -3682,7 +3682,7 @@
     lastMode = m;
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
-    document.documentElement.classList.toggle('dock-float', m === 'lib'); // "מסלולים" – גלולה צפה כמו שורת החיפוש (--dock-gap)
+    document.documentElement.classList.toggle('dock-full', m !== 'lib'); // "מסלולים" – גלולה צפה (--dock-gap); אחרת – צמוד לתחתית
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     // חיפוש – רק כשלא בתוך מסלול או בתכנון: בכניסה למסלול השורה מתכנסת לתוך ה-☰ (משמאל לימין), וביציאה נפתחת ממנו
     $('search').classList.toggle('collapsed', m !== 'lib');
