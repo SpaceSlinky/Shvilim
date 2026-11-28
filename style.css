@@ -576,6 +576,7 @@ body.night .dl-here.dl-busy { color: #e6e6e6; }
 .dl-here.dl-go svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .dl-here.dl-go:disabled { color: #777; }
 .dl-here.dl-go.dl-del { color: #c62828; }
+.dl-here.dl-go.dl-del.arm, body.night .dl-here.dl-go.dl-del.arm { background: #c62828; color: #fff; } /* "למחוק? נגיעה נוספת" */
 
 body.night .dl-here.dl-go { color: #81c784; }
 body.night .dl-here.dl-go.dl-del { color: #ef5350; }

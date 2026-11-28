@@ -555,7 +555,6 @@
   map.on('click', 'env-fill', (e) => {
     if (inMaps() || areaSel.size || map.getZoom() >= SEL_Z0) return;
     const { lng, lat } = e.lngLat;
-    try { if (!localStorage.getItem('hintDel')) { localStorage.setItem('hintDel', '1'); setTimeout(() => toast('נגיעה במשבצת שמורה – מחיקה או עדכון', 4000), 1000); } } catch { /* ignore */ }
     const g = envGroups.find((x) => lng >= x.bbox[0] && lng <= x.bbox[2] && lat >= x.bbox[1] && lat <= x.bbox[3]);
     if (g) map.fitBounds([[g.bbox[0], g.bbox[1]], [g.bbox[2], g.bbox[3]]], { padding: 40, duration: 900 });
   });
@@ -933,7 +932,7 @@
     setTimeout(syncBack);
   }
   function clearMaps() {
-    clearTimeout(selTimer);
+    clearTimeout(selTimer); clearTimeout(delArm); delArm = 0;
     areaSel.clear(); dlSel.clear(); batchShown = false;
     mapsChanged();
   }
@@ -943,8 +942,20 @@
   let selTimer = 0;
   const armSelTimer = () => { clearTimeout(selTimer); if (areaSel.size) selTimer = setTimeout(() => { areaLast = null; clearMaps(); }, SEL_IDLE); };
   map.on('zoomend', () => { if (areaSel.size && map.getZoom() < 8) { areaLast = null; clearMaps(); } });
+  // רמז למחווה: "לחיצה ארוכה…" – אחרי נגיעה במשבצת שמורה ובסוף הורדה, 3 פעמים בסך הכול (localStorage hintLong).
+  // מחכים רגע: נגיעה כפולה / זום / הזזה – זה לא ניסיון לבחור, אין רמז
+  const HINT_LONG = 'לחיצה ארוכה על משבצת שמורה – מחיקה או עדכון';
+  const hintLeft = () => { try { return 3 - (+localStorage.getItem('hintLong') || 0); } catch { return 0; } };
+  const hintUsed = () => { try { localStorage.setItem('hintLong', 4 - hintLeft()); } catch { /* ignore */ } };
+  let hintT = 0;
+  function hintLong() {
+    clearTimeout(hintT);
+    if (hintLeft() > 0) hintT = setTimeout(() => { hintUsed(); toast(HINT_LONG, 3500); }, 450);
+  }
+  for (const ev of ['dblclick', 'zoomstart', 'movestart']) map.on(ev, () => clearTimeout(hintT));
   function selectSaved(a) {
     const k = a.b.join();
+    clearTimeout(delArm); delArm = 0;
     dlSel.clear();
     areaSel.has(k) ? areaSel.delete(k) : areaSel.add(k);
     areaLast = areaSel.has(k) ? a.b : [...areaSel].map(keyCell).pop() || null;
@@ -959,10 +970,11 @@
     const { lng, lat } = e.lngLat;
     const a = savedAt(lng, lat);
     if (a && !batchQ?.cells.slice(batchQ.done).some((x) => x.join() === a.b.join())) {
-      // בזום האמצע (רואים את המשבצות הבודדות, לפני שהשבילים מופיעים) – נגיעה בוחרת, כמו משבצת להורדה;
-      // מרחוק – זום למעטפת (env-fill); מקרוב – מידע על השבילים; לחיצה ארוכה – בכל זום
+      // בחירה לניהול (מחיקה/עדכון) – רק בלחיצה ארוכה. נגיעה רגילה לא בוחרת (פעם בזום האמצע כן – הפריעה לזום:
+      // נגיעה כפולה בחרה וביטלה, ו"מחיקה" צץ מתחת לאצבע); בזום האמצע – רמז, כמה פעמים בהתחלה.
+      // כשכבר יש בחירה (מלחיצה ארוכה) – נגיעה מוסיפה/מורידה משבצת שמורה (מחיקה מרובה)
       const z = map.getZoom();
-      if (!areaSel.size && (z < SEL_Z0 || z >= SEL_Z1)) return;
+      if (!areaSel.size) { if (z >= SEL_Z0 && z < SEL_Z1) hintLong(); return; }
       e.shvSel = true;
       return selectSaved(a);
     }
@@ -1126,6 +1138,7 @@
     saveQueue(null);
     const upd = q.kind === 'upd';
     if (q.fails) toast(`${upd ? 'העדכון' : 'ההורדה'} נכשל${upd ? '' : 'ה'}${n > 1 ? ` ב-${q.fails} מתוך ${n} משבצות` : ''}: ${q.err}`, 6000);
+    else if (!upd && hintLeft() > 0) { hintUsed(); toast('המפות נשמרו ✓ · ' + HINT_LONG, 5000); }
     else toast(upd ? 'המפות עודכנו ✓' : 'המפות נשמרו – אפשר להשתמש בהן בלי אינטרנט ✓', 3000);
   }
   function resumeBatch() {
@@ -1231,7 +1244,15 @@
   // מפות שמורות שנבחרו (לחיצה ארוכה): "מחיקה" על המשבצת שנבחרה אחרונה, ומתחתיו "עדכון" כשיש
   const TRASH_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V4.5h4V7M7 7l1 13h8l1-13"/></svg>';
   const delBtn = mk('dl-here dl-go dl-del', ''), updBtn = mk('dl-here dl-go', '');
-  delBtn.addEventListener('click', () => $('ab-del').click());
+  // מחיקה בשני שלבים, באותו כפתור: נגיעה ראשונה – "למחוק? נגיעה נוספת" באדום מלא, השנייה מוחקת; 3 שנ' בלי נגיעה – חוזר
+  let delArm = 0;
+  delBtn.addEventListener('click', () => {
+    if (delArm) { clearTimeout(delArm); delArm = 0; return $('ab-del').click(); }
+    delArm = setTimeout(() => { delArm = 0; placeStop(); }, 3000);
+    navigator.vibrate?.(15);
+    armSelTimer();
+    placeStop();
+  });
   updBtn.addEventListener('click', () => { areaLast = null; $('ab-upd').click(); mapsChanged(); });
   goBtn.addEventListener('click', () => {
     const cells = [...dlSel].map(keyCell);
@@ -1271,7 +1292,8 @@
     putOn(goBtn, showGo && cellRect(dlLast));
     if (areaLast && !areaSel.has(areaLast.join())) areaLast = [...areaSel].map(keyCell).pop() || null;
     const sel = areaSel.size, nUpd = [...areaSel].filter((k) => areasUpd.has(k)).length;
-    delBtn.innerHTML = TRASH_ICON + (sel > 1 ? `מחיקה (${sel})` : 'מחיקה');
+    delBtn.innerHTML = TRASH_ICON + (delArm ? 'למחוק? נגיעה נוספת' : sel > 1 ? `מחיקה (${sel})` : 'מחיקה');
+    delBtn.classList.toggle('arm', !!delArm);
     updBtn.innerHTML = DL_ICON + (nUpd > 1 ? `עדכון (${nUpd})` : 'עדכון');
     const ar = sel && areaLast && dockMode() === 'lib' && cellRect(areaLast);
     const showUpd = !!(ar && nUpd && navigator.onLine && !batchQ);
