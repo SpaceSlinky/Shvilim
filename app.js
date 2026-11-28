@@ -137,7 +137,10 @@
       // המפות שהורדו – משבצות ירוקות בכל זום (מרחוק מילוי חזק יותר), ונעלמות כשהשבילים עצמם מופיעים; בלי שמות
       { id: 'env-fill', type: 'fill', source: 'areas-env', filter: ['==', ['geometry-type'], 'Polygon'], maxzoom: 11.3,
         paint: { 'fill-color': '#2e7d4f', 'fill-antialias': false, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.45, 9, 0.15, 10.4, 0.08, 11.2, 0] } },
-      { id: 'env-line', type: 'line', source: 'areas-env', filter: ['==', ['geometry-type'], 'LineString'], maxzoom: 11.3,
+      // הגריד בתוך המפות השמורות – אותו קו מקווקו ואותו פייד כמו הגריד בשאר המפה (dl-grid: 8.4–9.2), בירוק; נעלם עם המשבצות
+      { id: 'env-grid', type: 'line', source: 'areas-env', filter: ['all', ['==', ['geometry-type'], 'LineString'], ['has', 'g']], minzoom: 8.2, maxzoom: 11.3,
+        paint: { 'line-color': '#2e7d4f', 'line-width': 0.6, 'line-dasharray': [4, 4], 'line-opacity': ['interpolate', ['linear'], ['zoom'], 8.4, 0, 9.2, 0.6, 10.4, 0.6, 11.2, 0] } },
+      { id: 'env-line', type: 'line', source: 'areas-env', filter: ['all', ['==', ['geometry-type'], 'LineString'], ['!', ['has', 'g']]], maxzoom: 11.3,
         layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#2e7d4f', 'line-width': 0.6, 'line-opacity': ENV_FADE(0.9) } },
       { id: 'ad-fill', type: 'fill', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': ['case', ['==', ['get', 'dl'], 1], '#90caf9', ['==', ['get', 'sel'], 1], '#c62828', '#2e7d4f'], 'fill-opacity': ['case', ['==', ['get', 'sel'], 1], 0.14, 0.06] } },
       { id: 'ad-line', type: 'line', source: 'areas-del', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'line-color': ['case', ['==', ['get', 'dl'], 1], '#64b5f6', ['==', ['get', 'sel'], 1], '#e53935', '#2e7d4f'], 'line-width': ['case', ['==', ['get', 'sel'], 1], 1.6, 0.6] } },
@@ -305,7 +308,7 @@
     Object.assign(l.paint, { 'text-halo-width': HALO_W, 'text-halo-blur': 0, 'text-halo-color': HALO_LIGHT }); // בלילה – THEME למטה
   }
   // המשבצות שהורדו (ירוק) – מעל התצלום העליון, כך שרואים אותן גם ב"רק תצלום" (ממילא נעלמות בזום אין)
-  { const ENV = new Set(['env-fill', 'env-line']);
+  { const ENV = new Set(['env-fill', 'env-grid', 'env-line']);
     const env = style.layers.filter((l) => ENV.has(l.id)), rest = style.layers.filter((l) => !ENV.has(l.id));
     const i = rest.findIndex((l) => l.id === 'sat-top') + 1;
     // וגם שמות היישובים – נשארים גם ב"רק תצלום"; הסדר ביניהם נשמר
@@ -386,6 +389,7 @@
     ['dl-grid', 'line-color', '#6b6470', '#9aa3ab'],
     ...GRID_LEVELS.map(({ m }) => ['dl-grid-' + m, 'line-color', '#6b6470', '#9aa3ab']),
     ['env-line', 'line-color', '#2e7d4f', '#81c784'],
+    ['env-grid', 'line-color', '#2e7d4f', '#81c784'],
     ['dl-busy-label', 'text-color', '#2b3035', '#ffffff'],
     ['dl-busy-label', 'text-halo-color', 'rgba(255,255,255,.7)', 'rgba(0,0,0,.45)'],
     ['trail', 'line-color', ['get', 'c'], ['get', 'c']],
@@ -540,6 +544,10 @@
       if (!cov(i, j + 1)) edge([x0, y1], [x1, y1]);
       if (!cov(i - 1, j)) edge([x0, y0], [x0, y1]);
       if (!cov(i + 1, j)) edge([x1, y0], [x1, y1]);
+      // הגריד בין משבצות שמורות (פעם בפנים – רק משטח ירוק בלי קווים): כמו הגריד בשאר המפה, בירוק
+      const inner = (a, b) => feats.push({ type: 'Feature', properties: { g: 1 }, geometry: { type: 'LineString', coordinates: [a, b] } });
+      if (cov(i, j + 1)) inner([x0, y1], [x1, y1]);
+      if (cov(i + 1, j)) inner([x1, y0], [x1, y1]);
     }
     envGroups = areaGroups();
     map.getSource('areas-env')?.setData({ type: 'FeatureCollection', features: feats });
