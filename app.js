@@ -2366,7 +2366,7 @@
     return out;
   }
   // הנקודה הקרובה ביותר על רשימת קטעים: מרחק, הנקודה עצמה, והמרחק לאורך הקטעים עד אליה
-  function nearestOnSegs(segs, p) {
+  function nearestOnSegs(segs, p, minAlong = -1) {
     let best = { d: Infinity, pt: null, along: 0 }, acc = 0;
     const kx = Math.cos((p[1] * Math.PI) / 180);
     for (const sg of segs) {
@@ -2377,7 +2377,7 @@
         let t = L2 ? (((p[0] - A[0]) * kx) * dx + (p[1] - A[1]) * dy) / L2 : 0;
         t = Math.max(0, Math.min(1, t));
         const q = [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t], d = Geo.haversine(p, q), seg = Geo.haversine(A, B);
-        if (d < best.d) best = { d, pt: q, along: acc + seg * t };
+        if (d < best.d && acc + seg * t >= minAlong) best = { d, pt: q, along: acc + seg * t };
         acc += seg;
       }
     }
@@ -2572,8 +2572,13 @@
     renderDock();
     if (!plan.wps.length) map.getSource('route').setData(empty);
     // בניית הרשת תוקעת את הדף – אחרי שהדוק סיים לגדול (אחרת הוא "קופץ")
-    if (plan.opts.snap && plan.wps.length) { if (!graphKey) toast('מכין את רשת השבילים…', 1500); setTimeout(() => { if (!plan) return; getGraph(plan.opts.bike); renderPlan(); if (from?.fit) fitRoute(); }, 380); }
-    else renderPlan();
+    // מסלול קיים (כל הרגליים שמורות) – מוצג מיד; רשת השבילים (תוקעת את הדף) – רק אחרי שהדוק סיים לגדול
+    const ready = plan.fixed.every(Boolean);
+    if (ready || !plan.opts.snap || !plan.wps.length) { renderPlan(); if (ready && from?.fit) fitRoute(); }
+    if (plan.opts.snap) {
+      if (!graphKey && !ready) toast('מכין את רשת השבילים…', 1500);
+      setTimeout(() => { if (!plan) return; getGraph(plan.opts.bike); if (!ready) { renderPlan(); if (from?.fit) fitRoute(); } }, 380);
+    }
     applyLayers();
   }
 
@@ -2587,7 +2592,14 @@
       const fixed = r.lc.map((c) => { const s = segs.slice(o, o + c); o += c; return s.length ? s : null; });
       return { ...base, wps: r.wps, fixed, auto: r.auto || r.wps.map(() => false) };
     }
-    if (r.kind === 'plan' && r.wps?.length > 1 && !r.adds?.length) return { ...base, wps: r.wps }; // מתוכנן – מחשבים שוב את הדרך
+    if (r.kind === 'plan' && r.wps?.length > 1 && !r.adds?.length) {
+      // מתוכנן לפני שנשמרו הרגליים: מפצלים את הקו השמור בנקודות (לפי הסדר) – מוצג מיד, בלי לחשב מחדש
+      const al = [0];
+      for (let i = 1; i < r.wps.length; i++) al.push(i === r.wps.length - 1 ? Infinity : nearestOnSegs(segs, r.wps[i], al[i - 1]).along);
+      const fixed = r.wps.slice(1).map((_, i) => { const f = cutSegs(segs, al[i], al[i + 1]); return f.length ? f : null; });
+      if (fixed.every(Boolean)) return { ...base, wps: r.wps, fixed };
+      return { ...base, wps: r.wps }; // לא הסתדר – מחשבים שוב את הדרך
+    }
     // מסלול בלי נקודות (קובץ / ישן): התחלה וסוף, ועוגנים בלי סמן כל ~700 מ' – כך שינוי משנה רק את הקטע שליד
     const lines = segsToLines(segs), total = lines.reduce((s2, l) => s2 + l.reduce((x, p, j) => (j ? x + Geo.haversine(l[j - 1], p) : 0), 0), 0);
     const parts = Math.max(1, Math.min(30, Math.round(total / 700)));
@@ -2892,7 +2904,18 @@
     }
     box.scrollTop = scroll;
     renderLibTools(lib, cats);
+    fitLibList();
   }
+  // הרשימה גדלה עד שכל החלון (כותרת, רשימה, כלים, קרדיטים) מגיע לשני שליש מהמסך; מעבר לזה – נגללת בפנים
+  function fitLibList() {
+    const list = $('lib-list'), sec = list.closest('section');
+    if (!sec || sec.hidden) return;
+    const mh = (e) => { if (!e) return 0; const s = getComputedStyle(e); return e.offsetHeight + parseFloat(s.marginTop) + parseFloat(s.marginBottom); };
+    const ls = getComputedStyle(list), gap = innerHeight - dockEl.getBoundingClientRect().bottom;
+    const other = mh($('lib-head')) + mh($('lib-tools')) + mh(sec.querySelector('.credits')) + parseFloat(ls.marginTop) + parseFloat(ls.marginBottom);
+    list.style.maxHeight = Math.max(120, (innerHeight * 2) / 3 - gap - other) + 'px';
+  }
+  addEventListener('resize', fitLibList);
 
   // ---------- גרירה: מסלולים בין מקומות וקטגוריות, קטגוריות בסדר אחר ----------
   // מהידית ⋮⋮ – מיד עם התזוזה; מכל מקום אחר בשורה – בלחיצה ארוכה (כדי שגלילה רגילה תמשיך לעבוד)
@@ -3735,16 +3758,7 @@
   let libDragged = false;
   const libBody = $('lib-body');
   const EASE_L = 'grid-template-rows .3s cubic-bezier(.22,1,.36,1)';
-  // הגובה המלא של הרשימה הפתוחה: התוכן הטבעי, אבל לא יותר משני שליש מהמסך (מעבר לזה הרשימה נגללת בפנים)
-  function libFull() {
-    let h = 0;
-    for (const c of libBody.firstElementChild.children) {
-      const cs = getComputedStyle(c);
-      if (cs.display !== 'none') h += (c.id === 'lib-list' ? c.scrollHeight : c.offsetHeight) + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
-    }
-    const max = parseFloat(getComputedStyle(libBody.parentElement).maxHeight) - $('lib-head').offsetHeight;
-    return Number.isFinite(max) ? Math.min(h, max) : h;
-  }
+  const libFull = () => libBody.firstElementChild.scrollHeight; // הרשימה כבר מוגבלת (fitLibList)
   for (const el of document.querySelectorAll('#dock .lib-pull')) {
     let y0 = null, h0 = 0, full = 0, track = [];
     el.addEventListener('pointerdown', (e) => {
