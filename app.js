@@ -1012,14 +1012,17 @@
   async function startBg(q) {
     const reg = await swReg();
     if (!reg?.backgroundFetch || q.cancel || q.done >= q.cells.length) return;
-    const cells = q.cells.slice(q.done);
+    // רק משבצות בלי קובץ מוכן (Overpass – דקה ויותר). משבצת עם קובץ יורדת ישר בדף, בשנייה: ההורדה ברקע של אנדרואיד
+    // מתחילה לאט ומורידה אחד-אחד (גם את אריחי הגובה), והדף חיכה לה – "מפה בהורדה…" נתקע על ~30% הרבה זמן
+    await OSM.tileIndex();
+    const cells = q.cells.slice(q.done).filter((c) => !OSM.bgUrl(c).includes('/tiles/'));
+    if (!cells.length) return;
     const data = await caches.open('shvilim-data');
     const tiles = [];
     for (const u of new Set(cells.flatMap((c) => Elev.prefetchUrls(c)))) if (!(await data.match(u))) tiles.push(u);
     const id = 'maps-' + Date.now();
     try {
       q.srv = OSM.goodSrv(); // אותו שרת גם כשמחפשים את התשובות (במטמון / ברשומות)
-      await OSM.tileIndex(); // משבצת מוכנה – הקובץ שלה (מהיר); אחרת Overpass
       q.urls = Object.fromEntries(cells.map((c) => [c.join(), OSM.bgUrl(c, q.srv)])); // הכתובת נשמרת – גם אחרי פתיחה מחדש
       await reg.backgroundFetch.fetch(id, [...Object.values(q.urls), ...tiles], {
         title: cells.length > 1 ? `מוריד מפות של ${cells.length} משבצות` : 'מוריד את מפות האזור',
@@ -1038,6 +1041,9 @@
   }
   // התשובה למשבצת מההורדה ברקע שרצה (מחכים לה); null – לא הצליח ברקע, מורידים כרגיל
   async function fromBg(q, c) {
+    // משבצת עם קובץ מוכן – יורדת ישר בדף, גם אם נרשמה ברקע בגרסה קודמת (הורדה שנתקעה אצל המשתמש משתחררת)
+    const bu = q.urls?.[c.join()];
+    if (q.urls && (!bu || bu.includes('/tiles/'))) return null;
     const f = await (await swReg())?.backgroundFetch?.get(q.bg).catch(() => null);
     if (!f) { await endBg(q); return null; } // נגמרה (ה-SW שמר במטמון – takeBg)
     const rec = await f.match(q.urls?.[c.join()] || OSM.bgUrl(c, q.srv)).catch(() => null);
