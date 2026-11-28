@@ -3729,6 +3729,16 @@
   let libDragged = false;
   const libBody = $('lib-body');
   const EASE_L = 'grid-template-rows .3s cubic-bezier(.22,1,.36,1)';
+  // הגובה המלא של הרשימה הפתוחה: התוכן הטבעי, אבל לא יותר משני שליש מהמסך (מעבר לזה הרשימה נגללת בפנים)
+  function libFull() {
+    let h = 0;
+    for (const c of libBody.firstElementChild.children) {
+      const cs = getComputedStyle(c);
+      if (cs.display !== 'none') h += (c.id === 'lib-list' ? c.scrollHeight : c.offsetHeight) + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
+    }
+    const max = parseFloat(getComputedStyle(libBody.parentElement).maxHeight) - $('lib-head').offsetHeight;
+    return Number.isFinite(max) ? Math.min(h, max) : h;
+  }
   for (const el of document.querySelectorAll('#dock .lib-pull')) {
     let y0 = null, h0 = 0, full = 0, track = [];
     el.addEventListener('pointerdown', (e) => {
@@ -3741,7 +3751,7 @@
       if (y0 == null) return;
       const dy = e.clientY - y0;
       if (!libDragged && Math.abs(dy) < 6) return;
-      if (!libDragged) full = libBody.firstElementChild.scrollHeight;
+      if (!libDragged) full = libFull();
       libDragged = true;
       track.push([e.clientY, e.timeStamp]); if (track.length > 6) track.shift();
       libBody.style.transition = 'none';
