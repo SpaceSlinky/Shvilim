@@ -118,7 +118,6 @@
       'dl-tap': { type: 'geojson', data: empty }, // משבצות שנבחרו להורדה / בתור – placeDlHere
       'dl-grid-c': { type: 'geojson', data: empty }, // הגריד המאוחד (2×2, 4×4, 8×8 ריבועים) – כך שבכל זום יש גריד על המפה
       scrub: { type: 'geojson', data: empty },
-      detour: { type: 'geojson', data: empty },
       walked: { type: 'geojson', data: empty },
     },
     layers: [
@@ -267,13 +266,6 @@
           'circle-color': ['match', ['get', 'kind'], 'start', '#1a9b3c', '#c62828'] } },
       { id: 'wpts', type: 'circle', source: 'wpts',
         paint: { 'circle-radius': 6, 'circle-color': '#f39c12', 'circle-stroke-width': 2, 'circle-stroke-color': '#fff' } },
-      // תוספת למסלול (לפני האישור): מה שמדלגים עליו – אפור; הקטע החדש – מקווקו; והנקודה
-      { id: 'detour-skip', type: 'line', source: 'detour', filter: ['==', ['get', 'k'], 'skip'],
-        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#9e9e9e', 'line-width': 9, 'line-opacity': 0.75 } },
-      { id: 'detour-line', type: 'line', source: 'detour', filter: ['==', ['get', 'k'], 'new'],
-        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#d81b60', 'line-width': 5, 'line-dasharray': [1.6, 1.2] } },
-      { id: 'detour-pt', type: 'circle', source: 'detour', filter: ['==', '$type', 'Point'],
-        paint: { 'circle-radius': 8, 'circle-color': '#d81b60', 'circle-stroke-width': 3, 'circle-stroke-color': '#fff' } },
       // האצבע על הגרף: הקטע המסומן – רצועה מלאה בצבע השביל לכל הרוחב (בלי מסגרת לבנה; שביל לבן – לבן עם קו מתאר כהה דק),
       // ושאר המסלול דוהה בינתיים (SCRUB_FADE);
       // אצבע אחת – שברון לבן בקצה שזז עם האצבע, בכיוון ההליכה; שתי אצבעות – שני קווים לבנים ניצבים בקצוות הטווח
@@ -2236,8 +2228,8 @@
     // לפני היציאה: יוצאים מכל נקודה על המסלול, רק כשקרובים אליו
     $('ri-go').textContent = goMsg || 'יוצאים לדרך';
     $('ri-go').classList.toggle('warn', !!goMsg && !goWait);
-    $('ri-go').hidden = nav || !!detour;
-    $('dt-box').hidden = !detour;
+    $('ri-go').hidden = nav;
+    $('r-edit').hidden = nav; // עריכה – בתצוגה (בניווט – אחר כך)
     const wait = prof === false ? '–' : '…'; // נכשל – קו; עוד מחשב – שלוש נקודות
     if (scrub && prof && scrub.a != null) {
       // שתי אצבעות: הטווח שביניהן
@@ -2270,14 +2262,6 @@
 
   // יציאה – מכותרת הדוק: בניווט – עוצרים את הניווט; אחרת – חוזרים לרשימה, כמו שהייתה
   async function exitRoute() {
-    if (detour) cancelDetour();
-    // הוספת קטעים למסלול: שומרים כמסלול חדש? המקורי נשאר כמו שהוא
-    if (active?.edits?.length) {
-      const name = [active.baseName || active.name, ...(active.adds || [])].join(' + ');
-      if (await confirmDlg('לשמור את השינויים כמסלול חדש?', `"${name}". המסלול המקורי נשאר כמו שהוא.`, { ok: 'שמירה', cancel: 'לא לשמור', danger: false })) {
-        await libPut({ ...active, libId: Date.now(), name, nav: false });
-      }
-    }
     dock.libOpen = true;
     await clearRoute();
   }
@@ -2362,15 +2346,7 @@
     map.getSource('walked')?.setData({ type: 'FeatureCollection', features: active ? overlayFeatures(active.segs, 0, along, 'walk') : [] });
   }
 
-  // ---------- תוספת למסלול קיים: לחיצה ארוכה על המפה ----------
-  // מהנקודה הקרובה במסלול (בניווט – שעוד לפניך) אל הנקודה שנבחרה, לאורך השבילים.
-  // "הלוך וחזור" – חוזרים באותה דרך; "להמשיך משם" – הדרך הקצרה חזרה למסלול, בהמשך (מה שמדלגים עליו – אפור).
-  let detour = null; // { target, dep, opts:{back, on}, mode }
-  const segsLen = (segs) => segs.reduce((a, sg) => a + sg.coords.reduce((x, p, j) => (j ? x + Geo.haversine(sg.coords[j - 1], p) : 0), 0), 0);
-  const colorLeg = (segs) => segs.map((sg) => ({ ...sg, c: sg.c || (sg.h === 'free' ? null
-    : ['path', 'footway', 'track', 'steps', 'bridleway', 'cycleway'].includes(sg.h) ? '#7a6a58' : '#9e9e9e') }));
-  const reverseSegs = (segs) => segs.slice().reverse().map((sg) => ({ ...sg, coords: sg.coords.slice().reverse() }));
-  // הקטעים שבין שני מרחקים לאורך המסלול
+  // הקטעים שבין שני מרחקים לאורך רשימת קטעים (לפיצול רגל בעריכה)
   function cutSegs(segs, from, to) {
     const out = [];
     let acc = 0;
@@ -2389,123 +2365,24 @@
     }
     return out;
   }
-  function placeNear(p) {
-    let best = null, bd = 150;
-    for (const f of mapFC?.features || []) {
-      if (f.geometry.type !== 'Point' || !f.properties.n) continue;
-      const d = Geo.haversine(p, f.geometry.coordinates);
-      if (d < bd) { bd = d; best = f.properties.n; }
+  // הנקודה הקרובה ביותר על רשימת קטעים: מרחק, הנקודה עצמה, והמרחק לאורך הקטעים עד אליה
+  function nearestOnSegs(segs, p) {
+    let best = { d: Infinity, pt: null, along: 0 }, acc = 0;
+    const kx = Math.cos((p[1] * Math.PI) / 180);
+    for (const sg of segs) {
+      const c = sg.coords;
+      for (let j = 1; j < c.length; j++) {
+        const A = c[j - 1], B = c[j], dx = (B[0] - A[0]) * kx, dy = B[1] - A[1];
+        const L2 = dx * dx + dy * dy;
+        let t = L2 ? (((p[0] - A[0]) * kx) * dx + (p[1] - A[1]) * dy) / L2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        const q = [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t], d = Geo.haversine(p, q), seg = Geo.haversine(A, B);
+        if (d < best.d) best = { d, pt: q, along: acc + seg * t };
+        acc += seg;
+      }
     }
     return best;
   }
-  function proposeDetour(target) {
-    if (!showingRoute() || !mapFC) return;
-    const opts = { snap: true, bike: !!active.opts?.bike };
-    const g = getGraph(opts.bike), sn = g && Router.snap(g, target, 200);
-    if (sn) target = sn.p;
-    const lo = active.nav && prevAlong != null ? prevAlong : 0;
-    // יציאה: הנקודה הקרובה במסלול (שעוד לפניך)
-    let di = -1, dd = Infinity;
-    route.pts.forEach((p, i) => { if (route.cum[i] >= lo) { const d = Geo.haversine(p, target); if (d < dd) { dd = d; di = i; } } });
-    if (di < 0 || dd < 15) return toast('הנקודה כבר על המסלול', 2000);
-    const dep = route.cum[di];
-    const depPt = route.pts[di];
-    const sDep = g && Router.snap(g, depPt), outR = sDep && sn ? Router.route(g, sDep, sn) : null;
-    const out = colorLeg(outR ? outR.segs : computeLeg(depPt, target, opts).segs);
-    const outLen = segsLen(out);
-    const choices = { back: { segs: Router.pickColors([...out, ...reverseSegs(out)]), rejoin: dep, add: 2 * outLen } };
-    // חזרה למסלול בהמשך: הנקודות הקרובות ביותר (בקו אווירי) שאחרי היציאה, ומהן – הדרך הקצרה ביותר
-    const cands = [];
-    route.pts.forEach((p, i) => { if (route.cum[i] > dep + 60) cands.push({ i, d: Geo.haversine(p, target) }); });
-    cands.sort((a, b) => a.d - b.d);
-    const picked = [];
-    for (const c of cands) {
-      if (c.d > 2500 || picked.length >= 10) break;
-      if (picked.every((x) => Math.abs(route.cum[x.i] - route.cum[c.i]) > 40)) picked.push(c);
-    }
-    let best = null;
-    const avoid = new Set(outR?.edges || []); // לא לחזור באותה דרך
-    for (const c of outR ? picked : []) {
-      const sc = Router.snap(g, route.pts[c.i]);
-      const leg = sc && Router.route(g, sn, sc, { avoid });
-      if (!leg) continue;
-      // דרך חזרה שעוברת בנקודת היציאה – זה בעצם הלוך וחזור
-      if (leg.segs.some((sg) => sg.coords.some((q) => Geo.haversine(q, depPt) < 25))) continue;
-      const len = segsLen(leg.segs);
-      if (!best || len < best.len) best = { i: c.i, len, segs: leg.segs };
-    }
-    if (best && best.len < outLen * 3) {
-      const rejoin = route.cum[best.i];
-      choices.on = { segs: Router.pickColors([...out, ...colorLeg(best.segs)]), rejoin, add: outLen + best.len - (rejoin - dep) };
-    }
-    detour = { target, dep, choices, mode: 'back', name: placeNear(target) };
-    longPressAt = Date.now();
-    navigator.vibrate?.(25);
-    showDetour();
-  }
-  function showDetour() {
-    const ch = detour.choices[detour.mode];
-    const feats = ch.segs.map((sg) => ({ type: 'Feature', properties: { k: 'new' }, geometry: { type: 'LineString', coordinates: sg.coords } }));
-    if (detour.mode === 'on') for (const sg of cutSegs(active.segs, detour.dep, ch.rejoin))
-      feats.unshift({ type: 'Feature', properties: { k: 'skip' }, geometry: { type: 'LineString', coordinates: sg.coords } });
-    feats.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: detour.target } });
-    map.getSource('detour')?.setData({ type: 'FeatureCollection', features: feats });
-    for (const b of document.querySelectorAll('#dt-modes button')) {
-      b.hidden = !detour.choices[b.dataset.m];
-      b.classList.toggle('on', b.dataset.m === detour.mode);
-    }
-    $('dt-title').textContent = detour.name ? `תוספת: ${detour.name}` : 'תוספת למסלול';
-    // במילים ולא +/− (סימנים מתהפכים בטקסט עברי)
-    const more = (txt, neg) => (neg ? `${txt} פחות` : `עוד ${txt}`);
-    const lenTxt = more(Geo.fmtDist(Math.abs(ch.add)), ch.add < 0);
-    $('dt-info').textContent = `${lenTxt} · מחשב גובה…`;
-    renderRouteInfo();
-    // עלייה וזמן – אחרי חישוב הגובה של המסלול החדש
-    const mine = detour, mode = detour.mode;
-    const r = Geo.buildRoute(segsToLines(buildDetourSegs()));
-    Elev.profile(r.pts, 15, r.breaks).then((p) => {
-      if (detour !== mine || detour.mode !== mode) return;
-      const bike = !!active.opts?.bike;
-      const oldT = prof ? timeOf(prof, 0, prof.total, active.segs, bike) : estTime(route.total, 0, bike);
-      const newT = p ? timeOf(p, 0, p.total, buildDetourSegs(), bike) : null;
-      $('dt-info').textContent = lenTxt
-        + (p && prof ? ` · ↗ עוד ${Math.max(0, Math.round(p.gain - prof.gain))} מ'` : '')
-        + (newT != null ? ` · ⏱ ${more(fmtTime(Math.abs(newT - oldT)), newT < oldT)}` : '');
-    });
-  }
-  function buildDetourSegs() {
-    const ch = detour.choices[detour.mode];
-    return [...cutSegs(active.segs, 0, detour.dep), ...ch.segs, ...cutSegs(active.segs, ch.rejoin, Infinity)];
-  }
-  function cancelDetour() {
-    detour = null;
-    map.getSource('detour')?.setData(empty);
-    renderRouteInfo();
-    checkFar(); // החזרה (למעטפת / למיקום) חוזרת לפעול
-  }
-  async function acceptDetour() {
-    if (!detour || !active) return;
-    const segs = buildDetourSegs();
-    const a = active;
-    a.edits = [...(a.edits || []), { segs: a.segs, adds: a.adds || [] }];
-    a.baseName ||= a.name;
-    a.adds = [...(a.adds || []), detour.name || 'תוספת'];
-    a.segs = segs;
-    cancelDetour();
-    await setActive(a, { save: true });
-    toast('נוסף למסלול · "חזור" מבטל', 2500);
-  }
-  async function undoDetour() {
-    const a = active;
-    const last = a?.edits?.pop();
-    if (!last) return;
-    a.segs = last.segs; a.adds = last.adds;
-    await setActive(a, { save: true });
-    toast('התוספת בוטלה', 2000);
-  }
-  for (const b of document.querySelectorAll('#dt-modes button')) b.addEventListener('click', () => { detour.mode = b.dataset.m; showDetour(); });
-  $('dt-ok').addEventListener('click', acceptDetour);
-  $('dt-cancel').addEventListener('click', cancelDetour);
   // לחיצה ארוכה (בלי לזוז) על המפה, כשמסלול מוצג
   {
     let lpTimer = 0, lpStart = null;
@@ -2518,7 +2395,7 @@
       lpTimer = setTimeout(() => {
         const r = mapBox.getBoundingClientRect(), ll = map.unproject([lpStart[0] - r.left, lpStart[1] - r.top]);
         lpStart = null;
-        if (showingRoute()) return proposeDetour([ll.lng, ll.lat]);
+        if (showingRoute()) return; // במסלול – בלי לחיצה ארוכה (העריכה – בכפתור "עריכה")
         longPress(ll);
       }, 550);
     }, { passive: true });
@@ -2526,7 +2403,7 @@
       if (lpStart && (e.touches.length > 1 || Math.hypot(e.touches[0].clientX - lpStart[0], e.touches[0].clientY - lpStart[1]) > 10)) cancel();
     }, { passive: true });
     for (const t of ['touchend', 'touchcancel']) mapBox.addEventListener(t, cancel, { passive: true });
-    map.on('contextmenu', (e) => { if (!matchMedia('(pointer: coarse)').matches) (showingRoute() ? proposeDetour([e.lngLat.lng, e.lngLat.lat]) : longPress(e.lngLat)); });
+    map.on('contextmenu', (e) => { if (!matchMedia('(pointer: coarse)').matches && !showingRoute()) longPress(e.lngLat); });
     // בשיטוט: לחיצה ארוכה על מפה שמורה – בחירה לניהול (עדכון, מחיקה)
     function longPress(ll) {
       const a = savedAt(ll.lng, ll.lat);
@@ -2538,7 +2415,11 @@
   }
 
   // ---------- תכנון מסלול ----------
-  let plan = null;       // { wps:[[lon,lat]], opts:{snap,bike}, name, markers:[] }
+  // תכנון ועריכה – אותו מצב. המסלול = נקודות (wps) ורגליים ביניהן: רגל מחושבת (null – הדרך הקצרה לאורך השבילים)
+  // או קבועה (fixed[i] – קטעים שמורים: ממסלול קיים, או חלק של רגל שפוצלה). auto[i] – נקודה פנימית בלי סמן
+  // (עוגן של מסלול ישן, נקודת יציאה של "הלוך וחזור", סגירת מעגל). hist – מצבים קודמים ל"חזור"; pend – נקודה חדשה
+  // שעוד אפשר לבחור איך לחבר אותה (המשך / דרך הנקודה / הלוך וחזור)
+  let plan = null;       // { wps, fixed, auto, opts:{snap,bike}, name, folder, libId, orig, hist, pend, markers }
   let graph = null, graphKey = '';
   const legCache = new Map();
 
@@ -2568,13 +2449,16 @@
     return leg;
   }
 
+  const legSegs = (i, P = plan) => P.fixed[i] || computeLeg(P.wps[i], P.wps[i + 1], P.opts).segs;
   function planSegs() {
     const segs = [];
     let free = false;
+    plan.lc = [];
     for (let i = 1; i < plan.wps.length; i++) {
-      const leg = computeLeg(plan.wps[i - 1], plan.wps[i], plan.opts);
+      const fx = plan.fixed[i - 1], leg = fx ? { segs: fx } : computeLeg(plan.wps[i - 1], plan.wps[i], plan.opts);
       free ||= leg.free;
       segs.push(...leg.segs.map((sg) => ({ ...sg, coords: sg.coords })));
+      plan.lc.push(leg.segs.length); // כמה קטעים בכל רגל – נשמר, כדי לערוך שוב בלי לחשב מחדש מה שלא השתנה
     }
     Router.pickColors(segs); // קטע משותף לכמה שבילים – בצבע השביל שהולכים בו
     // צבע לקטעי שביל לא מסומן / דרך
@@ -2585,29 +2469,45 @@
   let profTimer = 0;
   function renderPlan() {
     const { segs, free } = planSegs();
-    const display = smoother ? segs.map((sg) => (sg.h === 'free' ? sg : { ...sg, coords: smoother(sg.coords) })) : segs;
+    // מעגלים רק מה שעוד לא עוגל (רגליים קבועות ממסלול שמור כבר מעוגלות – sm)
+    const display = segs.map((sg) => (sg.h === 'free' || sg.sm || !smoother ? sg : { ...sg, coords: smoother(sg.coords), sm: 1 }));
     map.getSource('route').setData(plan.wps.length > 1 ? routeFeatures(display) : empty);
     plan.segs = display;
     // סמנים
     plan.markers.forEach((m) => m.remove());
-    plan.markers = plan.wps.map((p, i) => {
+    const closed = isClosed(), vis = plan.wps.map((_, i) => i).filter((i) => !plan.auto[i]);
+    plan.markers = vis.map((i, n) => {
+      const p = plan.wps[i];
       const el = document.createElement('div');
-      el.className = 'wp' + (i === 0 ? ' first' : i === plan.wps.length - 1 ? ' last' : '');
-      el.textContent = i + 1;
+      el.className = 'wp' + (i === 0 ? ' first' + (closed ? ' loop' : '') : n === vis.length - 1 && vis.length > 1 ? ' last' : '');
+      el.textContent = n + 1;
       const m = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(p).addTo(map);
-      m.on('dragend', () => { const ll = m.getLngLat(); plan.wps[i] = snapWp([+ll.lng.toFixed(6), +ll.lat.toFixed(6)]); plan.lastDrag = Date.now(); renderPlan(); });
+      m.on('dragend', () => {
+        const ll = m.getLngLat();
+        pushHist();
+        plan.wps[i] = snapWp([+ll.lng.toFixed(6), +ll.lat.toFixed(6)]);
+        if (i > 0) plan.fixed[i - 1] = null;
+        if (i < plan.fixed.length) plan.fixed[i] = null;
+        if (i === 0 && closed) { const L = plan.wps.length - 1; plan.wps[L] = [...plan.wps[0]]; plan.fixed[L - 1] = null; } // מעגל – גם הסוף זז
+        plan.lastDrag = Date.now(); renderPlan();
+      });
+      // נגיעה בנקודה: בהתחלה (כשיש מסלול) – סגירה למעגל / פתיחה; בכל נקודה אחרת – מחיקה
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
         if (Date.now() - (plan.lastDrag || 0) < 400) return;
-        plan.wps.splice(i, 1); renderPlan();
+        if (i === 0 && vis.length > 1) return toggleLoop();
+        deleteWp(i);
       });
       return m;
     });
+    showChoice();
     const len = segs.reduce((s2, sg) => s2 + sg.coords.reduce((acc, p, j) => (j ? acc + Geo.haversine(sg.coords[j - 1], p) : 0), 0), 0);
     $('pl-len').textContent = plan.wps.length > 1 ? Geo.fmtDist(len) : '–';
     $('pl-hint').textContent = plan.wps.length === 0 ? 'הקישו על המפה כדי לסמן נקודת התחלה'
       : plan.wps.length === 1 ? 'הקישו על נקודה נוספת – המסלול יימשך לאורך השבילים'
-      : free && plan.opts.snap ? 'חלק מהקטעים לא נמצאו על שבילים – מוצגים כקו מקווקו' : 'גררו נקודה להזזה · הקשה על נקודה מוחקת אותה';
+      : plan.pend ? 'איך לחבר את הנקודה? נגיעה בנקודה הבאה ממשיכה'
+      : free && plan.opts.snap ? 'חלק מהקטעים לא נמצאו על שבילים – מוצגים כקו מקווקו'
+      : isClosed() ? 'מסלול מעגלי · נגיעה בהתחלה פותחת את המעגל' : 'נגיעה בהתחלה – סגירה למעגל · בנקודה – מחיקה · גרירה – הזזה';
     $('pl-done').disabled = plan.wps.length < 2;
     clearTimeout(profTimer);
     plan.prof = null; plan.scrubAt = null; setScrubMap(null);
@@ -2656,25 +2556,52 @@
     if (!mapFC) return toast('צריך להוריד מפה קודם');
     closeSearch();
     setFollow(false);
-    plan = { wps: from?.wps ? from.wps.map((p) => [...p]) : [], opts: { snap: true, bike: false, ...(from?.opts || {}) },
-      name: from?.name || '', folder: from?.folder, libId: from?.libId, markers: [] };
+    const wps = from?.wps ? from.wps.map((p) => [...p]) : [];
+    plan = { wps, fixed: from?.fixed || wps.slice(1).map(() => null), auto: from?.auto || wps.map(() => false),
+      opts: { snap: true, bike: false, ...(from?.opts || {}) }, name: from?.name || '', folder: from?.folder, libId: from?.libId,
+      orig: from?.orig || null, hist: [], pend: null, markers: [] };
     $('pl-name').value = plan.name;
     planToggles();
     $('pl-pace').textContent = paceLabel(plan.opts.bike);
     clearScrub();
     document.body.classList.add('planning');
     // עד אז – התוכן כבר בגודל הסופי (הנחיה ונתונים ריקים), כדי שהגובה לא ישתנה אחר כך
-    $('pl-hint').textContent = plan.wps.length > 1 ? 'גררו נקודה להזזה · הקשה על נקודה מוחקת אותה' : 'הקישו על המפה כדי לסמן נקודת התחלה';
+    $('pl-hint').textContent = plan.wps.length > 1 ? 'נגיעה בהתחלה – סגירה למעגל · בנקודה – מחיקה · גרירה – הזזה' : 'הקישו על המפה כדי לסמן נקודת התחלה';
     for (const id of ['pl-len', 'pl-up', 'pl-down', 'pl-time']) $(id).textContent = '–';
     drawProfile($('pl-profile'), null);
     renderDock();
     if (!plan.wps.length) map.getSource('route').setData(empty);
     // בניית הרשת תוקעת את הדף – אחרי שהדוק סיים לגדול (אחרת הוא "קופץ")
-    if (plan.opts.snap && plan.wps.length) { if (!graphKey) toast('מכין את רשת השבילים…', 1500); setTimeout(() => { if (!plan) return; getGraph(plan.opts.bike); renderPlan(); }, 380); }
+    if (plan.opts.snap && plan.wps.length) { if (!graphKey) toast('מכין את רשת השבילים…', 1500); setTimeout(() => { if (!plan) return; getGraph(plan.opts.bike); renderPlan(); if (from?.fit) fitRoute(); }, 380); }
     else renderPlan();
     applyLayers();
   }
 
+  // מסלול קיים → נקודות ורגליים לעריכה. מה שלא נוגעים בו נשאר בדיוק כמו שהיה (רגליים קבועות)
+  function editFrom(r) {
+    const base = { name: r.name, folder: r.folder, libId: r.libId, opts: r.opts, orig: r, fit: true };
+    const segs = (r.segs || []).map((sg) => ({ ...sg, sm: 1 })); // השמורים כבר מעוגלים
+    const n = r.lc?.reduce((x, y) => x + y, 0);
+    if (r.wps?.length > 1 && r.lc && n === segs.length) { // נשמר בגרסה הזו – הרגליים כמו שהיו
+      let o = 0;
+      const fixed = r.lc.map((c) => { const s = segs.slice(o, o + c); o += c; return s.length ? s : null; });
+      return { ...base, wps: r.wps, fixed, auto: r.auto || r.wps.map(() => false) };
+    }
+    if (r.kind === 'plan' && r.wps?.length > 1 && !r.adds?.length) return { ...base, wps: r.wps }; // מתוכנן – מחשבים שוב את הדרך
+    // מסלול בלי נקודות (קובץ / ישן): התחלה וסוף, ועוגנים בלי סמן כל ~700 מ' – כך שינוי משנה רק את הקטע שליד
+    const lines = segsToLines(segs), total = lines.reduce((s2, l) => s2 + l.reduce((x, p, j) => (j ? x + Geo.haversine(l[j - 1], p) : 0), 0), 0);
+    const parts = Math.max(1, Math.min(30, Math.round(total / 700)));
+    const at = (d) => { const c = cutSegs(segs, 0, Math.max(0.01, d)); const last = c[c.length - 1]; return last ? last.coords[last.coords.length - 1] : segs[0].coords[0]; };
+    const wps = [segs[0].coords[0]], fixed = [], auto = [false];
+    for (let i = 1; i <= parts; i++) {
+      wps.push(i === parts ? lines[lines.length - 1][lines[lines.length - 1].length - 1] : at((total * i) / parts));
+      const f = cutSegs(segs, (total * (i - 1)) / parts, i === parts ? Infinity : (total * i) / parts);
+      fixed.push(f.length ? f : null);
+      auto.push(i < parts);
+    }
+    return { ...base, wps: wps.map((p) => [...p]), fixed, auto };
+  }
+  $('r-edit').addEventListener('click', () => { if (active && !active.nav) startPlan(editFrom(active)); });
   function endPlan() {
     plan?.markers.forEach((m) => m.remove());
     setScrubMap(null);
@@ -2686,12 +2613,83 @@
     applyLayers();
   }
 
+  // ---------- עריכה: פעולות על הנקודות (כל פעולה נשמרת ב-hist – "חזור" מבטל אותה) ----------
+  const snap = () => ({ wps: plan.wps.map((p) => [...p]), fixed: plan.fixed.slice(), auto: plan.auto.slice() });
+  const restore = (s) => { plan.wps = s.wps.map((p) => [...p]); plan.fixed = s.fixed.slice(); plan.auto = s.auto.slice(); };
+  function pushHist() { plan.pend = null; plan.hist.push(snap()); }
+  const samePt = (p, q) => Math.abs(p[0] - q[0]) < 1e-7 && Math.abs(p[1] - q[1]) < 1e-7;
+  const isClosed = () => !!plan && plan.wps.length > 2 && plan.auto[plan.wps.length - 1] && samePt(plan.wps[0], plan.wps[plan.wps.length - 1]);
+  function toggleLoop() {
+    pushHist();
+    if (isClosed()) { plan.wps.pop(); plan.fixed.pop(); plan.auto.pop(); toast('המעגל נפתח', 1500); }
+    else { plan.wps.push([...plan.wps[0]]); plan.fixed.push(null); plan.auto.push(true); toast('המסלול נסגר למעגל', 1500); }
+    renderPlan();
+  }
+  function deleteWp(i) {
+    pushHist();
+    const L = plan.wps.length - 1;
+    if (L === 0) { plan.wps = []; plan.fixed = []; plan.auto = []; }
+    else if (i === 0) { plan.wps.shift(); plan.auto.shift(); plan.fixed.shift(); }
+    else if (i === L) { plan.wps.pop(); plan.auto.pop(); plan.fixed.pop(); }
+    else { plan.wps.splice(i, 1); plan.auto.splice(i, 1); plan.fixed.splice(i - 1, 2, null); }
+    // נשארו רק נקודות בלי סמן – אין מה לערוך מהן
+    if (plan.wps.length && plan.auto.every(Boolean)) { plan.wps = []; plan.fixed = []; plan.auto = []; }
+    renderPlan();
+  }
+  function undoPlan() { if (!plan?.hist.length) return; restore(plan.hist.pop()); plan.pend = null; renderPlan(); }
+  // נקודה חדשה כשכבר יש מסלול: ההצעה הסבירה מיד על המפה, ושאר האפשרויות – בכפתורים בדוק
+  function addPoint(T) {
+    if (plan.wps.length < 2) {
+      pushHist();
+      if (plan.wps.length) plan.fixed.push(null);
+      plan.wps.push(T); plan.auto.push(false);
+      return renderPlan();
+    }
+    pushHist();
+    const base = plan.hist[plan.hist.length - 1];
+    let near = { d: Infinity };
+    for (let k = 0; k < base.fixed.length; k++) {
+      const n = nearestOnSegs(legSegs(k, { ...plan, ...base }), T);
+      if (n.d < near.d) near = { ...n, k };
+    }
+    const closed = isClosed(), dEnd = Geo.haversine(T, plan.wps[plan.wps.length - 1]);
+    const avail = { end: !closed, via: true, spur: near.d > 20 };
+    // ממשיכים מהסוף, אלא אם הנקודה ממש ליד אמצע המסלול (או שהוא מעגל) – אז עוברים דרכה
+    const mode = !closed && dEnd <= 2 * near.d + 40 ? 'end' : 'via';
+    plan.pend = { base, T, near, avail, mode };
+    applyPend();
+  }
+  function applyPend() {
+    const { base, T, near, mode } = plan.pend;
+    restore(base);
+    const k = near.k;
+    if (mode === 'end') { plan.wps.push(T); plan.fixed.push(null); plan.auto.push(false); }
+    else if (mode === 'via') { plan.wps.splice(k + 1, 0, T); plan.fixed.splice(k, 1, null, null); plan.auto.splice(k + 1, 0, false); }
+    else { // הלוך וחזור: מהנקודה הקרובה במסלול אל הנקודה ובחזרה; הרגל שבה יוצאים מתפצלת במקום (בלי לשנות אותה)
+      const leg = legSegs(k, { ...plan, ...base }), A = cutSegs(leg, 0, near.along), B = cutSegs(leg, near.along, Infinity), D = near.pt;
+      plan.wps.splice(k + 1, 0, [...D], T, [...D]);
+      plan.fixed.splice(k, 1, A.length ? A : null, null, null, B.length ? B : null);
+      plan.auto.splice(k + 1, 0, true, false, true);
+    }
+    renderPlan();
+  }
+  function showChoice() {
+    const box = $('pl-choice'), p = plan?.pend;
+    box.hidden = !p;
+    if (!p) return;
+    for (const b of box.querySelectorAll('button')) { b.hidden = !p.avail[b.dataset.m]; b.classList.toggle('on', b.dataset.m === p.mode); }
+  }
+  for (const b of document.querySelectorAll('#pl-choice button')) b.addEventListener('click', () => { if (plan?.pend) { plan.pend.mode = b.dataset.m; applyPend(); } });
   map.on('click', (e) => {
     if (!plan) return;
-    plan.wps.push(snapWp([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]));
-    renderPlan();
+    addPoint(snapWp([+e.lngLat.lng.toFixed(6), +e.lngLat.lat.toFixed(6)]));
   });
-  $('pl-cancel').addEventListener('click', endPlan);
+  // ביטול: אם השתנה משהו – שואלים; חוזרים למסלול (אם נכנסו ממנו) או לרשימה
+  async function cancelPlan() {
+    if (plan?.hist.length && !(await confirmDlg('לצאת בלי לשמור?', 'השינויים במסלול לא יישמרו.', { ok: 'יציאה' }))) return;
+    endPlan();
+  }
+  $('pl-cancel').addEventListener('click', cancelPlan);
   // הליכה / אופניים – כפתור אחד שמתחלף (מראה את המצב הנוכחי); הצמדה לשבילים – דלוק/כבוי
   const MODE_ICON = {
     walk: '<circle cx="13" cy="4.5" r="1.8"/><path d="M12.5 8l-2 6 3 3 1 4.5M10.5 14l-2 7M11.5 9.5L8 11.5v3M12.5 8.5l2.5 3 3 1"/>',
@@ -2739,18 +2737,24 @@
   $('pl-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.target.blur(); });
   // מסלול קיים – נשמר במקומו (השם כבר בדוק); חדש – חלון עם שם וקטגוריה
   $('pl-done').addEventListener('click', async () => {
-    if (plan.libId && plan.name.trim()) return savePlan(plan.name.trim(), plan.folder || '');
-    openSaveDlg('plan', { name: plan.name, folder: plan.folder, coords: plan.wps });
+    if (!plan.libId || !plan.name.trim()) return openSaveDlg('plan', { name: plan.name, folder: plan.folder, coords: plan.wps });
+    if (!plan.hist.length) return endPlan(); // בלי שינויים – חוזרים כמו שהיה
+    const name = plan.name.trim();
+    const v = await choiceDlg('לשמור את השינויים?', `"${name}"`, [
+      { v: 'cancel', label: 'המשך עריכה' }, { v: 'new', label: 'כמסלול חדש' }, { v: 'ok', label: 'שמירה', cls: 'primary' }]);
+    if (v === 'ok') return savePlan(name, plan.folder || '');
+    if (v === 'new') { plan.asNew = true; openSaveDlg('plan', { name: `${name} (2)`, folder: plan.folder }); }
   });
   async function savePlan(name, folder) {
-    const a = { kind: 'plan', name, folder, wps: plan.wps, opts: plan.opts, segs: plan.segs, waypoints: [], libId: plan.libId || Date.now() };
+    const a = { kind: 'plan', name, folder, wps: plan.wps, auto: plan.auto, lc: plan.lc, opts: plan.opts, segs: plan.segs,
+      waypoints: plan.orig?.waypoints || [], libId: (!plan.asNew && plan.libId) || Date.now() };
     endPlan();
     await libPut(a);
     await setActive(a, { fit: true });
     toast(`"${name}" נשמר${folder ? ` ב"${folder}"` : ''} · ${Geo.fmtDist(route.total)}`, 4000);
   }
   $('plan-dlg').addEventListener('close', async () => {
-    if ($('plan-dlg').returnValue !== 'ok') return;
+    if ($('plan-dlg').returnValue !== 'ok') { if (plan) plan.asNew = false; return; }
     const name = $('plan-name').value.trim() || 'מסלול מתוכנן';
     const folder = $('plan-folder').value.trim();
     if (saveMode === 'plan' && plan) await savePlan(name, folder);
@@ -2760,7 +2764,7 @@
   const libLoad = async () => { const lib = (await db.get('library').catch(() => null)) || []; for (const r of lib) if (!r.folder || r.folder === 'כללי') r.folder = ''; return lib; };
   async function libPut(a) {
     const lib = await libLoad();
-    const entry = { id: a.libId, kind: a.kind, name: a.name, folder: a.folder || '', segs: a.segs, wps: a.wps, opts: a.opts,
+    const entry = { id: a.libId, kind: a.kind, name: a.name, folder: a.folder || '', segs: a.segs, wps: a.wps, opts: a.opts, lc: a.lc, auto: a.auto,
       waypoints: a.waypoints,
       len: segsToLines(a.segs).reduce((s2, l) => s2 + l.reduce((acc, p, j) => (j ? acc + Geo.haversine(l[j - 1], p) : 0), 0), 0),
       gain: a.gain, loss: a.loss, updated: Date.now() };
@@ -3088,7 +3092,7 @@
       // בלי "פתח" (נגיעה שנייה / כפולה פותחת) ובלי "מסלול": "עריכה" פותחת את המסלול לעריכה – הדרך והשם (בדוק);
       // מסלול שלא תוכנן כאן (בלי נקודות) – רק השם, במקום
       btn(g1, 'edit', 'עריכה', () => {
-        if (r.kind === 'plan' && r.wps?.length) { clearSel(); startPlan({ ...r, libId: r.id }); } else { lsel.editing = true; renderLibrary(); }
+        if (r.segs?.length) { clearSel(); startPlan(editFrom({ ...r, libId: r.id })); } else { lsel.editing = true; renderLibrary(); }
       });
       delBtn(g1);
       addRoute(grp());
@@ -3103,17 +3107,19 @@
   }
 
   // חלון אישור: כותרת, מה יקרה, ביטול / מחיקה
-  function confirmDlg(title, text, { ok = 'מחיקה', cancel = 'ביטול', danger = true } = {}) {
+  // חלון שאלה עם כפתורים (ערך הכפתור שנבחר; סגירה בלי בחירה – '')
+  function choiceDlg(title, text, btns) {
     const d = $('confirm-dlg');
     $('cf-title').textContent = title;
     $('cf-text').textContent = text;
-    const [bc, bo] = d.querySelectorAll('.cf-btns button');
-    bc.textContent = cancel; bo.textContent = ok;
-    bo.className = danger ? 'danger-btn' : 'primary';
+    d.querySelector('.cf-btns').replaceChildren(...btns.map((b) => Object.assign(document.createElement('button'),
+      { value: b.v, textContent: b.label, className: b.cls || '', formNoValidate: true })));
     d.returnValue = '';
     d.showModal();
-    return new Promise((res) => d.addEventListener('close', () => res(d.returnValue === 'ok'), { once: true }));
+    return new Promise((res) => d.addEventListener('close', () => res(d.returnValue === 'cancel' ? '' : d.returnValue), { once: true }));
   }
+  const confirmDlg = (title, text, { ok = 'מחיקה', cancel = 'ביטול', danger = true } = {}) =>
+    choiceDlg(title, text, [{ v: 'cancel', label: cancel }, { v: 'ok', label: ok, cls: danger ? 'danger-btn' : 'primary' }]).then((v) => v === 'ok');
   async function libEdit(fn) {
     const lib = await libLoad();
     fn(lib);
@@ -3341,10 +3347,10 @@
   const SOFT = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
   function checkFar() {
     clearTimeout(farTimer);
-    if (!showingRoute() || follow || detour) return; // במעקב – המפה ממילא עליך
+    if (!showingRoute() || follow) return; // במעקב – המפה ממילא עליך
     const nav = active.nav && watchId != null;
     farTimer = setTimeout(() => {
-      if (!showingRoute() || follow || detour) return;
+      if (!showingRoute() || follow) return;
       if (touching || map.isMoving?.()) return checkFar();
       if (nav) {
         // חזרה למיקום שמתחילה רך ונגמרת רך (ולא קפיצה מהירה בהתחלה); אחרי זה – מעקב רגיל
@@ -3781,14 +3787,12 @@
   function dockBack() {
     const m = dockMode();
     if (m === 'route') {
-      if (detour) return cancelDetour(); // תוספת שעוד לא אושרה
       if (dock.open) return setDockOpen(false); // הגרף
-      if (active?.edits?.length) return undoDetour(); // התוספת האחרונה
       if (active?.nav) return ask('לעצור את הניווט?', 'עצור', stopNav); // שומרים מעצירה בטעות
       return exitRoute(); // לרשימה, כמו שהייתה
     }
     if (m === 'areas') return batchShown && batchQ ? ((batchShown = false), mapsChanged()) : clearMaps();
-    if (m === 'plan') return plan?.wps.length ? (plan.wps.pop(), renderPlan()) : endPlan(); // הנקודה האחרונה; בלי נקודות – יציאה
+    if (m === 'plan') return plan?.hist.length ? undoPlan() : cancelPlan(); // הפעולה האחרונה; בלי שינויים – יציאה
     if (m === 'lib') {
       if (lsel.editing) { lsel.editing = false; return renderLibrary(); }
       if (lsel.kind) { clearSel(); return renderLibrary(); }

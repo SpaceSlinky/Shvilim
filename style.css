@@ -183,6 +183,7 @@ body.night .info-row + .info-row { border-color: #444; }
   font: bold 13px sans-serif; display: grid; place-items: center; box-shadow: 0 1px 5px rgba(0,0,0,.45); cursor: grab; }
 .wp.first { background: #1a9b3c; border-color: #fff; color: #fff; }
 .wp.last { background: #c62828; border-color: #fff; color: #fff; }
+.wp.first.loop { box-shadow: 0 0 0 3px #c62828; } /* מעגל – ההתחלה היא גם הסוף */
 
 body.night .stats .lbl { color: #999; }
 body.night .btns button { background: #2a3036; border-color: #444; }
@@ -280,6 +281,11 @@ body.night .more-layers summary { color: #aaa; }
 .r-head .r-title { flex: 1; justify-content: flex-start; text-align: start; }
 .r-exit { flex: none; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 700; color: #c62828; padding: 4px 2px 4px 6px; cursor: pointer; }
 body.night .r-exit { color: #ef5350; }
+.r-edit { flex: none; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 700; color: var(--green); padding: 4px 6px; cursor: pointer; }
+body.night .r-edit { color: #81c784; }
+.pl-choice { margin: 2px auto 6px; }
+.dt-modes.pl-choice button.on { background: var(--green); color: #fff; }
+body.night .dt-modes.pl-choice button.on { background: #2e7d4f; }
 #ri-name { flex: 0 1 auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .r-title b { font-weight: 700; }
 /* חזרה: גלולה ברורה, בגודל אגודל */

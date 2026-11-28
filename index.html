@@ -87,6 +87,7 @@
       <!-- שם המסלול מימין, "יציאה" משמאל (בניווט – עוצרת את הניווט) -->
       <div class="dock-head r-head">
         <div class="r-title d-title"><b id="ri-name"></b></div>
+        <button id="r-edit" class="r-edit">עריכה</button>
         <button id="r-exit" class="r-exit">יציאה</button>
       </div>
       <div id="ri-stats" class="stats">
@@ -97,13 +98,6 @@
       </div>
       <div class="r-more">
         <canvas id="ri-profile" class="profile"></canvas>
-      </div>
-      <!-- תוספת למסלול (לחיצה ארוכה על המפה): הלוך וחזור / להמשיך משם -->
-      <div id="dt-box" class="dt-box" hidden>
-        <div id="dt-title" class="dt-title"></div>
-        <div id="dt-info" class="dt-info"></div>
-        <div id="dt-modes" class="dt-modes"><button data-m="back">הלוך וחזור</button><button data-m="on">להמשיך משם</button></div>
-        <div class="dt-btns"><button id="dt-cancel">ביטול</button><button id="dt-ok" class="primary">הוספה למסלול</button></div>
       </div>
       <button id="ri-go" class="go primary">יוצאים לדרך</button>
     </section>
@@ -125,6 +119,8 @@
       <!-- שם המסלול: נוגעים ועורכים במקום (עט קטן ליד) -->
       <label class="pl-name-row"><input id="pl-name" placeholder="מסלול חדש" maxlength="50" autocomplete="off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg></label>
       <p id="pl-hint" class="center"></p>
+      <!-- נקודה חדשה ליד מסלול קיים: איך לחבר אותה (ברירת המחדל כבר על המפה; נגיעה בנקודה הבאה מאשרת) -->
+      <div id="pl-choice" class="dt-modes pl-choice" hidden><button data-m="end">המשך</button><button data-m="via">דרך הנקודה</button><button data-m="spur">הלוך וחזור</button></div>
       <div class="stats">
         <div><span class="lbl">אורך</span><span id="pl-len" class="v">–</span></div>
         <div><span class="lbl"><svg class="arr" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 9.5L9.5 2.5M4 2.5h5.5V8"/></svg> עלייה</span><span id="pl-up" class="v">–</span></div>
