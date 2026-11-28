@@ -1262,7 +1262,7 @@
     runBatch({ kind: 'dl', cells, done: 0, fails: 0, err: '' });
   });
   function cellRect(c) {
-    const W = innerWidth, top = 70, bottom = innerHeight - ($('dock')?.offsetHeight || 120) - 10;
+    const W = innerWidth, top = 70, bottom = ($('dock')?.getBoundingClientRect().top ?? innerHeight - 120) - 10;
     const pts = [[c[0], c[1]], [c[2], c[1]], [c[2], c[3]], [c[0], c[3]]].map((p) => map.project(p));
     const x0 = Math.max(0, Math.min(...pts.map((p) => p.x))), x1 = Math.min(W, Math.max(...pts.map((p) => p.x)));
     const y0 = Math.max(top, Math.min(...pts.map((p) => p.y))), y1 = Math.min(bottom, Math.max(...pts.map((p) => p.y)));
@@ -3682,6 +3682,7 @@
     lastMode = m;
     for (const sec of $('dock-in').querySelectorAll(':scope > section')) sec.hidden = sec.dataset.mode !== m;
     dockEl.dataset.mode = m;
+    document.documentElement.classList.toggle('dock-float', m === 'lib'); // "מסלולים" – גלולה צפה כמו שורת החיפוש (--dock-gap)
     $('btn-fit').hidden = !(active || plan?.wps.length > 1); // מרכוז על כל המסלול – רק כשיש מסלול
     // חיפוש – רק כשלא בתוך מסלול או בתכנון: בכניסה למסלול השורה מתכנסת לתוך ה-☰ (משמאל לימין), וביציאה נפתחת ממנו
     $('search').classList.toggle('collapsed', m !== 'lib');
